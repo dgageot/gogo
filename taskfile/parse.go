@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -124,7 +125,9 @@ func Parse(dir string) (*Taskfile, error) {
 	}
 
 	var tf Taskfile
-	if err := yaml.Unmarshal(data, &tf); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&tf); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
