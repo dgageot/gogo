@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dgageot/gogo/taskfile"
 	"maps"
@@ -21,15 +22,22 @@ func run() error {
 	args := os.Args[1:]
 
 	// Parse flags
-	if len(args) > 0 {
-		switch args[0] {
+	watch := false
+	var filtered []string
+	for _, arg := range args {
+		switch arg {
 		case "-l", "--list":
 			return listTasks()
 		case "-h", "--help":
 			printUsage()
 			return nil
+		case "-w", "--watch":
+			watch = true
+		default:
+			filtered = append(filtered, arg)
 		}
 	}
+	args = filtered
 	dir, err := os.Getwd()
 	if err != nil {
 		return err
@@ -61,6 +69,17 @@ func run() error {
 	}
 
 	runner := taskfile.NewRunner(tf, dir)
+
+	if watch {
+		interval := 500 * time.Millisecond
+		if tf.Interval != "" {
+			if d, err := time.ParseDuration(tf.Interval); err == nil {
+				interval = d
+			}
+		}
+		return runner.Watch(taskName, cliArgs, interval)
+	}
+
 	return runner.Run(taskName, cliArgs)
 }
 
@@ -111,5 +130,6 @@ Usage:
 
 Flags:
   -l, --list      List available tasks
+  -w, --watch     Watch sources and re-run on changes
   -h, --help      Show this help`)
 }

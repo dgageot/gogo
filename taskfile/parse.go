@@ -34,7 +34,6 @@ type Task struct {
 	Vars    map[string]Var    `yaml:"vars"`
 	Cmd     Cmd               `yaml:"cmd"`
 	Sources []string          `yaml:"sources"`
-	Watch   bool              `yaml:"watch"`
 	Aliases []string          `yaml:"aliases"`
 	Desc    string            `yaml:"-"` // set from YAML comments, not from a field
 }
