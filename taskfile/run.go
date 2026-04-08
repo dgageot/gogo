@@ -71,10 +71,18 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 
 	task := r.tf.Tasks[resolved]
 
-	// Run dependencies first
-	for _, dep := range task.Deps {
-		if err := r.Run(dep.Task, ""); err != nil {
-			return fmt.Errorf("dependency %q failed: %w", dep.Task, err)
+	// Run dependencies concurrently
+	if len(task.Deps) > 0 {
+		errs := make(chan error, len(task.Deps))
+		for _, dep := range task.Deps {
+			go func() {
+				errs <- r.Run(dep.Task, "")
+			}()
+		}
+		for range task.Deps {
+			if err := <-errs; err != nil {
+				return err
+			}
 		}
 	}
 
@@ -141,7 +149,10 @@ func (r *Runner) taskDir(task Task) string {
 func (r *Runner) resolveVars(task Task) map[string]string {
 	resolved := make(map[string]string)
 
-	// Global vars first
+	// Built-in vars
+	resolved["TASKFILE_DIR"] = r.taskDir(task)
+
+	// Global vars
 	for k, v := range r.tf.Vars {
 		resolved[k] = r.resolveVar(v, r.tf.Dir)
 	}
