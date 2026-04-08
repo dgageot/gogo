@@ -1,0 +1,160 @@
+package taskfile
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// Runner executes tasks from a loaded Taskfile.
+type Runner struct {
+	tf      *Taskfile
+	env     []string
+	verbose bool
+}
+
+// NewRunner creates a task runner for the given taskfile.
+func NewRunner(tf *Taskfile, verbose bool) *Runner {
+	return &Runner{
+		tf:      tf,
+		env:     os.Environ(),
+		verbose: verbose,
+	}
+}
+
+// Run executes the named task.
+func (r *Runner) Run(name string, cliArgs string) error {
+	task, ok := r.tf.Tasks[name]
+	if !ok {
+		return fmt.Errorf("task %q not found", name)
+	}
+
+	// Run dependencies first
+	for _, dep := range task.Deps {
+		if err := r.Run(dep.Task, ""); err != nil {
+			return fmt.Errorf("dependency %q failed: %w", dep.Task, err)
+		}
+	}
+
+	// Resolve variables
+	vars := r.resolveVars(task)
+
+	// Determine working directory
+	dir := r.taskDir(task)
+
+	// Build environment
+	env := r.buildEnv(task, vars)
+
+	// If the task has a single cmd field, use that
+	if task.Cmd.Cmd != "" {
+		return r.execShell(r.expandVars(task.Cmd.Cmd, vars, cliArgs), dir, env)
+	}
+	if task.Cmd.Task != "" {
+		return r.Run(task.Cmd.Task, cliArgs)
+	}
+
+	// Execute commands
+	for _, cmd := range task.Cmds {
+		if cmd.Task != "" {
+			// This is a task reference
+			if err := r.Run(cmd.Task, cliArgs); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := r.execShell(r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Runner) taskDir(task Task) string {
+	if task.Dir != "" {
+		if strings.HasPrefix(task.Dir, "/") {
+			return task.Dir
+		}
+		return task.Dir
+	}
+	return r.tf.Dir
+}
+
+func (r *Runner) resolveVars(task Task) map[string]string {
+	resolved := make(map[string]string)
+
+	// Global vars first
+	for k, v := range r.tf.Vars {
+		resolved[k] = r.resolveVar(v, r.tf.Dir)
+	}
+
+	// Task vars override
+	for k, v := range task.Vars {
+		resolved[k] = r.resolveVar(v, r.taskDir(task))
+	}
+
+	return resolved
+}
+
+func (r *Runner) resolveVar(v Var, dir string) string {
+	if v.Sh != "" {
+		cmd := exec.Command("sh", "-c", v.Sh)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	return v.Value
+}
+
+func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
+	env := make([]string, len(r.env))
+	copy(env, r.env)
+
+	for k, v := range vars {
+		env = append(env, k+"="+v)
+	}
+	for k, v := range task.Env {
+		expanded := os.Expand(v, func(key string) string {
+			if val, ok := vars[key]; ok {
+				return val
+			}
+			return os.Getenv(key)
+		})
+		env = append(env, k+"="+expanded)
+	}
+	return env
+}
+
+func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) string {
+	s = strings.ReplaceAll(s, "{{.CLI_ARGS}}", cliArgs)
+	for k, v := range vars {
+		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
+	}
+	// Expand HOME and similar
+	s = os.Expand(s, func(key string) string {
+		if val, ok := vars[key]; ok {
+			return val
+		}
+		return os.Getenv(key)
+	})
+	return s
+}
+
+func (r *Runner) execShell(command, dir string, env []string) error {
+	if r.verbose {
+		fmt.Fprintf(os.Stderr, "$ %s\n", command)
+	}
+
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Dir = dir
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}

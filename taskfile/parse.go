@@ -1,0 +1,183 @@
+package taskfile
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Taskfile represents a parsed Taskfile.yml.
+type Taskfile struct {
+	Version  string             `yaml:"version"`
+	Includes map[string]Include `yaml:"includes"`
+	Dotenv   []string           `yaml:"dotenv"`
+	Vars     map[string]Var     `yaml:"vars"`
+	Tasks    map[string]Task    `yaml:"tasks"`
+	Dir      string             `yaml:"-"`
+	Interval string             `yaml:"interval"`
+}
+
+// Include represents an included taskfile reference.
+type Include struct {
+	Taskfile string `yaml:"taskfile"`
+	Dir      string `yaml:"dir"`
+}
+
+// UnmarshalYAML allows Include to be either a string or a map.
+func (i *Include) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		i.Taskfile = value.Value
+		return nil
+	}
+	type plain Include
+	return value.Decode((*plain)(i))
+}
+
+// Task represents a single task definition.
+type Task struct {
+	Desc    string            `yaml:"desc"`
+	Cmds    []Cmd             `yaml:"cmds"`
+	Deps    []Dep             `yaml:"deps"`
+	Dir     string            `yaml:"dir"`
+	Env     map[string]string `yaml:"env"`
+	Vars    map[string]Var    `yaml:"vars"`
+	Cmd     Cmd               `yaml:"cmd"`
+	Sources []string          `yaml:"sources"`
+	Watch   bool              `yaml:"watch"`
+	Aliases []string          `yaml:"aliases"`
+}
+
+// Cmd represents a command in a task. It can be a simple string or a task reference.
+type Cmd struct {
+	Cmd  string            `yaml:"cmd"`
+	Task string            `yaml:"task"`
+	Vars map[string]Var    `yaml:"vars"`
+}
+
+// UnmarshalYAML allows Cmd to be either a string or a map.
+func (c *Cmd) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		c.Cmd = value.Value
+		return nil
+	}
+	type plain Cmd
+	return value.Decode((*plain)(c))
+}
+
+// Dep represents a task dependency.
+type Dep struct {
+	Task string
+}
+
+// UnmarshalYAML allows Dep to be either a string or a map.
+func (d *Dep) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		d.Task = value.Value
+		return nil
+	}
+	type depMap struct {
+		Task string `yaml:"task"`
+	}
+	var m depMap
+	if err := value.Decode(&m); err != nil {
+		return err
+	}
+	d.Task = m.Task
+	return nil
+}
+
+// Var represents a variable value. It can be a static string or a shell command.
+type Var struct {
+	Value string
+	Sh    string
+}
+
+// UnmarshalYAML allows Var to be either a string or a map with sh.
+func (v *Var) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		v.Value = value.Value
+		return nil
+	}
+	type varMap struct {
+		Sh string `yaml:"sh"`
+	}
+	var m varMap
+	if err := value.Decode(&m); err != nil {
+		return err
+	}
+	v.Sh = m.Sh
+	return nil
+}
+
+// Parse reads and parses a Taskfile from the given directory.
+func Parse(dir string) (*Taskfile, error) {
+	path := findTaskfile(dir)
+	if path == "" {
+		return nil, fmt.Errorf("no Taskfile found in %s", dir)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	var tf Taskfile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	tf.Dir = dir
+	if tf.Tasks == nil {
+		tf.Tasks = make(map[string]Task)
+	}
+
+	return &tf, nil
+}
+
+func findTaskfile(dir string) string {
+	for _, name := range []string{"Taskfile.yml", "Taskfile.yaml"} {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
+func LoadWithIncludes(dir string) (*Taskfile, error) {
+	tf, err := Parse(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	for namespace, inc := range tf.Includes {
+		incDir := inc.Dir
+		if incDir == "" {
+			incDir = filepath.Dir(inc.Taskfile)
+		}
+		if !filepath.IsAbs(incDir) {
+			incDir = filepath.Join(dir, incDir)
+		}
+
+		child, err := Parse(incDir)
+		if err != nil {
+			return nil, fmt.Errorf("loading include %q: %w", namespace, err)
+		}
+
+		for name, task := range child.Tasks {
+			qualifiedName := namespace + ":" + name
+			// Resolve relative dir to the child's directory
+			if task.Dir == "" {
+				task.Dir = child.Dir
+			} else if !filepath.IsAbs(task.Dir) {
+				task.Dir = filepath.Join(child.Dir, task.Dir)
+			}
+			tf.Tasks[qualifiedName] = task
+		}
+	}
+
+	return tf, nil
+}
