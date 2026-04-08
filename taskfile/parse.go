@@ -9,7 +9,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 )
 
-// Taskfile represents a parsed Taskfile.yml.
+// Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
 type Taskfile struct {
 	Version    string             `yaml:"version"`
 	Includes   map[string]Include `yaml:"includes"`
@@ -144,7 +144,7 @@ func Parse(dir string) (*Taskfile, error) {
 }
 
 func findTaskfile(dir string) string {
-	for _, name := range []string{"Taskfile.yml", "Taskfile.yaml"} {
+	for _, name := range []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"} {
 		path := filepath.Join(dir, name)
 		if _, err := os.Stat(path); err == nil {
 			return path
