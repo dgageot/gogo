@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -129,10 +130,10 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 
 func (r *Runner) taskDir(task Task) string {
 	if task.Dir != "" {
-		if strings.HasPrefix(task.Dir, "/") {
+		if filepath.IsAbs(task.Dir) {
 			return task.Dir
 		}
-		return task.Dir
+		return filepath.Join(r.tf.Dir, task.Dir)
 	}
 	return r.tf.Dir
 }

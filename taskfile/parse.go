@@ -27,7 +27,6 @@ type Taskfile struct {
 
 // Task represents a single task definition.
 type Task struct {
-	Desc    string            `yaml:"desc"`
 	Cmds    []Cmd             `yaml:"cmds"`
 	Deps    []Dep             `yaml:"deps"`
 	Dir     string            `yaml:"dir"`
@@ -37,6 +36,7 @@ type Task struct {
 	Sources []string          `yaml:"sources"`
 	Watch   bool              `yaml:"watch"`
 	Aliases []string          `yaml:"aliases"`
+	Desc    string            `yaml:"-"` // set from YAML comments, not from a field
 }
 
 // Cmd represents a command in a task. It can be a simple string or a task reference.
@@ -229,7 +229,7 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 				}
 
 				task, exists := tf.Tasks[taskKey.Value]
-				if !exists || task.Desc != "" {
+				if !exists {
 					continue
 				}
 

@@ -11,7 +11,7 @@ func TestParse(t *testing.T) {
 	tf, err := LoadWithIncludes("/Users/dgageot/src/ai")
 	require.NoError(t, err)
 
-	assert.Equal(t, "3", tf.Version)
+	assert.Equal(t, "1", tf.Version)
 	assert.NotEmpty(t, tf.Tasks)
 
 	// Root task
@@ -52,7 +52,6 @@ tasks:
     cmd: go build
   # Run all the tests
   test:
-    desc: "explicit desc"
     cmd: go test
   deploy:
     cmd: deploy.sh
@@ -61,7 +60,7 @@ tasks:
 	tf := &Taskfile{
 		Tasks: map[string]Task{
 			"build":  {Cmd: Cmd{Cmd: "go build"}},
-			"test":   {Desc: "explicit desc", Cmd: Cmd{Cmd: "go test"}},
+			"test":   {Cmd: Cmd{Cmd: "go test"}},
 			"deploy": {Cmd: Cmd{Cmd: "deploy.sh"}},
 		},
 	}
@@ -69,6 +68,6 @@ tasks:
 	applyTaskComments(tf, yamlData)
 
 	assert.Equal(t, "Build the project", tf.Tasks["build"].Desc)
-	assert.Equal(t, "explicit desc", tf.Tasks["test"].Desc)
+	assert.Equal(t, "Run all the tests", tf.Tasks["test"].Desc)
 	assert.Equal(t, "", tf.Tasks["deploy"].Desc)
 }
