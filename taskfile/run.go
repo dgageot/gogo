@@ -53,7 +53,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 }
 
 // Run executes the named task.
-func (r *Runner) Run(name string, cliArgs string) error {
+func (r *Runner) Run(name string, cliArgs string) (err error) {
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)
@@ -73,6 +73,23 @@ func (r *Runner) Run(name string, cliArgs string) error {
 
 	// Determine working directory
 	dir := r.taskDir(task)
+
+	// Check sources for up-to-date
+	if len(task.Sources) > 0 {
+		checksum, err := sourcesChecksum(dir, task.Sources)
+		if err != nil {
+			return fmt.Errorf("computing sources checksum: %w", err)
+		}
+		if checksum == readStoredChecksum(r.tf.Dir, resolved) {
+			fmt.Fprintf(os.Stderr, "\033[33m[%s]\033[0m up to date\n", resolved)
+			return nil
+		}
+		defer func() {
+			if err == nil {
+				_ = writeChecksum(r.tf.Dir, resolved, checksum)
+			}
+		}()
+	}
 
 	// Build environment
 	env := r.buildEnv(task, vars)
