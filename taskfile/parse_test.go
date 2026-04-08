@@ -29,4 +29,9 @@ func TestParse(t *testing.T) {
 	assert.True(t, ok)
 	assert.Len(t, task.Deps, 1)
 	assert.Equal(t, "build", task.Deps[0].Task)
+
+	// Task with aliases
+	task, ok = tf.Tasks["github"]
+	assert.True(t, ok)
+	assert.Equal(t, []string{"gh"}, task.Aliases)
 }

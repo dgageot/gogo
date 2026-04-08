@@ -35,7 +35,12 @@ func run() error {
 		return err
 	}
 
-	tf, err := taskfile.LoadWithIncludes(dir)
+	rootDir, err := taskfile.FindRootDir(dir)
+	if err != nil {
+		return err
+	}
+
+	tf, err := taskfile.LoadWithIncludes(rootDir)
 	if err != nil {
 		return err
 	}
@@ -55,7 +60,7 @@ func run() error {
 		}
 	}
 
-	runner := taskfile.NewRunner(tf)
+	runner := taskfile.NewRunner(tf, dir)
 	return runner.Run(taskName, cliArgs)
 }
 
@@ -65,7 +70,12 @@ func listTasks() error {
 		return err
 	}
 
-	tf, err := taskfile.LoadWithIncludes(dir)
+	rootDir, err := taskfile.FindRootDir(dir)
+	if err != nil {
+		return err
+	}
+
+	tf, err := taskfile.LoadWithIncludes(rootDir)
 	if err != nil {
 		return err
 	}
@@ -82,7 +92,11 @@ func listTasks() error {
 	for _, name := range names {
 		task := tf.Tasks[name]
 		if task.Desc != "" {
-			fmt.Printf("%-*s  %s\n", maxLen, name, task.Desc)
+			if len(task.Aliases) > 0 {
+				fmt.Printf("%-*s  %s (aliases: %s)\n", maxLen, name, task.Desc, strings.Join(task.Aliases, ", "))
+			} else {
+				fmt.Printf("%-*s  %s\n", maxLen, name, task.Desc)
+			}
 		}
 	}
 

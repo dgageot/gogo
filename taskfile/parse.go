@@ -10,13 +10,14 @@ import (
 
 // Taskfile represents a parsed Taskfile.yml.
 type Taskfile struct {
-	Version  string             `yaml:"version"`
-	Includes map[string]Include `yaml:"includes"`
-	Dotenv   []string           `yaml:"dotenv"`
-	Vars     map[string]Var     `yaml:"vars"`
-	Tasks    map[string]Task    `yaml:"tasks"`
-	Dir      string             `yaml:"-"`
-	Interval string             `yaml:"interval"`
+	Version    string             `yaml:"version"`
+	Includes   map[string]Include `yaml:"includes"`
+	Dotenv     []string           `yaml:"dotenv"`
+	Vars       map[string]Var     `yaml:"vars"`
+	Tasks      map[string]Task    `yaml:"tasks"`
+	Dir        string             `yaml:"-"`
+	Interval   string             `yaml:"interval"`
+	Namespaces map[string]string  `yaml:"-"` // dir -> namespace
 }
 
 // Include represents an included taskfile reference.
@@ -150,12 +151,54 @@ func findTaskfile(dir string) string {
 	return ""
 }
 
+// FindRootDir walks up from dir to find the topmost directory containing a Taskfile.
+// It first finds the nearest Taskfile, then keeps walking up to find any ancestor
+// that also has a Taskfile (to support running from included subdirectories).
+func FindRootDir(dir string) (string, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+
+	// Find the nearest Taskfile first
+	found := ""
+	current := dir
+	for {
+		if findTaskfile(current) != "" {
+			found = current
+			break
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("no Taskfile found")
+		}
+		current = parent
+	}
+
+	// Keep walking up to find the topmost Taskfile
+	for {
+		parent := filepath.Dir(found)
+		if parent == found {
+			break
+		}
+		if findTaskfile(parent) != "" {
+			found = parent
+		} else {
+			break
+		}
+	}
+
+	return found, nil
+}
+
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
 func LoadWithIncludes(dir string) (*Taskfile, error) {
 	tf, err := Parse(dir)
 	if err != nil {
 		return nil, err
 	}
+
+	tf.Namespaces = make(map[string]string)
 
 	for namespace, inc := range tf.Includes {
 		incDir := inc.Dir
@@ -170,6 +213,8 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("loading include %q: %w", namespace, err)
 		}
+
+		tf.Namespaces[incDir] = namespace
 
 		for name, task := range child.Tasks {
 			qualifiedName := namespace + ":" + name

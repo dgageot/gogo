@@ -10,23 +10,56 @@ import (
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
 	tf  *Taskfile
+	cwd string
 	env []string
 }
 
 // NewRunner creates a task runner for the given taskfile.
-func NewRunner(tf *Taskfile) *Runner {
+func NewRunner(tf *Taskfile, cwd string) *Runner {
 	return &Runner{
 		tf:  tf,
+		cwd: cwd,
 		env: os.Environ(),
 	}
 }
 
+// resolveTaskName finds the actual task name, trying the exact name first,
+// then aliases, then prefixing with the namespace matching the current working directory.
+func (r *Runner) resolveTaskName(name string) (string, bool) {
+	if _, ok := r.tf.Tasks[name]; ok {
+		return name, true
+	}
+
+	// Try aliases
+	for taskName, task := range r.tf.Tasks {
+		for _, alias := range task.Aliases {
+			if alias == name {
+				return taskName, true
+			}
+		}
+	}
+
+	// Try prefixing with namespace for cwd
+	for dir, ns := range r.tf.Namespaces {
+		if r.cwd == dir || strings.HasPrefix(r.cwd, dir+string(os.PathSeparator)) {
+			qualified := ns + ":" + name
+			if _, ok := r.tf.Tasks[qualified]; ok {
+				return qualified, true
+			}
+		}
+	}
+
+	return name, false
+}
+
 // Run executes the named task.
 func (r *Runner) Run(name string, cliArgs string) error {
-	task, ok := r.tf.Tasks[name]
+	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)
 	}
+
+	task := r.tf.Tasks[resolved]
 
 	// Run dependencies first
 	for _, dep := range task.Deps {
