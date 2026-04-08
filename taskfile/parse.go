@@ -1,12 +1,11 @@
 package taskfile
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"gopkg.in/yaml.v3"
+	yaml "github.com/goccy/go-yaml"
 )
 
 // Taskfile represents a parsed Taskfile.yml.
@@ -27,13 +26,14 @@ type Include struct {
 }
 
 // UnmarshalYAML allows Include to be either a string or a map.
-func (i *Include) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		i.Taskfile = value.Value
+func (i *Include) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		i.Taskfile = s
 		return nil
 	}
 	type plain Include
-	return value.Decode((*plain)(i))
+	return unmarshal((*plain)(i))
 }
 
 // Task represents a single task definition.
@@ -58,13 +58,14 @@ type Cmd struct {
 }
 
 // UnmarshalYAML allows Cmd to be either a string or a map.
-func (c *Cmd) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		c.Cmd = value.Value
+func (c *Cmd) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		c.Cmd = s
 		return nil
 	}
 	type plain Cmd
-	return value.Decode((*plain)(c))
+	return unmarshal((*plain)(c))
 }
 
 // Dep represents a task dependency.
@@ -73,16 +74,17 @@ type Dep struct {
 }
 
 // UnmarshalYAML allows Dep to be either a string or a map.
-func (d *Dep) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		d.Task = value.Value
+func (d *Dep) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		d.Task = s
 		return nil
 	}
 	type depMap struct {
 		Task string `yaml:"task"`
 	}
 	var m depMap
-	if err := value.Decode(&m); err != nil {
+	if err := unmarshal(&m); err != nil {
 		return err
 	}
 	d.Task = m.Task
@@ -96,16 +98,17 @@ type Var struct {
 }
 
 // UnmarshalYAML allows Var to be either a string or a map with sh.
-func (v *Var) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		v.Value = value.Value
+func (v *Var) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		v.Value = s
 		return nil
 	}
 	type varMap struct {
 		Sh string `yaml:"sh"`
 	}
 	var m varMap
-	if err := value.Decode(&m); err != nil {
+	if err := unmarshal(&m); err != nil {
 		return err
 	}
 	v.Sh = m.Sh
@@ -125,10 +128,8 @@ func Parse(dir string) (*Taskfile, error) {
 	}
 
 	var tf Taskfile
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&tf); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	if err := yaml.UnmarshalWithOptions(data, &tf, yaml.Strict()); err != nil {
+		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
 	}
 
 	tf.Dir = dir
