@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	yaml "github.com/goccy/go-yaml"
 )
@@ -129,7 +130,7 @@ func Parse(dir string) (*Taskfile, error) {
 	}
 
 	var tf Taskfile
-	if err := yaml.UnmarshalWithOptions(data, &tf, yaml.Strict()); err != nil {
+	if err := yaml.UnmarshalWithOptions(expandTemplates(data), &tf, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
 	}
 
@@ -189,6 +190,19 @@ func FindRootDir(dir string) (string, error) {
 	}
 
 	return found, nil
+}
+
+var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
+
+// expandTemplates replaces {{.VAR}} patterns with environment variable values.
+func expandTemplates(data []byte) []byte {
+	return templatePattern.ReplaceAllFunc(data, func(match []byte) []byte {
+		name := templatePattern.FindSubmatch(match)[1]
+		if val, ok := os.LookupEnv(string(name)); ok {
+			return []byte(val)
+		}
+		return match
+	})
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.

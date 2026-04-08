@@ -35,3 +35,11 @@ func TestParse(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, []string{"gh"}, task.Aliases)
 }
+
+func TestExpandTemplates(t *testing.T) {
+	t.Setenv("MY_VAR", "hello")
+
+	assert.Equal(t, []byte("value: hello"), expandTemplates([]byte("value: {{.MY_VAR}}")))
+	assert.Equal(t, []byte("value: hello"), expandTemplates([]byte("value: {{ .MY_VAR }}")))
+	assert.Equal(t, []byte("value: {{.UNSET_VAR}}"), expandTemplates([]byte("value: {{.UNSET_VAR}}")))
+}
