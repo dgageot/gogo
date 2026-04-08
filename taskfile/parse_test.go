@@ -43,3 +43,32 @@ func TestExpandTemplates(t *testing.T) {
 	assert.Equal(t, []byte("value: hello"), expandTemplates([]byte("value: {{ .MY_VAR }}")))
 	assert.Equal(t, []byte("value: {{.UNSET_VAR}}"), expandTemplates([]byte("value: {{.UNSET_VAR}}")))
 }
+
+func TestApplyTaskComments(t *testing.T) {
+	yamlData := []byte(`version: "3"
+tasks:
+  # Build the project
+  build:
+    cmd: go build
+  # Run all the tests
+  test:
+    desc: "explicit desc"
+    cmd: go test
+  deploy:
+    cmd: deploy.sh
+`)
+
+	tf := &Taskfile{
+		Tasks: map[string]Task{
+			"build":  {Cmd: Cmd{Cmd: "go build"}},
+			"test":   {Desc: "explicit desc", Cmd: Cmd{Cmd: "go test"}},
+			"deploy": {Cmd: Cmd{Cmd: "deploy.sh"}},
+		},
+	}
+
+	applyTaskComments(tf, yamlData)
+
+	assert.Equal(t, "Build the project", tf.Tasks["build"].Desc)
+	assert.Equal(t, "explicit desc", tf.Tasks["test"].Desc)
+	assert.Equal(t, "", tf.Tasks["deploy"].Desc)
+}

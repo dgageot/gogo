@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 )
 
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
@@ -113,8 +116,10 @@ func Parse(dir string) (*Taskfile, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
+	expandedData := expandTemplates(data)
+
 	var tf Taskfile
-	if err := yaml.UnmarshalWithOptions(expandTemplates(data), &tf, yaml.Strict()); err != nil {
+	if err := yaml.UnmarshalWithOptions(expandedData, &tf, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
 	}
 
@@ -122,6 +127,9 @@ func Parse(dir string) (*Taskfile, error) {
 	if tf.Tasks == nil {
 		tf.Tasks = make(map[string]Task)
 	}
+
+	// Extract comments from AST to use as task descriptions
+	applyTaskComments(&tf, expandedData)
 
 	return &tf, nil
 }
@@ -187,6 +195,66 @@ func expandTemplates(data []byte) []byte {
 		}
 		return match
 	})
+}
+
+// applyTaskComments parses the YAML AST to extract comments above task keys
+// and uses them as task descriptions when no explicit desc is set.
+func applyTaskComments(tf *Taskfile, data []byte) {
+	file, err := parser.ParseBytes(data, parser.ParseComments)
+	if err != nil {
+		return
+	}
+
+	for _, doc := range file.Docs {
+		mapping, ok := doc.Body.(*ast.MappingNode)
+		if !ok {
+			continue
+		}
+
+		for _, mv := range mapping.Values {
+			key, ok := mv.Key.(*ast.StringNode)
+			if !ok || key.Value != "tasks" {
+				continue
+			}
+
+			taskMapping, ok := mv.Value.(*ast.MappingNode)
+			if !ok {
+				return
+			}
+
+			for _, taskMV := range taskMapping.Values {
+				taskKey, ok := taskMV.Key.(*ast.StringNode)
+				if !ok {
+					continue
+				}
+
+				task, exists := tf.Tasks[taskKey.Value]
+				if !exists || task.Desc != "" {
+					continue
+				}
+
+				comment := taskMV.GetComment()
+				if comment == nil {
+					continue
+				}
+
+				var lines []string
+				for _, c := range comment.Comments {
+					text := strings.TrimPrefix(c.Token.Value, "#")
+					text = strings.TrimSpace(text)
+					if text != "" {
+						lines = append(lines, text)
+					}
+				}
+
+				if len(lines) > 0 {
+					task.Desc = strings.Join(lines, " ")
+					tf.Tasks[taskKey.Value] = task
+				}
+			}
+			return
+		}
+	}
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
