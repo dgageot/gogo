@@ -9,17 +9,15 @@ import (
 
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf      *Taskfile
-	env     []string
-	verbose bool
+	tf  *Taskfile
+	env []string
 }
 
 // NewRunner creates a task runner for the given taskfile.
-func NewRunner(tf *Taskfile, verbose bool) *Runner {
+func NewRunner(tf *Taskfile) *Runner {
 	return &Runner{
-		tf:      tf,
-		env:     os.Environ(),
-		verbose: verbose,
+		tf:  tf,
+		env: os.Environ(),
 	}
 }
 
@@ -48,7 +46,7 @@ func (r *Runner) Run(name string, cliArgs string) error {
 
 	// If the task has a single cmd field, use that
 	if task.Cmd.Cmd != "" {
-		return r.execShell(r.expandVars(task.Cmd.Cmd, vars, cliArgs), dir, env)
+		return r.runCmd(name, r.expandVars(task.Cmd.Cmd, vars, cliArgs), dir, env)
 	}
 	if task.Cmd.Task != "" {
 		return r.Run(task.Cmd.Task, cliArgs)
@@ -57,13 +55,12 @@ func (r *Runner) Run(name string, cliArgs string) error {
 	// Execute commands
 	for _, cmd := range task.Cmds {
 		if cmd.Task != "" {
-			// This is a task reference
 			if err := r.Run(cmd.Task, cliArgs); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := r.execShell(r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+		if err := r.runCmd(name, r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
 			return err
 		}
 	}
@@ -144,10 +141,8 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 	return s
 }
 
-func (r *Runner) execShell(command, dir string, env []string) error {
-	if r.verbose {
-		fmt.Fprintf(os.Stderr, "$ %s\n", command)
-	}
+func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
+	fmt.Fprintf(os.Stderr, "\033[32m[%s]\033[0m %s\n", taskName, command)
 
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = dir
@@ -156,5 +151,8 @@ func (r *Runner) execShell(command, dir string, env []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("\033[31mtask: Failed to run task %q: %w\033[0m", taskName, err)
+	}
+	return nil
 }

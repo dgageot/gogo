@@ -18,23 +18,17 @@ func main() {
 }
 
 func run() error {
-	verbose := false
 	args := os.Args[1:]
 
 	// Parse flags
-	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+	if len(args) > 0 {
 		switch args[0] {
-		case "-v", "--verbose":
-			verbose = true
 		case "-l", "--list":
 			return listTasks()
 		case "-h", "--help":
 			printUsage()
 			return nil
-		default:
-			return fmt.Errorf("unknown flag: %s", args[0])
 		}
-		args = args[1:]
 	}
 	dir, err := os.Getwd()
 	if err != nil {
@@ -61,7 +55,7 @@ func run() error {
 		}
 	}
 
-	runner := taskfile.NewRunner(tf, verbose)
+	runner := taskfile.NewRunner(tf)
 	return runner.Run(taskName, cliArgs)
 }
 
@@ -103,6 +97,5 @@ Usage:
 
 Flags:
   -l, --list      List available tasks
-  -v, --verbose   Show commands being run
   -h, --help      Show this help`)
 }
