@@ -16,10 +16,19 @@ type Runner struct {
 
 // NewRunner creates a task runner for the given taskfile.
 func NewRunner(tf *Taskfile, cwd string) *Runner {
+	env := os.Environ()
+
+	// Inject dotenv variables (don't override existing env vars)
+	for k, v := range tf.DotenvVars {
+		if _, exists := os.LookupEnv(k); !exists {
+			env = append(env, k+"="+v)
+		}
+	}
+
 	return &Runner{
 		tf:  tf,
 		cwd: cwd,
-		env: os.Environ(),
+		env: env,
 	}
 }
 

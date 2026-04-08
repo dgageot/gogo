@@ -19,6 +19,7 @@ type Taskfile struct {
 	Dir        string             `yaml:"-"`
 	Interval   string             `yaml:"interval"`
 	Namespaces map[string]string  `yaml:"-"` // dir -> namespace
+	DotenvVars map[string]string  `yaml:"-"` // resolved dotenv variables
 }
 
 // Include represents an included taskfile reference.
@@ -214,6 +215,13 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 
 	tf.Namespaces = make(map[string]string)
 
+	// Load dotenv files, deduplicating across includes
+	seen := make(map[string]bool)
+	dotenvVars, err := loadDotenvFiles(dir, tf.Dotenv, seen)
+	if err != nil {
+		return nil, fmt.Errorf("loading dotenv: %w", err)
+	}
+
 	for namespace, inc := range tf.Includes {
 		incDir := inc.Dir
 		if incDir == "" {
@@ -230,6 +238,17 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 
 		tf.Namespaces[incDir] = namespace
 
+		// Load child dotenv files, deduplicating with parent
+		childDotenv, err := loadDotenvFiles(incDir, child.Dotenv, seen)
+		if err != nil {
+			return nil, fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
+		}
+		for k, v := range childDotenv {
+			if _, exists := dotenvVars[k]; !exists {
+				dotenvVars[k] = v
+			}
+		}
+
 		for name, task := range child.Tasks {
 			qualifiedName := namespace + ":" + name
 			// Resolve relative dir to the child's directory
@@ -241,6 +260,8 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 			tf.Tasks[qualifiedName] = task
 		}
 	}
+
+	tf.DotenvVars = dotenvVars
 
 	return tf, nil
 }
