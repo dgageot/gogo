@@ -11,32 +11,15 @@ import (
 
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
 type Taskfile struct {
-	Version    string             `yaml:"version"`
-	Includes   map[string]Include `yaml:"includes"`
-	Dotenv     []string           `yaml:"dotenv"`
-	Vars       map[string]Var     `yaml:"vars"`
-	Tasks      map[string]Task    `yaml:"tasks"`
-	Dir        string             `yaml:"-"`
-	Interval   string             `yaml:"interval"`
-	Namespaces map[string]string  `yaml:"-"` // dir -> namespace
-	DotenvVars map[string]string  `yaml:"-"` // resolved dotenv variables
-}
-
-// Include represents an included taskfile reference.
-type Include struct {
-	Taskfile string `yaml:"taskfile"`
-	Dir      string `yaml:"dir"`
-}
-
-// UnmarshalYAML allows Include to be either a string or a map.
-func (i *Include) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var s string
-	if err := unmarshal(&s); err == nil {
-		i.Taskfile = s
-		return nil
-	}
-	type plain Include
-	return unmarshal((*plain)(i))
+	Version    string            `yaml:"version"`
+	Includes   []string          `yaml:"includes"`
+	Dotenv     []string          `yaml:"dotenv"`
+	Vars       map[string]Var    `yaml:"vars"`
+	Tasks      map[string]Task   `yaml:"tasks"`
+	Dir        string            `yaml:"-"`
+	Interval   string            `yaml:"interval"`
+	Namespaces map[string]string `yaml:"-"` // dir -> namespace
+	DotenvVars map[string]string `yaml:"-"` // resolved dotenv variables
 }
 
 // Task represents a single task definition.
@@ -222,14 +205,8 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 		return nil, fmt.Errorf("loading dotenv: %w", err)
 	}
 
-	for namespace, inc := range tf.Includes {
-		incDir := inc.Dir
-		if incDir == "" {
-			incDir = filepath.Dir(inc.Taskfile)
-		}
-		if !filepath.IsAbs(incDir) {
-			incDir = filepath.Join(dir, incDir)
-		}
+	for _, namespace := range tf.Includes {
+		incDir := filepath.Join(dir, namespace)
 
 		child, err := Parse(incDir)
 		if err != nil {
