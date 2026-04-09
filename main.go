@@ -102,18 +102,25 @@ func listTasks() error {
 
 	names := slices.Sorted(maps.Keys(tf.Tasks))
 
+	// Filter to only tasks with descriptions
+	names = slices.DeleteFunc(names, func(name string) bool {
+		return tf.Tasks[name].Desc == ""
+	})
+
+	if len(names) == 0 {
+		return nil
+	}
+
 	maxLen := len(slices.MaxFunc(names, func(a, b string) int {
 		return cmp.Compare(len(a), len(b))
 	}))
 
 	for _, name := range names {
 		task := tf.Tasks[name]
-		if task.Desc != "" {
-			if len(task.Aliases) > 0 {
-				fmt.Printf("%-*s  %s (aliases: %s)\n", maxLen, name, task.Desc, strings.Join(task.Aliases, ", "))
-			} else {
-				fmt.Printf("%-*s  %s\n", maxLen, name, task.Desc)
-			}
+		if len(task.Aliases) > 0 {
+			fmt.Printf("%-*s  %s (aliases: %s)\n", maxLen, name, task.Desc, strings.Join(task.Aliases, ", "))
+		} else {
+			fmt.Printf("%-*s  %s\n", maxLen, name, task.Desc)
 		}
 	}
 
