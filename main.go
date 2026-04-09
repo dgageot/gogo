@@ -10,8 +10,21 @@ import (
 	"strings"
 	"time"
 
+	arg "github.com/alexflint/go-arg"
+
 	"github.com/dgageot/gogo/taskfile"
 )
+
+type args struct {
+	List    bool     `arg:"-l,--list" help:"list available tasks"`
+	Watch   bool     `arg:"-w,--watch" help:"watch sources and re-run on changes"`
+	Task    string   `arg:"positional" default:"default" help:"task to run"`
+	CLIArgs []string `arg:"positional" help:"arguments passed to the task (after --)"`
+}
+
+func (args) Description() string {
+	return "gogo - a simple task runner"
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -21,58 +34,47 @@ func main() {
 }
 
 func run() error {
-	args := os.Args[1:]
-
-	// Handle subcommands
-	if len(args) >= 3 && args[0] == "secret" && args[1] == "set" {
-		return secretSet(args[2:])
+	// Handle "secret set" subcommand before arg parsing
+	if len(os.Args) >= 3 && os.Args[1] == "secret" && os.Args[2] == "set" {
+		return secretSet(os.Args[3:])
 	}
 
-	// Parse flags
-	watch := false
-	var positionalArgs []string
-	for _, arg := range args {
-		if arg == "--" {
-			break
-		}
-		switch arg {
-		case "-l", "--list":
-			return listTasks()
-		case "-h", "--help":
-			printUsage()
+	var a args
+	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &a)
+	if err != nil {
+		return err
+	}
+
+	if err := p.Parse(os.Args[1:]); err != nil {
+		switch {
+		case errors.Is(err, arg.ErrHelp):
+			p.WriteHelp(os.Stdout)
 			return nil
-		case "-w", "--watch":
-			watch = true
+		case errors.Is(err, arg.ErrVersion):
+			return nil
 		default:
-			positionalArgs = append(positionalArgs, arg)
+			return err
 		}
 	}
-	args = positionalArgs
+
+	if a.List {
+		return listTasks()
+	}
 
 	dir, tf, err := loadTaskfile()
 	if err != nil {
 		return err
 	}
 
-	taskName := "default"
-	if len(args) > 0 {
-		taskName = args[0]
-	}
-
-	// Collect CLI_ARGS (everything after --)
-	var cliArgs string
-	if i := slices.Index(os.Args, "--"); i >= 0 {
-		cliArgs = strings.Join(os.Args[i+1:], " ")
-	}
-
+	cliArgs := strings.Join(a.CLIArgs, " ")
 	runner := taskfile.NewRunner(tf, dir)
 
-	if watch {
+	if a.Watch {
 		parsed, _ := time.ParseDuration(tf.Interval)
-		return runner.Watch(taskName, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
+		return runner.Watch(a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
 	}
 
-	return runner.Run(taskName, cliArgs)
+	return runner.Run(a.Task, cliArgs)
 }
 
 func loadTaskfile() (string, *taskfile.Taskfile, error) {
@@ -124,22 +126,6 @@ func listTasks() error {
 	}
 
 	return nil
-}
-
-func printUsage() {
-	fmt.Println(`gogo - a simple task runner
-
-Usage:
-  gogo [flags] [task] [-- args...]
-  gogo secret set <service> <key> <value>
-
-Flags:
-  -l, --list      List available tasks
-  -w, --watch     Watch sources and re-run on changes
-  -h, --help      Show this help
-
-Commands:
-  secret set      Store a secret in the OS keychain`)
 }
 
 func secretSet(args []string) error {
