@@ -115,16 +115,14 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 	// Build environment
 	env := r.buildEnv(task, vars)
 
-	// If the task has a single cmd field, use that
-	if task.Cmd.Cmd != "" {
-		return r.runCmd(name, r.expandVars(task.Cmd.Cmd, vars, cliArgs), dir, env)
-	}
-	if task.Cmd.Task != "" {
-		return r.Run(task.Cmd.Task, cliArgs)
+	// Normalize single cmd into cmds list
+	cmds := task.Cmds
+	if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
+		cmds = []Cmd{task.Cmd}
 	}
 
 	// Execute commands
-	for _, cmd := range task.Cmds {
+	for _, cmd := range cmds {
 		if cmd.Task != "" {
 			if err := r.Run(cmd.Task, cliArgs); err != nil {
 				return err
