@@ -29,7 +29,7 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 
 		if checksum != lastChecksum {
 			if lastChecksum != "" {
-				fmt.Fprintf(os.Stderr, "\033[33m[%s]\033[0m sources changed, re-running...\n", resolved)
+				fmt.Fprintf(os.Stderr, "%s[%s]%s sources changed, re-running...\n", colorYellow, resolved, colorReset)
 			}
 
 			// Run the task, but don't stop watching on failure

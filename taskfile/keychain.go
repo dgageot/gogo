@@ -24,7 +24,7 @@ func loadKeychainSecrets(service string, entries []KeychainEntry) (map[string]st
 
 	env := make(map[string]string)
 	for _, entry := range entries {
-		fmt.Fprintf(os.Stderr, "\033[36m[keychain]\033[0m reading %q from %q\n", entry.Key, service)
+		fmt.Fprintf(os.Stderr, "%s[keychain]%s reading %q from %q\n", colorCyan, colorReset, entry.Key, service)
 		value, err := getSecret(service, entry.Key)
 		if err != nil {
 			return nil, err

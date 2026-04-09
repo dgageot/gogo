@@ -101,7 +101,7 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 			return fmt.Errorf("computing sources checksum: %w", err)
 		}
 		if checksum == readStoredChecksum(r.tf.Dir, resolved) {
-			fmt.Fprintf(os.Stderr, "\033[33m[%s]\033[0m up to date\n", resolved)
+			fmt.Fprintf(os.Stderr, "%s[%s]%s up to date\n", colorYellow, resolved, colorReset)
 			return nil
 		}
 		defer func() {
@@ -214,7 +214,7 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 }
 
 func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
-	fmt.Fprintf(os.Stderr, "\033[32m[%s]\033[0m %s\n", taskName, command)
+	fmt.Fprintf(os.Stderr, "%s[%s]%s %s\n", colorGreen, taskName, colorReset, command)
 
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = dir
@@ -224,7 +224,7 @@ func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("\033[31mtask: Failed to run task %q: %w\033[0m", taskName, err)
+		return fmt.Errorf("%stask: Failed to run task %q: %w%s", colorRed, taskName, err, colorReset)
 	}
 	return nil
 }
