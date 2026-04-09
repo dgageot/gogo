@@ -125,12 +125,14 @@ Make sure:
 	return nil
 }
 
+var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
+
 func newOnePasswordClient(ctx context.Context, account string) (client *onepassword.Client, useDesktopApp bool, err error) {
 	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
 		client, err := onepassword.NewClient(
 			ctx,
 			onepassword.WithServiceAccountToken(token),
-			onepassword.WithIntegrationInfo("gogo", "v1.0.0"),
+			opIntegrationInfo,
 		)
 		if err != nil {
 			return nil, false, fmt.Errorf("creating 1Password client with service account: %w", err)
@@ -141,7 +143,7 @@ func newOnePasswordClient(ctx context.Context, account string) (client *onepassw
 	client, err = onepassword.NewClient(
 		ctx,
 		onepassword.WithDesktopAppIntegration(account),
-		onepassword.WithIntegrationInfo("gogo", "v1.0.0"),
+		opIntegrationInfo,
 	)
 	if err != nil {
 		return nil, true, fmt.Errorf(`creating 1Password client with desktop app (account %q): %w
