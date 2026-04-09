@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"os"
@@ -58,7 +59,6 @@ func run() error {
 		return err
 	}
 
-	// Default task
 	taskName := "default"
 	if len(args) > 0 {
 		taskName = args[0]
@@ -76,12 +76,11 @@ func run() error {
 	runner := taskfile.NewRunner(tf, dir)
 
 	if watch {
-		interval := 500 * time.Millisecond
+		var parsed time.Duration
 		if tf.Interval != "" {
-			if d, err := time.ParseDuration(tf.Interval); err == nil {
-				interval = d
-			}
+			parsed, _ = time.ParseDuration(tf.Interval)
 		}
+		interval := cmp.Or(parsed, 500*time.Millisecond)
 		return runner.Watch(taskName, cliArgs, interval)
 	}
 
