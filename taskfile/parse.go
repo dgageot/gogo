@@ -84,8 +84,8 @@ func (d *Dep) UnmarshalYAML(unmarshal func(any) error) error {
 
 // Var represents a variable value. It can be a static string or a shell command.
 type Var struct {
-	Value string
-	Sh    string
+	Value string `yaml:"value"`
+	Sh    string `yaml:"sh"`
 }
 
 // UnmarshalYAML allows Var to be either a string or a map with sh.
