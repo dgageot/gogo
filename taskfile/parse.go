@@ -13,10 +13,13 @@ import (
 	"github.com/goccy/go-yaml/parser"
 )
 
-// KeychainConfig describes which keychain service to read secrets from.
-type KeychainConfig struct {
-	Service string          `yaml:"service"`
-	Secrets []KeychainEntry `yaml:"secrets"`
+// SecretEntry maps a secret reference to an environment variable.
+// The ref field uses a URI scheme to identify the provider:
+//   - keychain://service/key
+//   - 1password://account/vault/item/field
+type SecretEntry struct {
+	Ref string `yaml:"ref"`
+	Env string `yaml:"env"`
 }
 
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
@@ -24,7 +27,7 @@ type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
 	Dotenv     []string          `yaml:"dotenv"`
-	Keychain   *KeychainConfig   `yaml:"keychain"`
+	Secrets    []SecretEntry     `yaml:"secrets"`
 	Vars       map[string]Var    `yaml:"vars"`
 	Tasks      map[string]Task   `yaml:"tasks"`
 	Dir        string            `yaml:"-"`
@@ -295,11 +298,11 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 
 	tf.DotenvVars = dotenvVars
 
-	// Load keychain secrets
-	if tf.Keychain != nil {
-		secrets, err := loadKeychainSecrets(tf.Keychain.Service, tf.Keychain.Secrets)
+	// Load secrets
+	if len(tf.Secrets) > 0 {
+		secrets, err := loadSecrets(tf.Secrets)
 		if err != nil {
-			return nil, fmt.Errorf("loading keychain secrets: %w", err)
+			return nil, fmt.Errorf("loading secrets: %w", err)
 		}
 		tf.SecretVars = secrets
 	}
