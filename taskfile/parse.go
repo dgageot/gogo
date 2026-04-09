@@ -223,6 +223,7 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 	}
 }
 
+// findTasksMapping locates the "tasks" mapping node in the top-level YAML document.
 func findTasksMapping(mapping *ast.MappingNode) *ast.MappingNode {
 	for _, mv := range mapping.Values {
 		key, ok := mv.Key.(*ast.StringNode)
@@ -235,6 +236,7 @@ func findTasksMapping(mapping *ast.MappingNode) *ast.MappingNode {
 	return nil
 }
 
+// extractCommentText returns the text from comments above a YAML mapping value.
 func extractCommentText(node *ast.MappingValueNode) string {
 	comment := node.GetComment()
 	if comment == nil {
