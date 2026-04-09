@@ -196,7 +196,7 @@ func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
 }
 
 func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) string {
-	s = strings.ReplaceAll(s, "{{.CLI_ARGS}}", cliArgs)
+	vars["CLI_ARGS"] = cliArgs
 	for k, v := range vars {
 		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
 	}
@@ -210,6 +210,7 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 		}
 		return "${" + key + "}"
 	})
+	delete(vars, "CLI_ARGS")
 	return s
 }
 
