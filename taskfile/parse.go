@@ -186,11 +186,7 @@ func expandTemplates(data []byte) []byte {
 // and uses them as task descriptions when no explicit desc is set.
 func applyTaskComments(tf *Taskfile, data []byte) {
 	file, err := parser.ParseBytes(data, parser.ParseComments)
-	if err != nil {
-		return
-	}
-
-	if len(file.Docs) == 0 {
+	if err != nil || len(file.Docs) == 0 {
 		return
 	}
 
