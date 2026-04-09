@@ -242,15 +242,17 @@ func extractCommentText(node *ast.MappingValueNode) string {
 		return ""
 	}
 
-	var lines []string
+	var b strings.Builder
 	for _, c := range comment.Comments {
-		text := strings.TrimPrefix(c.Token.Value, "#")
-		text = strings.TrimSpace(text)
+		text := strings.TrimSpace(strings.TrimPrefix(c.Token.Value, "#"))
 		if text != "" {
-			lines = append(lines, text)
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(text)
 		}
 	}
-	return strings.Join(lines, " ")
+	return b.String()
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
