@@ -275,31 +275,8 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	}
 
 	for _, namespace := range tf.Includes {
-		incDir := filepath.Join(dir, namespace)
-
-		child, err := Parse(incDir)
-		if err != nil {
-			return nil, fmt.Errorf("loading include %q: %w", namespace, err)
-		}
-
-		tf.Namespaces[incDir] = namespace
-
-		// Load child dotenv files, deduplicating with parent
-		childDotenv, err := loadDotenvFiles(incDir, child.Dotenv, seen)
-		if err != nil {
-			return nil, fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
-		}
-		// Child values only fill in gaps (parent takes precedence)
-		maps.Copy(childDotenv, dotenvVars)
-		dotenvVars = childDotenv
-
-		for name, task := range child.Tasks {
-			qualifiedName := namespace + ":" + name
-			// Resolve relative dir to the child's directory
-			if !filepath.IsAbs(task.Dir) {
-				task.Dir = filepath.Join(child.Dir, task.Dir)
-			}
-			tf.Tasks[qualifiedName] = task
+		if err := loadInclude(tf, dir, namespace, seen, dotenvVars); err != nil {
+			return nil, err
 		}
 	}
 
@@ -315,4 +292,36 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	}
 
 	return tf, nil
+}
+
+// loadInclude parses a child Taskfile and merges it into the parent.
+func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]struct{}, dotenvVars map[string]string) error {
+	incDir := filepath.Join(parentDir, namespace)
+
+	child, err := Parse(incDir)
+	if err != nil {
+		return fmt.Errorf("loading include %q: %w", namespace, err)
+	}
+
+	tf.Namespaces[incDir] = namespace
+
+	// Load child dotenv files, deduplicating with parent
+	childDotenv, err := loadDotenvFiles(incDir, child.Dotenv, seen)
+	if err != nil {
+		return fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
+	}
+	// Child values only fill in gaps (parent takes precedence)
+	maps.Copy(childDotenv, dotenvVars)
+	maps.Copy(dotenvVars, childDotenv)
+
+	for name, task := range child.Tasks {
+		qualifiedName := namespace + ":" + name
+		// Resolve relative dir to the child's directory
+		if !filepath.IsAbs(task.Dir) {
+			task.Dir = filepath.Join(child.Dir, task.Dir)
+		}
+		tf.Tasks[qualifiedName] = task
+	}
+
+	return nil
 }
