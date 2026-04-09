@@ -40,7 +40,7 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = fmt.Fprintf(h, "%s\n%d\n", f, len(data))
+		fmt.Fprintf(h, "%s\n%d\n", f, len(data))
 		h.Write(data)
 	}
 
