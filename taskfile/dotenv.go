@@ -16,15 +16,7 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 	env := make(map[string]string)
 
 	for _, p := range paths {
-		if after, ok := strings.CutPrefix(p, "~/"); ok {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return nil, err
-			}
-			p = filepath.Join(home, after)
-		} else if !filepath.IsAbs(p) {
-			p = filepath.Join(dir, p)
-		}
+		p = resolvePath(dir, p)
 
 		abs, err := filepath.Abs(p)
 		if err != nil {
@@ -87,4 +79,16 @@ func unquote(s string) string {
 		}
 	}
 	return s
+}
+
+// resolvePath resolves a path relative to dir, expanding ~ to the home directory.
+func resolvePath(dir, p string) string {
+	if after, ok := strings.CutPrefix(p, "~/"); ok {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, after)
+	}
+	if !filepath.IsAbs(p) {
+		return filepath.Join(dir, p)
+	}
+	return p
 }
