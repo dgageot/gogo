@@ -147,8 +147,10 @@ func (r *Runner) taskDir(task Task) string {
 func (r *Runner) resolveVars(task Task) map[string]string {
 	resolved := make(map[string]string)
 
+	taskDir := r.taskDir(task)
+
 	// Built-in vars
-	resolved["TASKFILE_DIR"] = r.taskDir(task)
+	resolved["TASKFILE_DIR"] = taskDir
 
 	// Global vars
 	for k, v := range r.tf.Vars {
@@ -157,7 +159,7 @@ func (r *Runner) resolveVars(task Task) map[string]string {
 
 	// Task vars override
 	for k, v := range task.Vars {
-		resolved[k] = r.resolveVar(v, r.taskDir(task))
+		resolved[k] = r.resolveVar(v, taskDir)
 	}
 
 	return resolved
