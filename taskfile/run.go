@@ -114,7 +114,7 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 
 	// Normalize single cmd into cmds list
 	cmds := task.Cmds
-	if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
+	if !task.Cmd.isEmpty() {
 		cmds = []Cmd{task.Cmd}
 	}
 
