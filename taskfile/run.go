@@ -45,10 +45,8 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 
 	// Try aliases
 	for taskName, task := range r.tf.Tasks {
-		for _, alias := range task.Aliases {
-			if alias == name {
-				return taskName, true
-			}
+		if slices.Contains(task.Aliases, name) {
+			return taskName, true
 		}
 	}
 
