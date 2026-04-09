@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -281,11 +282,9 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
 		}
-		for k, v := range childDotenv {
-			if _, exists := dotenvVars[k]; !exists {
-				dotenvVars[k] = v
-			}
-		}
+		// Merge child dotenv (parent takes precedence)
+		maps.Copy(childDotenv, dotenvVars)
+		dotenvVars = childDotenv
 
 		for name, task := range child.Tasks {
 			qualifiedName := namespace + ":" + name
