@@ -169,16 +169,17 @@ func (r *Runner) resolveVars(task Task) map[string]string {
 }
 
 func (r *Runner) resolveVar(v Var, dir string) string {
-	if v.Sh != "" {
-		cmd := exec.Command("sh", "-c", v.Sh)
-		cmd.Dir = dir
-		out, err := cmd.Output()
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(out))
+	if v.Sh == "" {
+		return v.Value
 	}
-	return v.Value
+
+	cmd := exec.Command("sh", "-c", v.Sh)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
