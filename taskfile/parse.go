@@ -153,40 +153,26 @@ func findTaskfile(dir string) string {
 }
 
 // FindRootDir walks up from dir to find the topmost directory containing a Taskfile.
-// It first finds the nearest Taskfile, then keeps walking up to find any ancestor
-// that also has a Taskfile (to support running from included subdirectories).
 func FindRootDir(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
 
-	// Find the nearest Taskfile first
 	found := ""
-	current := dir
-	for {
+	for current := dir; ; {
 		if findTaskfile(current) != "" {
 			found = current
-			break
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", fmt.Errorf("no Taskfile found")
+			break
 		}
 		current = parent
 	}
 
-	// Keep walking up to find the topmost Taskfile
-	for {
-		parent := filepath.Dir(found)
-		if parent == found {
-			break
-		}
-		if findTaskfile(parent) != "" {
-			found = parent
-		} else {
-			break
-		}
+	if found == "" {
+		return "", fmt.Errorf("no Taskfile found")
 	}
 
 	return found, nil
