@@ -117,11 +117,11 @@ func listTasks() error {
 
 	for _, name := range names {
 		task := tf.Tasks[name]
-		aliases := ""
+		desc := task.Desc
 		if len(task.Aliases) > 0 {
-			aliases = " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
+			desc += " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
-		fmt.Printf("%-*s  %s%s\n", maxLen, name, task.Desc, aliases)
+		fmt.Printf("%-*s  %s\n", maxLen, name, desc)
 	}
 
 	return nil
