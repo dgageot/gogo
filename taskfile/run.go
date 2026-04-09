@@ -210,7 +210,7 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 	}
 
 	// Replace {{.VAR}} templates
-	oldnew := make([]string, 0, (len(vars)+1)*2)
+	var oldnew []string
 	for k, v := range vars {
 		oldnew = append(oldnew, "{{."+k+"}}", v)
 	}
