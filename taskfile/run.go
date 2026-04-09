@@ -209,12 +209,15 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 	for k, v := range vars {
 		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
 	}
-	// Expand HOME and similar
+	// Expand known variables; leave unknown ${VAR} references for the shell
 	s = os.Expand(s, func(key string) string {
 		if val, ok := vars[key]; ok {
 			return val
 		}
-		return os.Getenv(key)
+		if val, ok := os.LookupEnv(key); ok {
+			return val
+		}
+		return "${" + key + "}"
 	})
 	return s
 }
