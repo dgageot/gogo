@@ -30,7 +30,7 @@ func run() error {
 
 	// Parse flags
 	watch := false
-	var filtered []string
+	var positionalArgs []string
 	for _, arg := range args {
 		if arg == "--" {
 			break
@@ -44,10 +44,10 @@ func run() error {
 		case "-w", "--watch":
 			watch = true
 		default:
-			filtered = append(filtered, arg)
+			positionalArgs = append(positionalArgs, arg)
 		}
 	}
-	args = filtered
+	args = positionalArgs
 
 	dir, tf, err := loadTaskfile()
 	if err != nil {
