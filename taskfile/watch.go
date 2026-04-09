@@ -19,27 +19,32 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 	}
 
 	dir := r.taskDir(task)
-	var lastChecksum string
+
+	// Run once immediately
+	if err := r.Run(name, cliArgs); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
+
+	lastChecksum, _ := sourcesChecksum(dir, task.Sources)
 
 	for {
+		time.Sleep(interval)
+
 		checksum, err := sourcesChecksum(dir, task.Sources)
 		if err != nil {
 			return fmt.Errorf("computing sources checksum: %w", err)
 		}
 
-		if checksum != lastChecksum {
-			if lastChecksum != "" {
-				fmt.Fprintf(os.Stderr, "%s[%s]%s sources changed, re-running...\n", colorYellow, resolved, colorReset)
-			}
-
-			// Run the task, but don't stop watching on failure
-			if err := r.Run(name, cliArgs); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-			}
-
-			lastChecksum = checksum
+		if checksum == lastChecksum {
+			continue
 		}
 
-		time.Sleep(interval)
+		fmt.Fprintf(os.Stderr, "%s[%s]%s sources changed, re-running...\n", colorYellow, resolved, colorReset)
+
+		if err := r.Run(name, cliArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+
+		lastChecksum = checksum
 	}
 }
