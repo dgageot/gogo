@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -186,8 +187,7 @@ func (r *Runner) resolveVar(v Var, dir string) string {
 }
 
 func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
-	env := make([]string, len(r.env))
-	copy(env, r.env)
+	env := slices.Clone(r.env)
 
 	for k, v := range vars {
 		env = append(env, k+"="+v)
