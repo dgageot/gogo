@@ -13,6 +13,7 @@ import (
 )
 
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
+
 // KeychainConfig describes which keychain service to read secrets from.
 type KeychainConfig struct {
 	Service string          `yaml:"service"`
