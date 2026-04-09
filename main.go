@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/dgageot/gogo/taskfile"
-	"maps"
 )
 
 func main() {
