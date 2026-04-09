@@ -7,10 +7,10 @@ import (
 
 // ANSI color escape sequences.
 const (
-	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorCyan   = "\033[36m"
+	colorReset  = "\x1b[0m"
+	colorGreen  = "\x1b[32m"
+	colorYellow = "\x1b[33m"
+	colorCyan   = "\x1b[36m"
 )
 
 // logTask prints a colored task-prefixed message to stderr.
