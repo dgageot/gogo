@@ -240,7 +240,7 @@ func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("task: failed to run task %q: %w", taskName, err)
+		return fmt.Errorf("task %q: %w", taskName, err)
 	}
 	return nil
 }
