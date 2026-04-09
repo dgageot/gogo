@@ -48,6 +48,7 @@ func openKeyring(service string) (keyring.Keyring, error) {
 
 	if runtime.GOOS == "darwin" {
 		cfg.AllowedBackends = []keyring.BackendType{keyring.KeychainBackend}
+		cfg.KeychainTrustApplication = true
 	}
 
 	return keyring.Open(cfg)
