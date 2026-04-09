@@ -14,12 +14,12 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 	env := make(map[string]string)
 
 	for _, p := range paths {
-		if strings.HasPrefix(p, "~/") {
+		if rest, ok := strings.CutPrefix(p, "~/"); ok {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return nil, err
 			}
-			p = filepath.Join(home, p[2:])
+			p = filepath.Join(home, rest)
 		} else if !filepath.IsAbs(p) {
 			p = filepath.Join(dir, p)
 		}
