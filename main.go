@@ -153,7 +153,7 @@ func secretSet(args []string) error {
 	}
 
 	if err := taskfile.SetSecret(args[0], args[1], args[2]); err != nil {
-		return fmt.Errorf("storing secret: %w", err)
+		return err
 	}
 
 	fmt.Fprintf(os.Stderr, "Secret %q stored in keychain %q\n", args[1], args[0])
