@@ -118,10 +118,10 @@ func Parse(dir string) (*Taskfile, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	expandedData := expandTemplates(data)
+	data = expandTemplates(data)
 
 	var tf Taskfile
-	if err := yaml.UnmarshalWithOptions(expandedData, &tf, yaml.Strict()); err != nil {
+	if err := yaml.UnmarshalWithOptions(data, &tf, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
 	}
 
@@ -131,7 +131,7 @@ func Parse(dir string) (*Taskfile, error) {
 	}
 
 	// Extract comments from AST to use as task descriptions
-	applyTaskComments(&tf, expandedData)
+	applyTaskComments(&tf, data)
 
 	return &tf, nil
 }
