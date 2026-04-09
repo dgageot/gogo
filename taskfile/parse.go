@@ -190,34 +190,35 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 		return
 	}
 
-	for _, doc := range file.Docs {
-		mapping, ok := doc.Body.(*ast.MappingNode)
+	if len(file.Docs) == 0 {
+		return
+	}
+
+	mapping, ok := file.Docs[0].Body.(*ast.MappingNode)
+	if !ok {
+		return
+	}
+
+	taskMapping := findTasksMapping(mapping)
+	if taskMapping == nil {
+		return
+	}
+
+	for _, taskMV := range taskMapping.Values {
+		taskKey, ok := taskMV.Key.(*ast.StringNode)
 		if !ok {
 			continue
 		}
 
-		taskMapping := findTasksMapping(mapping)
-		if taskMapping == nil {
+		task, exists := tf.Tasks[taskKey.Value]
+		if !exists {
 			continue
 		}
 
-		for _, taskMV := range taskMapping.Values {
-			taskKey, ok := taskMV.Key.(*ast.StringNode)
-			if !ok {
-				continue
-			}
-
-			task, exists := tf.Tasks[taskKey.Value]
-			if !exists {
-				continue
-			}
-
-			if desc := extractCommentText(taskMV); desc != "" {
-				task.Desc = desc
-				tf.Tasks[taskKey.Value] = task
-			}
+		if desc := extractCommentText(taskMV); desc != "" {
+			task.Desc = desc
+			tf.Tasks[taskKey.Value] = task
 		}
-		break
 	}
 }
 
