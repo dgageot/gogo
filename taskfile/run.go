@@ -26,6 +26,13 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		}
 	}
 
+	// Inject keychain secrets (don't override existing env vars)
+	for k, v := range tf.SecretVars {
+		if _, exists := os.LookupEnv(k); !exists {
+			env = append(env, k+"="+v)
+		}
+	}
+
 	return &Runner{
 		tf:  tf,
 		cwd: cwd,

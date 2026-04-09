@@ -21,6 +21,11 @@ func main() {
 func run() error {
 	args := os.Args[1:]
 
+	// Handle subcommands
+	if len(args) >= 3 && args[0] == "secret" && args[1] == "set" {
+		return secretSet(args[2:])
+	}
+
 	// Parse flags
 	watch := false
 	var filtered []string
@@ -127,9 +132,28 @@ func printUsage() {
 
 Usage:
   gogo [flags] [task] [-- args...]
+  gogo secret set <service> <key> <value>
 
 Flags:
   -l, --list      List available tasks
   -w, --watch     Watch sources and re-run on changes
-  -h, --help      Show this help`)
+  -h, --help      Show this help
+
+Commands:
+  secret set      Store a secret in the OS keychain`)
+}
+
+func secretSet(args []string) error {
+	if len(args) != 3 {
+		return fmt.Errorf("usage: gogo secret set <service> <key> <value>")
+	}
+
+	service, key, value := args[0], args[1], args[2]
+
+	if err := taskfile.SetSecret(service, key, value); err != nil {
+		return fmt.Errorf("storing secret: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Secret %q stored in keychain %q\n", key, service)
+	return nil
 }

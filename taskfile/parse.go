@@ -13,16 +13,24 @@ import (
 )
 
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
+// KeychainConfig describes which keychain service to read secrets from.
+type KeychainConfig struct {
+	Service string          `yaml:"service"`
+	Secrets []KeychainEntry `yaml:"secrets"`
+}
+
 type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
 	Dotenv     []string          `yaml:"dotenv"`
+	Keychain   *KeychainConfig   `yaml:"keychain"`
 	Vars       map[string]Var    `yaml:"vars"`
 	Tasks      map[string]Task   `yaml:"tasks"`
 	Dir        string            `yaml:"-"`
 	Interval   string            `yaml:"interval"`
 	Namespaces map[string]string `yaml:"-"` // dir -> namespace
 	DotenvVars map[string]string `yaml:"-"` // resolved dotenv variables
+	SecretVars map[string]string `yaml:"-"` // resolved keychain secrets
 }
 
 // Task represents a single task definition.
@@ -306,6 +314,15 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	}
 
 	tf.DotenvVars = dotenvVars
+
+	// Load keychain secrets
+	if tf.Keychain != nil {
+		secrets, err := loadKeychainSecrets(tf.Keychain.Service, tf.Keychain.Secrets)
+		if err != nil {
+			return nil, fmt.Errorf("loading keychain secrets: %w", err)
+		}
+		tf.SecretVars = secrets
+	}
 
 	return tf, nil
 }
