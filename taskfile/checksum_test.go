@@ -32,6 +32,14 @@ func TestSourcesChecksum(t *testing.T) {
 	assert.NotEqual(t, sum1, sum3)
 }
 
+func TestSourcesChecksumNoMatches(t *testing.T) {
+	dir := t.TempDir()
+
+	sum, err := sourcesChecksum(dir, []string{"*.go"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, sum, "empty file set should still produce a checksum")
+}
+
 func TestChecksumStorage(t *testing.T) {
 	dir := t.TempDir()
 
