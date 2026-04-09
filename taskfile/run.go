@@ -108,15 +108,15 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	vars := r.resolveVars(&task, dir)
 
 	// Check sources for up-to-date
-	if len(task.Sources) > 0 {
-		checksum, err := sourcesChecksum(dir, task.Sources)
-		if err != nil {
-			return fmt.Errorf("computing sources checksum: %w", err)
-		}
-		if checksum == readStoredChecksum(r.tf.Dir, resolved) {
-			logTask(colorYellow, resolved, "up to date")
-			return nil
-		}
+	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved)
+	if err != nil {
+		return err
+	}
+	if upToDate {
+		logTask(colorYellow, resolved, "up to date")
+		return nil
+	}
+	if checksum != "" {
 		defer func() {
 			if err == nil {
 				_ = writeChecksum(r.tf.Dir, resolved, checksum)
@@ -190,6 +190,21 @@ func (r *Runner) resolveVar(v Var, dir string) string {
 	}
 
 	return v.Value
+}
+
+// isUpToDate checks if the task sources are unchanged since the last run.
+// Returns whether the task is up-to-date, the current checksum, and any error.
+func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, error) {
+	if len(task.Sources) == 0 {
+		return false, "", nil
+	}
+
+	checksum, err := sourcesChecksum(dir, task.Sources)
+	if err != nil {
+		return false, "", fmt.Errorf("computing sources checksum: %w", err)
+	}
+
+	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
 
 // buildEnv constructs the environment for a command execution.
