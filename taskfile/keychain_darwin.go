@@ -12,7 +12,7 @@ import (
 var (
 	swiftHelper     string
 	swiftHelperOnce sync.Once
-	swiftHelperErr  error
+	errSwiftHelper  error
 )
 
 const keychainSwiftSource = `import Foundation
@@ -125,13 +125,13 @@ func compileSwiftHelper() (string, error) {
 	swiftHelperOnce.Do(func() {
 		dir, err := os.UserCacheDir()
 		if err != nil {
-			swiftHelperErr = err
+			errSwiftHelper = err
 			return
 		}
 
 		cacheDir := filepath.Join(dir, "gogo")
 		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-			swiftHelperErr = err
+			errSwiftHelper = err
 			return
 		}
 
@@ -145,20 +145,20 @@ func compileSwiftHelper() (string, error) {
 		}
 
 		if err := os.WriteFile(source, []byte(keychainSwiftSource), 0o600); err != nil {
-			swiftHelperErr = err
+			errSwiftHelper = err
 			return
 		}
 
 		cmd := exec.Command("swiftc", "-O", "-o", binary, source)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			swiftHelperErr = fmt.Errorf("compiling keychain helper: %s\n%s", err, out)
+			errSwiftHelper = fmt.Errorf("compiling keychain helper: %w\n%s", err, out)
 			return
 		}
 
 		swiftHelper = binary
 	})
 
-	return swiftHelper, swiftHelperErr
+	return swiftHelper, errSwiftHelper
 }
 
 func authenticateBiometric() error {

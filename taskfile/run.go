@@ -66,7 +66,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 }
 
 // Run executes the named task.
-func (r *Runner) Run(name string, cliArgs string) (err error) {
+func (r *Runner) Run(name, cliArgs string) (err error) {
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)

@@ -29,7 +29,7 @@ SPACED_KEY = spaced_value
 	assert.Equal(t, "value1", env["KEY1"])
 	assert.Equal(t, "quoted value", env["KEY2"])
 	assert.Equal(t, "single quoted", env["KEY3"])
-	assert.Equal(t, "", env["KEY4"])
+	assert.Empty(t, env["KEY4"])
 	assert.Equal(t, "spaced_value", env["SPACED_KEY"])
 }
 
@@ -68,7 +68,7 @@ func TestUnquote(t *testing.T) {
 	assert.Equal(t, "hello", unquote(`"hello"`))
 	assert.Equal(t, "hello", unquote(`'hello'`))
 	assert.Equal(t, "hello", unquote("hello"))
-	assert.Equal(t, "", unquote(`""`))
-	assert.Equal(t, "", unquote(`''`))
+	assert.Empty(t, unquote(`""`))
+	assert.Empty(t, unquote(`''`))
 	assert.Equal(t, "a", unquote("a"))
 }

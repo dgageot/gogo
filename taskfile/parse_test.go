@@ -69,5 +69,5 @@ tasks:
 
 	assert.Equal(t, "Build the project", tf.Tasks["build"].Desc)
 	assert.Equal(t, "Run all the tests", tf.Tasks["test"].Desc)
-	assert.Equal(t, "", tf.Tasks["deploy"].Desc)
+	assert.Empty(t, tf.Tasks["deploy"].Desc)
 }

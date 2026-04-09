@@ -49,13 +49,13 @@ type Task struct {
 
 // Cmd represents a command in a task. It can be a simple string or a task reference.
 type Cmd struct {
-	Cmd  string            `yaml:"cmd"`
-	Task string            `yaml:"task"`
-	Vars map[string]Var    `yaml:"vars"`
+	Cmd  string         `yaml:"cmd"`
+	Task string         `yaml:"task"`
+	Vars map[string]Var `yaml:"vars"`
 }
 
 // isEmpty reports whether the command is empty.
-func (c Cmd) isEmpty() bool {
+func (c *Cmd) isEmpty() bool {
 	return c.Cmd == "" && c.Task == ""
 }
 

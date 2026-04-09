@@ -54,6 +54,7 @@ func checksumPath(taskfileDir, taskName string) string {
 	safeName := strings.ReplaceAll(taskName, ":", "_")
 	return filepath.Join(taskfileDir, ".task", "checksum", safeName)
 }
+
 func readStoredChecksum(taskfileDir, taskName string) string {
 	data, err := os.ReadFile(checksumPath(taskfileDir, taskName))
 	if err != nil {
@@ -70,4 +71,3 @@ func writeChecksum(taskfileDir, taskName, checksum string) error {
 	}
 	return os.WriteFile(path, []byte(checksum+"\n"), 0o644)
 }
-

@@ -7,7 +7,7 @@ import (
 )
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
-func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) error {
+func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)
