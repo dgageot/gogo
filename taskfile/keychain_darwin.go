@@ -2,33 +2,196 @@ package taskfile
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 )
 
-// authenticateBiometric is a no-op on macOS because the Keychain
-// prompts for Touch ID when accessing protected secrets.
+var (
+	swiftHelper     string
+	swiftHelperOnce sync.Once
+	swiftHelperErr  error
+)
+
+const keychainSwiftSource = `import Foundation
+import LocalAuthentication
+import Security
+
+let args = CommandLine.arguments
+guard args.count >= 4 else {
+    fputs("usage: {set|get} <service> <key> [value]\n", stderr)
+    exit(1)
+}
+
+let action = args[1]
+let service = args[2]
+let key = args[3]
+
+func touchID(_ reason: String) -> Bool {
+    let context = LAContext()
+    var error: NSError?
+    guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+        fputs("Touch ID unavailable: \(error?.localizedDescription ?? "unknown")\n", stderr)
+        return false
+    }
+
+    let semaphore = DispatchSemaphore(value: 0)
+    var success = false
+    context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { ok, _ in
+        success = ok
+        semaphore.signal()
+    }
+    semaphore.wait()
+    return success
+}
+
+func setSecret(service: String, key: String, value: String) -> Bool {
+    let deleteQuery: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: key,
+    ]
+    SecItemDelete(deleteQuery as CFDictionary)
+
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: key,
+        kSecValueData as String: value.data(using: .utf8)!,
+    ]
+
+    let status = SecItemAdd(query as CFDictionary, nil)
+    if status != errSecSuccess {
+        fputs("Failed to store secret: \(status)\n", stderr)
+        return false
+    }
+    return true
+}
+
+func getSecret(service: String, key: String) -> String? {
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: key,
+        kSecReturnData as String: true,
+        kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+
+    var result: AnyObject?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    if status != errSecSuccess {
+        fputs("Failed to read secret: \(status)\n", stderr)
+        return nil
+    }
+
+    guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+        fputs("Failed to decode secret\n", stderr)
+        return nil
+    }
+    return value
+}
+
+switch action {
+case "set":
+    guard args.count >= 5 else {
+        fputs("usage: set <service> <key> <value>\n", stderr)
+        exit(1)
+    }
+    exit(setSecret(service: service, key: key, value: args[4]) ? 0 : 1)
+case "get":
+    guard touchID("gogo needs to access secrets") else {
+        fputs("Authentication failed\n", stderr)
+        exit(2)
+    }
+    guard let value = getSecret(service: service, key: key) else {
+        exit(1)
+    }
+    print(value, terminator: "")
+    exit(0)
+default:
+    fputs("unknown action: \(action)\n", stderr)
+    exit(1)
+}
+`
+
+func compileSwiftHelper() (string, error) {
+	swiftHelperOnce.Do(func() {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			swiftHelperErr = err
+			return
+		}
+
+		cacheDir := filepath.Join(dir, "gogo")
+		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+			swiftHelperErr = err
+			return
+		}
+
+		binary := filepath.Join(cacheDir, "keychain-helper")
+		source := filepath.Join(cacheDir, "keychain-helper.swift")
+
+		// Recompile only if binary is missing
+		if _, err := os.Stat(binary); err == nil {
+			swiftHelper = binary
+			return
+		}
+
+		if err := os.WriteFile(source, []byte(keychainSwiftSource), 0o600); err != nil {
+			swiftHelperErr = err
+			return
+		}
+
+		cmd := exec.Command("swiftc", "-O", "-o", binary, source)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			swiftHelperErr = fmt.Errorf("compiling keychain helper: %s\n%s", err, out)
+			return
+		}
+
+		swiftHelper = binary
+	})
+
+	return swiftHelper, swiftHelperErr
+}
+
 func authenticateBiometric() error {
 	return nil
 }
 
 func getSecret(service, key string) (string, error) {
-	out, err := exec.Command("security", "find-generic-password", "-s", service, "-a", key, "-w").Output()
+	helper, err := compileSwiftHelper()
 	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(helper, "get", service, key)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return "", fmt.Errorf("reading secret %q from keychain %q: %s", key, service, msg)
+		}
 		return "", fmt.Errorf("reading secret %q from keychain %q: %w", key, service, err)
 	}
-	return strings.TrimRight(string(out), "\n"), nil
+	return string(out), nil
 }
 
 // SetSecret stores a secret in the macOS Keychain.
-// The -T "" flag ensures no application is trusted by default,
-// so every access requires user authorization (Touch ID on supported Macs).
 func SetSecret(service, key, value string) error {
-	// Delete first to reset the ACL (update preserves the old ACL)
-	_ = exec.Command("security", "delete-generic-password", "-s", service, "-a", key).Run()
-
-	err := exec.Command("security", "add-generic-password", "-s", service, "-a", key, "-w", value, "-T", "").Run()
+	helper, err := compileSwiftHelper()
 	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(helper, "set", service, key, value)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return fmt.Errorf("storing secret %q in keychain %q: %s", key, service, msg)
+		}
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
 	}
 	return nil
