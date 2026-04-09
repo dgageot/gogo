@@ -61,7 +61,7 @@ func run() error {
 
 	// Collect CLI_ARGS (everything after --)
 	var cliArgs string
-	if i := slices.Index(os.Args, "--"); i >= 0 && i+1 < len(os.Args) {
+	if i := slices.Index(os.Args, "--"); i >= 0 {
 		cliArgs = strings.Join(os.Args[i+1:], " ")
 	}
 
