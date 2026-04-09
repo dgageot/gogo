@@ -68,5 +68,5 @@ func writeChecksum(taskfileDir, taskName, checksum string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(checksum+"\n"), 0o644)
+	return os.WriteFile(path, fmt.Appendf(nil, "%s\n", checksum), 0o644)
 }
