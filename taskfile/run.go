@@ -89,10 +89,8 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 	}
 
 	// Resolve variables
-	vars := r.resolveVars(task)
-
-	// Determine working directory
 	dir := r.taskDir(task)
+	vars := r.resolveVars(task, dir)
 
 	// Check sources for up-to-date
 	if len(task.Sources) > 0 {
@@ -144,10 +142,8 @@ func (r *Runner) taskDir(task Task) string {
 	return filepath.Join(r.tf.Dir, dir)
 }
 
-func (r *Runner) resolveVars(task Task) map[string]string {
+func (r *Runner) resolveVars(task Task, taskDir string) map[string]string {
 	resolved := make(map[string]string)
-
-	taskDir := r.taskDir(task)
 
 	// Built-in vars
 	resolved["TASKFILE_DIR"] = taskDir
