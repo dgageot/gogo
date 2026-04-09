@@ -6,35 +6,9 @@ import (
 	"strings"
 )
 
-const touchIDSwift = `
-import LocalAuthentication
-import Foundation
-let context = LAContext()
-var error: NSError?
-guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-    fputs(error?.localizedDescription ?? "Biometrics unavailable", stderr)
-    exit(1)
-}
-let semaphore = DispatchSemaphore(value: 0)
-var authOK = false
-context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "authenticate") { success, _ in
-    authOK = success
-    semaphore.signal()
-}
-semaphore.wait()
-exit(authOK ? 0 : 2)
-`
-
+// authenticateBiometric is a no-op on macOS because the Keychain
+// prompts for Touch ID when accessing protected secrets.
 func authenticateBiometric() error {
-	cmd := exec.Command("swift", "-e", touchIDSwift, "gogo needs to access secrets")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg != "" {
-			return fmt.Errorf("biometric authentication: %s", msg)
-		}
-		return fmt.Errorf("biometric authentication denied")
-	}
 	return nil
 }
 
@@ -47,8 +21,13 @@ func getSecret(service, key string) (string, error) {
 }
 
 // SetSecret stores a secret in the macOS Keychain.
+// The -T "" flag ensures no application is trusted by default,
+// so every access requires user authorization (Touch ID on supported Macs).
 func SetSecret(service, key, value string) error {
-	err := exec.Command("security", "add-generic-password", "-s", service, "-a", key, "-w", value, "-U").Run()
+	// Delete first to reset the ACL (update preserves the old ACL)
+	_ = exec.Command("security", "delete-generic-password", "-s", service, "-a", key).Run()
+
+	err := exec.Command("security", "add-generic-password", "-s", service, "-a", key, "-w", value, "-T", "").Run()
 	if err != nil {
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
 	}
