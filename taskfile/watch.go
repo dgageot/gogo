@@ -25,7 +25,7 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	lastChecksum, _ := sourcesChecksum(dir, task.Sources)
+	var lastChecksum string
 
 	for {
 		time.Sleep(interval)
