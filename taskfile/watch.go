@@ -39,7 +39,7 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 			continue
 		}
 
-		fmt.Fprintf(os.Stderr, "%s[%s]%s sources changed, re-running...\n", colorYellow, resolved, colorReset)
+		logTask(colorYellow, resolved, "sources changed, re-running...")
 
 		if err := r.Run(name, cliArgs); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)

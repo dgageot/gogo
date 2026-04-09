@@ -101,7 +101,7 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 			return fmt.Errorf("computing sources checksum: %w", err)
 		}
 		if checksum == readStoredChecksum(r.tf.Dir, resolved) {
-			fmt.Fprintf(os.Stderr, "%s[%s]%s up to date\n", colorYellow, resolved, colorReset)
+			logTask(colorYellow, resolved, "up to date")
 			return nil
 		}
 		defer func() {
@@ -217,7 +217,7 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 }
 
 func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
-	fmt.Fprintf(os.Stderr, "%s[%s]%s %s\n", colorGreen, taskName, colorReset, command)
+	logTask(colorGreen, taskName, command)
 
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = dir
