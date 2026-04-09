@@ -102,8 +102,6 @@ func listTasks() error {
 	}
 
 	names := slices.Sorted(maps.Keys(tf.Tasks))
-
-	// Filter to only tasks with descriptions
 	names = slices.DeleteFunc(names, func(name string) bool {
 		return tf.Tasks[name].Desc == ""
 	})
@@ -112,9 +110,10 @@ func listTasks() error {
 		return nil
 	}
 
-	maxLen := len(slices.MaxFunc(names, func(a, b string) int {
-		return cmp.Compare(len(a), len(b))
-	}))
+	var maxLen int
+	for _, name := range names {
+		maxLen = max(maxLen, len(name))
+	}
 
 	for _, name := range names {
 		task := tf.Tasks[name]
