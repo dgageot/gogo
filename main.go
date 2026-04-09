@@ -46,15 +46,14 @@ func run() error {
 	}
 
 	if err := p.Parse(os.Args[1:]); err != nil {
-		switch {
-		case errors.Is(err, arg.ErrHelp):
+		if errors.Is(err, arg.ErrHelp) {
 			p.WriteHelp(os.Stdout)
 			return nil
-		case errors.Is(err, arg.ErrVersion):
-			return nil
-		default:
-			return err
 		}
+		if errors.Is(err, arg.ErrVersion) {
+			return nil
+		}
+		return err
 	}
 
 	if a.List {
