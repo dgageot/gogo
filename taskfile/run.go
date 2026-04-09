@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Runner executes tasks from a loaded Taskfile.
@@ -76,17 +77,14 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 
 	// Run dependencies concurrently
 	if len(task.Deps) > 0 {
+		var wg sync.WaitGroup
 		errs := make([]error, len(task.Deps))
-		done := make(chan struct{}, len(task.Deps))
 		for i, dep := range task.Deps {
-			go func() {
+			wg.Go(func() {
 				errs[i] = r.Run(dep.Task, "")
-				done <- struct{}{}
-			}()
+			})
 		}
-		for range task.Deps {
-			<-done
-		}
+		wg.Wait()
 		if err := errors.Join(errs...); err != nil {
 			return err
 		}
