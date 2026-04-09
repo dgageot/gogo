@@ -114,10 +114,9 @@ func listTasks() error {
 		return nil
 	}
 
-	var maxLen int
-	for _, name := range names {
-		maxLen = max(maxLen, len(name))
-	}
+	maxLen := len(slices.MaxFunc(names, func(a, b string) int {
+		return cmp.Compare(len(a), len(b))
+	}))
 
 	for _, name := range names {
 		task := tf.Tasks[name]
