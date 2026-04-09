@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,9 +27,9 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 
 	// Inject dotenv variables and keychain secrets (don't override existing env vars)
 	for _, vars := range []map[string]string{tf.DotenvVars, tf.SecretVars} {
-		for k, v := range vars {
+		for _, k := range slices.Sorted(maps.Keys(vars)) {
 			if _, exists := os.LookupEnv(k); !exists {
-				env = append(env, k+"="+v)
+				env = append(env, k+"="+vars[k])
 			}
 		}
 	}
