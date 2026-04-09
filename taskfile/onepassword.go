@@ -29,19 +29,10 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 
 		client, ok := clients[account]
 		if !ok {
-			var useDesktopApp bool
-			client, useDesktopApp, err = newOnePasswordClient(ctx, account)
+			client, err = newOnePasswordClient(ctx, account)
 			if err != nil {
 				return err
 			}
-
-			// When using the desktop app, validate the connection early.
-			if useDesktopApp {
-				if err := validateDesktopAppConnection(ctx, client, account); err != nil {
-					return err
-				}
-			}
-
 			clients[account] = client
 		}
 
@@ -116,7 +107,7 @@ Make sure:
 var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
 
 // newOnePasswordClient creates a 1Password client, preferring service account token over desktop app.
-func newOnePasswordClient(ctx context.Context, account string) (client *onepassword.Client, useDesktopApp bool, err error) {
+func newOnePasswordClient(ctx context.Context, account string) (*onepassword.Client, error) {
 	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
 		client, err := onepassword.NewClient(
 			ctx,
@@ -124,22 +115,27 @@ func newOnePasswordClient(ctx context.Context, account string) (client *onepassw
 			opIntegrationInfo,
 		)
 		if err != nil {
-			return nil, false, fmt.Errorf("creating 1Password client with service account: %w", err)
+			return nil, fmt.Errorf("creating 1Password client with service account: %w", err)
 		}
-		return client, false, nil
+		return client, nil
 	}
 
-	client, err = onepassword.NewClient(
+	client, err := onepassword.NewClient(
 		ctx,
 		onepassword.WithDesktopAppIntegration(account),
 		opIntegrationInfo,
 	)
 	if err != nil {
-		return nil, true, fmt.Errorf(`creating 1Password client with desktop app (account %q): %w
+		return nil, fmt.Errorf(`creating 1Password client with desktop app (account %q): %w
 
 Make sure the 1Password desktop app is installed and has SDK integration enabled:
   → Open 1Password > Settings > Developer > enable "Integrate with other apps"`, account, err)
 	}
 
-	return client, true, nil
+	// Validate the desktop app connection early.
+	if err := validateDesktopAppConnection(ctx, client, account); err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
