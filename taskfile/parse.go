@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -172,7 +173,7 @@ func FindRootDir(dir string) (string, error) {
 	}
 
 	if found == "" {
-		return "", fmt.Errorf("no Taskfile found")
+		return "", errors.New("no Taskfile found")
 	}
 
 	return found, nil

@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -145,7 +146,7 @@ Commands:
 
 func secretSet(args []string) error {
 	if len(args) != 3 {
-		return fmt.Errorf("usage: gogo secret set <service> <key> <value>")
+		return errors.New("usage: gogo secret set <service> <key> <value>")
 	}
 
 	service, key, value := args[0], args[1], args[2]
