@@ -84,22 +84,15 @@ func resolveHint(ref string, err error) string {
 	path, _ := strings.CutPrefix(ref, onePasswordScheme)
 	parts := strings.SplitN(path, "/", 4)
 
-	part := func(i int) string {
-		if i < len(parts) {
-			return parts[i]
-		}
-		return ""
-	}
-
 	msg := err.Error()
 
 	switch {
-	case strings.Contains(msg, "no vault matched"):
-		return fmt.Sprintf("Vault %q was not found. Check that the vault name is correct and that your account has access to it.", part(1))
-	case strings.Contains(msg, "no item matched"):
-		return fmt.Sprintf("Item %q was not found in vault %q. Check that the item name is correct.", part(2), part(1))
-	case strings.Contains(msg, "no field matched"):
-		return fmt.Sprintf("Field %q was not found. Check that the field name is correct in 1Password.", part(3))
+	case strings.Contains(msg, "no vault matched") && len(parts) > 1:
+		return fmt.Sprintf("Vault %q was not found. Check that the vault name is correct and that your account has access to it.", parts[1])
+	case strings.Contains(msg, "no item matched") && len(parts) > 2:
+		return fmt.Sprintf("Item %q was not found in vault %q. Check that the item name is correct.", parts[2], parts[1])
+	case strings.Contains(msg, "no field matched") && len(parts) > 3:
+		return fmt.Sprintf("Field %q was not found. Check that the field name is correct in 1Password.", parts[3])
 	default:
 		return "Check that the secret reference follows the format 1password://account/vault/item/field"
 	}
