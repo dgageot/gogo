@@ -128,6 +128,15 @@ func Parse(dir string) (*Taskfile, error) {
 	// Extract comments from AST to use as task descriptions
 	applyTaskComments(&tf, data)
 
+	// Normalize single cmd into cmds list
+	for name, task := range tf.Tasks {
+		if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
+			task.Cmds = []Cmd{task.Cmd}
+			task.Cmd = Cmd{}
+			tf.Tasks[name] = task
+		}
+	}
+
 	return &tf, nil
 }
 

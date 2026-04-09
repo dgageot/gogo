@@ -127,14 +127,8 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	// Build environment
 	env := r.buildEnv(&task, vars)
 
-	// Normalize single cmd into cmds list
-	cmds := task.Cmds
-	if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
-		cmds = []Cmd{task.Cmd}
-	}
-
 	// Execute commands
-	for _, cmd := range cmds {
+	for _, cmd := range task.Cmds {
 		if cmd.Task != "" {
 			if err := r.Run(cmd.Task, cliArgs); err != nil {
 				return err
