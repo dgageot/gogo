@@ -9,27 +9,48 @@ import (
 func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 	env := make(map[string]string)
 
-	// Group keychain entries to authenticate once.
-	var keychainEntries []SecretEntry
-	var opEntries []SecretEntry
+	keychainAuthenticated := false
 
 	for _, entry := range entries {
 		switch {
 		case strings.HasPrefix(entry.Ref, "keychain://"):
-			keychainEntries = append(keychainEntries, entry)
+			if !keychainAuthenticated {
+				if err := authenticateBiometric(); err != nil {
+					return nil, err
+				}
+				keychainAuthenticated = true
+			}
+
+			service, key, err := parseKeychainRef(entry.Ref)
+			if err != nil {
+				return nil, err
+			}
+
+			logTask(colorCyan, "keychain", "reading "+key+" from "+service)
+
+			value, err := getSecret(service, key)
+			if err != nil {
+				return nil, err
+			}
+
+			env[entry.Env] = value
+
 		case strings.HasPrefix(entry.Ref, "1password://"):
-			opEntries = append(opEntries, entry)
+			// 1Password entries are handled in batch for client caching
+			continue
+
 		default:
 			return nil, fmt.Errorf("unknown secret scheme in %q", entry.Ref)
 		}
 	}
 
-	if len(keychainEntries) > 0 {
-		if err := loadKeychainSecrets(keychainEntries, env); err != nil {
-			return nil, err
+	// Collect 1Password entries and process them in batch
+	var opEntries []SecretEntry
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Ref, "1password://") {
+			opEntries = append(opEntries, entry)
 		}
 	}
-
 	if len(opEntries) > 0 {
 		if err := loadOnePasswordSecrets(opEntries, env); err != nil {
 			return nil, err
@@ -37,32 +58,6 @@ func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 	}
 
 	return env, nil
-}
-
-// loadKeychainSecrets retrieves secrets from the OS credential store.
-// Each ref has the form keychain://service/key.
-func loadKeychainSecrets(entries []SecretEntry, env map[string]string) error {
-	if err := authenticateBiometric(); err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		service, key, err := parseKeychainRef(entry.Ref)
-		if err != nil {
-			return err
-		}
-
-		logTask(colorCyan, "keychain", "reading "+key+" from "+service)
-
-		value, err := getSecret(service, key)
-		if err != nil {
-			return err
-		}
-
-		env[entry.Env] = value
-	}
-
-	return nil
 }
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
