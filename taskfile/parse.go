@@ -68,7 +68,7 @@ func (c *Cmd) UnmarshalYAML(unmarshal func(any) error) error {
 
 // Dep represents a task dependency.
 type Dep struct {
-	Task string
+	Task string `yaml:"task"`
 }
 
 // UnmarshalYAML allows Dep to be either a string or a map.
