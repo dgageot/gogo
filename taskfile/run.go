@@ -23,16 +23,7 @@ type Runner struct {
 
 // NewRunner creates a task runner for the given taskfile.
 func NewRunner(tf *Taskfile, cwd string) *Runner {
-	env := os.Environ()
-
-	// Inject dotenv variables and keychain secrets (don't override existing env vars)
-	for _, vars := range []map[string]string{tf.DotenvVars, tf.SecretVars} {
-		for _, k := range slices.Sorted(maps.Keys(vars)) {
-			if _, exists := os.LookupEnv(k); !exists {
-				env = append(env, k+"="+vars[k])
-			}
-		}
-	}
+	env := injectEnvVars(tf)
 
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
@@ -48,6 +39,19 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		env:     env,
 		aliases: aliases,
 	}
+}
+
+// injectEnvVars builds the process environment with dotenv and secret vars injected.
+func injectEnvVars(tf *Taskfile) []string {
+	env := os.Environ()
+	for _, vars := range []map[string]string{tf.DotenvVars, tf.SecretVars} {
+		for _, k := range slices.Sorted(maps.Keys(vars)) {
+			if _, exists := os.LookupEnv(k); !exists {
+				env = append(env, k+"="+vars[k])
+			}
+		}
+	}
+	return env
 }
 
 // resolveTaskName finds the actual task name, trying the exact name first,
