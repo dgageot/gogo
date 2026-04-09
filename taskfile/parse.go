@@ -211,15 +211,18 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 			continue
 		}
 
+		desc := extractCommentText(taskMV)
+		if desc == "" {
+			continue
+		}
+
 		task, exists := tf.Tasks[taskKey.Value]
 		if !exists {
 			continue
 		}
 
-		if desc := extractCommentText(taskMV); desc != "" {
-			task.Desc = desc
-			tf.Tasks[taskKey.Value] = task
-		}
+		task.Desc = desc
+		tf.Tasks[taskKey.Value] = task
 	}
 }
 
