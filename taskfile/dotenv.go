@@ -1,7 +1,6 @@
 package taskfile
 
 import (
-	"bufio"
 	"maps"
 	"os"
 	"path/filepath"
@@ -50,33 +49,27 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 // It supports blank lines, comments (#), and simple KEY=VALUE pairs.
 // Quoted values (single or double) are unquoted.
 func parseDotenv(path string) (map[string]string, error) {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	env := make(map[string]string)
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+	for line := range strings.SplitSeq(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 
-		key, value, ok := strings.Cut(line, "=")
+		key, value, ok := strings.Cut(trimmed, "=")
 		if !ok {
 			continue
 		}
 
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		value = unquote(value)
-
-		env[key] = value
+		env[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
 	}
 
-	return env, scanner.Err()
+	return env, nil
 }
 
 // unquote removes matching surrounding quotes from a value.
