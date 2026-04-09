@@ -26,7 +26,10 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	}
 
 	// Track checksum after initial run to avoid immediate re-run
-	lastChecksum, _ := sourcesChecksum(dir, task.Sources)
+	lastChecksum, err := sourcesChecksum(dir, task.Sources)
+	if err != nil {
+		return fmt.Errorf("computing sources checksum: %w", err)
+	}
 
 	for {
 		time.Sleep(interval)
