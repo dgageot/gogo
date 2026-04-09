@@ -55,7 +55,7 @@ func parseDotenv(path string) (map[string]string, error) {
 	}
 
 	env := make(map[string]string)
-	for line := range strings.SplitSeq(string(data), "\n") {
+	for line := range strings.Lines(string(data)) {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
