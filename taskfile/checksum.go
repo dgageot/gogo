@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,7 +44,7 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 		h.Write(data)
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // checksumDir returns the directory where task checksums are stored.
