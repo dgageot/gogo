@@ -195,15 +195,17 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	for k, v := range vars {
 		env = append(env, k+"="+v)
 	}
-	for k, v := range task.Env {
-		expanded := os.Expand(v, func(key string) string {
-			if val, ok := vars[key]; ok {
-				return val
-			}
-			return os.Getenv(key)
-		})
-		env = append(env, k+"="+expanded)
+
+	lookup := func(key string) string {
+		if val, ok := vars[key]; ok {
+			return val
+		}
+		return os.Getenv(key)
 	}
+	for k, v := range task.Env {
+		env = append(env, k+"="+os.Expand(v, lookup))
+	}
+
 	return env
 }
 
