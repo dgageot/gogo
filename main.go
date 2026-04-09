@@ -54,11 +54,10 @@ func run() error {
 		return err
 	}
 
-	var taskName string
+	taskName := "default"
 	if len(args) > 0 {
 		taskName = args[0]
 	}
-	taskName = cmp.Or(taskName, "default")
 
 	// Collect CLI_ARGS (everything after --)
 	var cliArgs string
