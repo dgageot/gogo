@@ -213,7 +213,7 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 				tf.Tasks[taskKey.Value] = task
 			}
 		}
-		return
+		break
 	}
 }
 
