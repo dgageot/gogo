@@ -79,6 +79,7 @@ func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 	return account, "op://" + rest, nil
 }
 
+// resolveHint returns a user-friendly hint based on the 1Password error.
 func resolveHint(ref string, err error) string {
 	path, _ := strings.CutPrefix(ref, onePasswordScheme)
 	parts := strings.SplitN(path, "/", 4)
