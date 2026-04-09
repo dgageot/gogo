@@ -126,7 +126,7 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 			}
 			continue
 		}
-		if err := r.runCmd(name, r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+		if err := r.runCmd(resolved, r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
 			return err
 		}
 	}
