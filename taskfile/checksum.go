@@ -30,16 +30,9 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 
 	h := sha256.New()
 	for _, f := range files {
-		info, err := os.Stat(f)
-		if err != nil {
-			return "", err
-		}
-		if !info.Mode().IsRegular() {
-			continue
-		}
 		data, err := os.ReadFile(f)
 		if err != nil {
-			return "", err
+			continue // skip directories and unreadable files
 		}
 		fmt.Fprintln(h, f)
 		h.Write(data)
