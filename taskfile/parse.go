@@ -95,15 +95,8 @@ func (v *Var) UnmarshalYAML(unmarshal func(any) error) error {
 		v.Value = s
 		return nil
 	}
-	type varMap struct {
-		Sh string `yaml:"sh"`
-	}
-	var m varMap
-	if err := unmarshal(&m); err != nil {
-		return err
-	}
-	v.Sh = m.Sh
-	return nil
+	type plain Var
+	return unmarshal((*plain)(v))
 }
 
 // Parse reads and parses a Taskfile from the given directory.
