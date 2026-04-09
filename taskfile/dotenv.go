@@ -15,10 +15,6 @@ import (
 func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[string]string, error) {
 	env := make(map[string]string)
 
-	if len(paths) == 0 {
-		return env, nil
-	}
-
 	for _, p := range paths {
 		if after, ok := strings.CutPrefix(p, "~/"); ok {
 			home, err := os.UserHomeDir()
