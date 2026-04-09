@@ -22,7 +22,7 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 
 	// Run once immediately
 	if err := r.Run(name, cliArgs); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 	}
 
 	lastChecksum, _ := sourcesChecksum(dir, task.Sources)
@@ -42,7 +42,7 @@ func (r *Runner) Watch(name string, cliArgs string, interval time.Duration) erro
 		logTask(colorYellow, resolved, "sources changed, re-running...")
 
 		if err := r.Run(name, cliArgs); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
+			fmt.Fprintln(os.Stderr, err)
 		}
 
 		lastChecksum = checksum
