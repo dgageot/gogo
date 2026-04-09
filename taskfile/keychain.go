@@ -65,12 +65,9 @@ func resolveKeychainEntry(entry SecretEntry) (string, error) {
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
 func parseKeychainRef(ref string) (service, key string, err error) {
-	path, ok := strings.CutPrefix(ref, keychainScheme)
-	if !ok {
-		return "", "", fmt.Errorf("invalid keychain reference %q, expected keychain://service/key", ref)
-	}
+	path, _ := strings.CutPrefix(ref, keychainScheme)
 
-	service, key, ok = strings.Cut(path, "/")
+	service, key, ok := strings.Cut(path, "/")
 	if !ok || service == "" || key == "" {
 		return "", "", fmt.Errorf("invalid keychain reference %q, expected keychain://service/key", ref)
 	}
