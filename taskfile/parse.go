@@ -289,9 +289,7 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 		for name, task := range child.Tasks {
 			qualifiedName := namespace + ":" + name
 			// Resolve relative dir to the child's directory
-			if task.Dir == "" {
-				task.Dir = child.Dir
-			} else if !filepath.IsAbs(task.Dir) {
+			if !filepath.IsAbs(task.Dir) {
 				task.Dir = filepath.Join(child.Dir, task.Dir)
 			}
 			tf.Tasks[qualifiedName] = task
