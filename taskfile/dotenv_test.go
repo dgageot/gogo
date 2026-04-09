@@ -55,6 +55,20 @@ func TestLoadDotenvFilesDeduplication(t *testing.T) {
 	assert.Empty(t, env2)
 }
 
+func TestLoadDotenvFilesHomeTilde(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	path := filepath.Join(home, ".gogo-test-dotenv")
+	require.NoError(t, os.WriteFile(path, []byte("TILDE_KEY=tilde_value\n"), 0o644))
+	t.Cleanup(func() { os.Remove(path) })
+
+	seen := make(map[string]struct{})
+	env, err := loadDotenvFiles("/unused", []string{"~/.gogo-test-dotenv"}, seen)
+	require.NoError(t, err)
+	assert.Equal(t, "tilde_value", env["TILDE_KEY"])
+}
+
 func TestLoadDotenvFilesSkipsMissing(t *testing.T) {
 	dir := t.TempDir()
 	seen := make(map[string]struct{})
