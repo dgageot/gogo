@@ -10,6 +10,7 @@ func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 	env := make(map[string]string)
 
 	keychainAuthenticated := false
+	var opEntries []SecretEntry
 
 	for _, entry := range entries {
 		switch {
@@ -36,21 +37,13 @@ func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 			env[entry.Env] = value
 
 		case strings.HasPrefix(entry.Ref, "1password://"):
-			// 1Password entries are handled in batch for client caching
-			continue
+			opEntries = append(opEntries, entry)
 
 		default:
 			return nil, fmt.Errorf("unknown secret scheme in %q", entry.Ref)
 		}
 	}
 
-	// Collect 1Password entries and process them in batch
-	var opEntries []SecretEntry
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Ref, "1password://") {
-			opEntries = append(opEntries, entry)
-		}
-	}
 	if len(opEntries) > 0 {
 		if err := loadOnePasswordSecrets(opEntries, env); err != nil {
 			return nil, err
