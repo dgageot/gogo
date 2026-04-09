@@ -91,8 +91,8 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	// Resolve variables
-	dir := r.taskDir(task)
-	vars := r.resolveVars(task, dir)
+	dir := r.taskDir(&task)
+	vars := r.resolveVars(&task, dir)
 
 	// Check sources for up-to-date
 	if len(task.Sources) > 0 {
@@ -112,7 +112,7 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	// Build environment
-	env := r.buildEnv(task, vars)
+	env := r.buildEnv(&task, vars)
 
 	// Normalize single cmd into cmds list
 	cmds := task.Cmds
@@ -136,7 +136,7 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	return nil
 }
 
-func (r *Runner) taskDir(task Task) string {
+func (r *Runner) taskDir(task *Task) string {
 	dir := cmp.Or(task.Dir, r.tf.Dir)
 	if filepath.IsAbs(dir) {
 		return dir
@@ -144,7 +144,7 @@ func (r *Runner) taskDir(task Task) string {
 	return filepath.Join(r.tf.Dir, dir)
 }
 
-func (r *Runner) resolveVars(task Task, taskDir string) map[string]string {
+func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 	resolved := make(map[string]string)
 
 	// Built-in vars
@@ -177,7 +177,7 @@ func (r *Runner) resolveVar(v Var, dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
+func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
 
 	for k, v := range vars {

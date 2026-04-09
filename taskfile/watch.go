@@ -18,7 +18,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		return fmt.Errorf("task %q has no sources, cannot watch", name)
 	}
 
-	dir := r.taskDir(task)
+	dir := r.taskDir(&task)
 
 	// Run once immediately
 	if err := r.Run(name, cliArgs); err != nil {
