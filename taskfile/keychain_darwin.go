@@ -101,6 +101,7 @@ func setSecret(service: String, key: String, value: String) -> Bool {
     return true
 }
 
+// getSecret retrieves a secret from the macOS Keychain via the Swift helper.
 func getSecret(service: String, key: String) -> String? {
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -147,10 +148,12 @@ default:
 }
 `
 
+// authenticateBiometric is a no-op on macOS; Touch ID is triggered per-secret access.
 func authenticateBiometric() error {
 	return nil
 }
 
+// runHelper compiles the Swift keychain helper (if needed) and runs it with the given args.
 func runHelper(args ...string) (string, error) {
 	helper, err := compileSwiftHelper()
 	if err != nil {
