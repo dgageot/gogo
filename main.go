@@ -77,12 +77,12 @@ func run() error {
 }
 
 func loadTaskfile() (string, *taskfile.Taskfile, error) {
-	dir, err := os.Getwd()
+	cwd, err := os.Getwd()
 	if err != nil {
 		return "", nil, err
 	}
 
-	rootDir, err := taskfile.FindRootDir(dir)
+	rootDir, err := taskfile.FindRootDir(cwd)
 	if err != nil {
 		return "", nil, err
 	}
@@ -92,7 +92,7 @@ func loadTaskfile() (string, *taskfile.Taskfile, error) {
 		return "", nil, err
 	}
 
-	return dir, tf, nil
+	return cwd, tf, nil
 }
 
 func listTasks() error {
