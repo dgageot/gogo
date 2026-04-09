@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"os/exec"
@@ -136,13 +137,11 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 }
 
 func (r *Runner) taskDir(task Task) string {
-	if task.Dir != "" {
-		if filepath.IsAbs(task.Dir) {
-			return task.Dir
-		}
-		return filepath.Join(r.tf.Dir, task.Dir)
+	dir := cmp.Or(task.Dir, r.tf.Dir)
+	if filepath.IsAbs(dir) {
+		return dir
 	}
-	return r.tf.Dir
+	return filepath.Join(r.tf.Dir, dir)
 }
 
 func (r *Runner) resolveVars(task Task) map[string]string {
