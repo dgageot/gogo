@@ -10,11 +10,36 @@ import (
 	"sync"
 )
 
-var (
-	swiftHelper     string
-	swiftHelperOnce sync.Once
-	errSwiftHelper  error
-)
+var compileSwiftHelper = sync.OnceValues(func() (string, error) {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+
+	cacheDir := filepath.Join(dir, "gogo")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		return "", err
+	}
+
+	binary := filepath.Join(cacheDir, "keychain-helper")
+	source := filepath.Join(cacheDir, "keychain-helper.swift")
+
+	// Recompile only if binary is missing
+	if _, err := os.Stat(binary); err == nil {
+		return binary, nil
+	}
+
+	if err := os.WriteFile(source, []byte(keychainSwiftSource), 0o600); err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command("swiftc", "-O", "-o", binary, source)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("compiling keychain helper: %w\n%s", err, out)
+	}
+
+	return binary, nil
+})
 
 const keychainSwiftSource = `import Foundation
 import LocalAuthentication
@@ -121,46 +146,6 @@ default:
     exit(1)
 }
 `
-
-func compileSwiftHelper() (string, error) {
-	swiftHelperOnce.Do(func() {
-		dir, err := os.UserCacheDir()
-		if err != nil {
-			errSwiftHelper = err
-			return
-		}
-
-		cacheDir := filepath.Join(dir, "gogo")
-		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-			errSwiftHelper = err
-			return
-		}
-
-		binary := filepath.Join(cacheDir, "keychain-helper")
-		source := filepath.Join(cacheDir, "keychain-helper.swift")
-
-		// Recompile only if binary is missing
-		if _, err := os.Stat(binary); err == nil {
-			swiftHelper = binary
-			return
-		}
-
-		if err := os.WriteFile(source, []byte(keychainSwiftSource), 0o600); err != nil {
-			errSwiftHelper = err
-			return
-		}
-
-		cmd := exec.Command("swiftc", "-O", "-o", binary, source)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			errSwiftHelper = fmt.Errorf("compiling keychain helper: %w\n%s", err, out)
-			return
-		}
-
-		swiftHelper = binary
-	})
-
-	return swiftHelper, errSwiftHelper
-}
 
 func authenticateBiometric() error {
 	return nil
