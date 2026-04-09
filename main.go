@@ -57,11 +57,8 @@ func run() error {
 
 	// Collect CLI_ARGS (everything after --)
 	var cliArgs string
-	for i, arg := range os.Args {
-		if arg == "--" && i+1 < len(os.Args) {
-			cliArgs = strings.Join(os.Args[i+1:], " ")
-			break
-		}
+	if i := slices.Index(os.Args, "--"); i >= 0 && i+1 < len(os.Args) {
+		cliArgs = strings.Join(os.Args[i+1:], " ")
 	}
 
 	runner := taskfile.NewRunner(tf, dir)
