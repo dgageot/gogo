@@ -150,16 +150,16 @@ func FindRootDir(dir string) (string, error) {
 		return "", err
 	}
 
-	found := ""
-	for current := dir; ; {
-		if findTaskfile(current) != "" {
-			found = current
+	var found string
+	for {
+		if findTaskfile(dir) != "" {
+			found = dir
 		}
-		parent := filepath.Dir(current)
-		if parent == current {
+		parent := filepath.Dir(dir)
+		if parent == dir {
 			break
 		}
-		current = parent
+		dir = parent
 	}
 
 	if found == "" {
