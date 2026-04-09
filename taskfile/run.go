@@ -144,6 +144,7 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	return nil
 }
 
+// taskDir returns the working directory for a task.
 func (r *Runner) taskDir(task *Task) string {
 	dir := cmp.Or(task.Dir, r.tf.Dir)
 	if filepath.IsAbs(dir) {
@@ -152,6 +153,8 @@ func (r *Runner) taskDir(task *Task) string {
 	return filepath.Join(r.tf.Dir, dir)
 }
 
+// resolveVars computes the effective variables for a task.
+// resolveVar evaluates a single variable, running a shell command if needed.
 func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 	resolved := make(map[string]string)
 
@@ -185,6 +188,7 @@ func (r *Runner) resolveVar(v Var, dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
 
@@ -203,6 +207,7 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	return env
 }
 
+// expandVars substitutes template and shell variables in a command string.
 func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) string {
 	lookup := func(key string) string {
 		if key == "CLI_ARGS" {
