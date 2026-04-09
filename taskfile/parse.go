@@ -136,8 +136,10 @@ func Parse(dir string) (*Taskfile, error) {
 	return &tf, nil
 }
 
+var taskfileNames = []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"}
+
 func findTaskfile(dir string) string {
-	for _, name := range []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"} {
+	for _, name := range taskfileNames {
 		path := filepath.Join(dir, name)
 		if _, err := os.Stat(path); err == nil {
 			return path
