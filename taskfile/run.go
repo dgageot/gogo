@@ -20,17 +20,12 @@ type Runner struct {
 func NewRunner(tf *Taskfile, cwd string) *Runner {
 	env := os.Environ()
 
-	// Inject dotenv variables (don't override existing env vars)
-	for k, v := range tf.DotenvVars {
-		if _, exists := os.LookupEnv(k); !exists {
-			env = append(env, k+"="+v)
-		}
-	}
-
-	// Inject keychain secrets (don't override existing env vars)
-	for k, v := range tf.SecretVars {
-		if _, exists := os.LookupEnv(k); !exists {
-			env = append(env, k+"="+v)
+	// Inject dotenv variables and keychain secrets (don't override existing env vars)
+	for _, vars := range []map[string]string{tf.DotenvVars, tf.SecretVars} {
+		for k, v := range vars {
+			if _, exists := os.LookupEnv(k); !exists {
+				env = append(env, k+"="+v)
+			}
 		}
 	}
 
