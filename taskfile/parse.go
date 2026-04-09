@@ -138,6 +138,7 @@ func Parse(dir string) (*Taskfile, error) {
 
 var taskfileNames = []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"}
 
+// findTaskfile returns the path to a taskfile in dir, or empty if none exists.
 func findTaskfile(dir string) string {
 	for _, name := range taskfileNames {
 		path := filepath.Join(dir, name)
