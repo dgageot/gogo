@@ -32,6 +32,9 @@ func run() error {
 	watch := false
 	var filtered []string
 	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
 		switch arg {
 		case "-l", "--list":
 			return listTasks()
