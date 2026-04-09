@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -24,7 +24,7 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 		files = append(files, matches...)
 	}
 
-	sort.Strings(files)
+	slices.Sort(files)
 
 	h := sha256.New()
 	for _, f := range files {
