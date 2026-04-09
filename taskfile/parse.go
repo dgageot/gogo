@@ -56,7 +56,7 @@ type Cmd struct {
 }
 
 // UnmarshalYAML allows Cmd to be either a string or a map.
-func (c *Cmd) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *Cmd) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 	if err := unmarshal(&s); err == nil {
 		c.Cmd = s
@@ -72,7 +72,7 @@ type Dep struct {
 }
 
 // UnmarshalYAML allows Dep to be either a string or a map.
-func (d *Dep) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (d *Dep) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 	if err := unmarshal(&s); err == nil {
 		d.Task = s
@@ -96,7 +96,7 @@ type Var struct {
 }
 
 // UnmarshalYAML allows Var to be either a string or a map with sh.
-func (v *Var) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (v *Var) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string
 	if err := unmarshal(&s); err == nil {
 		v.Value = s
