@@ -55,7 +55,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 
 	// Try prefixing with namespace for cwd
 	for dir, ns := range r.tf.Namespaces {
-		if r.cwd == dir || strings.HasPrefix(r.cwd, dir+string(os.PathSeparator)) {
+		if r.cwd == dir || strings.HasPrefix(r.cwd, dir+string(filepath.Separator)) {
 			qualified := ns + ":" + name
 			if _, ok := r.tf.Tasks[qualified]; ok {
 				return qualified, true
