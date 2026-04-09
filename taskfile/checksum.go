@@ -47,14 +47,14 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// checksumDir returns the directory where task checksums are stored.
-func checksumDir(taskfileDir string) string {
-	return filepath.Join(taskfileDir, ".task", "checksum")
+// checksumPath returns the file path for a task's stored checksum.
+func checksumPath(taskfileDir, taskName string) string {
+	return filepath.Join(taskfileDir, ".task", "checksum", sanitizeTaskName(taskName))
 }
 
 // readStoredChecksum reads the previously stored checksum for a task.
 func readStoredChecksum(taskfileDir, taskName string) string {
-	data, err := os.ReadFile(filepath.Join(checksumDir(taskfileDir), sanitizeTaskName(taskName)))
+	data, err := os.ReadFile(checksumPath(taskfileDir, taskName))
 	if err != nil {
 		return ""
 	}
@@ -63,11 +63,11 @@ func readStoredChecksum(taskfileDir, taskName string) string {
 
 // writeChecksum stores the checksum for a task.
 func writeChecksum(taskfileDir, taskName, checksum string) error {
-	dir := checksumDir(taskfileDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	path := checksumPath(taskfileDir, taskName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, sanitizeTaskName(taskName)), []byte(checksum+"\n"), 0o644)
+	return os.WriteFile(path, []byte(checksum+"\n"), 0o644)
 }
 
 // sanitizeTaskName replaces characters that are not safe for filenames.
