@@ -198,12 +198,10 @@ func (r *Runner) buildEnv(task Task, vars map[string]string) []string {
 }
 
 func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) string {
-	vars["CLI_ARGS"] = cliArgs
-	for k, v := range vars {
-		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
-	}
-	// Expand known variables; leave unknown ${VAR} references for the shell
-	s = os.Expand(s, func(key string) string {
+	lookup := func(key string) string {
+		if key == "CLI_ARGS" {
+			return cliArgs
+		}
 		if val, ok := vars[key]; ok {
 			return val
 		}
@@ -211,9 +209,16 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 			return val
 		}
 		return "${" + key + "}"
-	})
-	delete(vars, "CLI_ARGS")
-	return s
+	}
+
+	// Replace {{.VAR}} templates
+	for k, v := range vars {
+		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
+	}
+	s = strings.ReplaceAll(s, "{{.CLI_ARGS}}", cliArgs)
+
+	// Expand ${VAR} references; leave unknown ones for the shell
+	return os.Expand(s, lookup)
 }
 
 func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
