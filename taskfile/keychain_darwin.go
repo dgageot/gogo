@@ -165,38 +165,35 @@ func authenticateBiometric() error {
 	return nil
 }
 
-func getSecret(service, key string) (string, error) {
+func runHelper(args ...string) (string, error) {
 	helper, err := compileSwiftHelper()
 	if err != nil {
 		return "", err
 	}
 
-	cmd := exec.Command(helper, "get", service, key)
+	cmd := exec.Command(helper, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg != "" {
-			return "", fmt.Errorf("reading secret %q from keychain %q: %s", key, service, msg)
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return "", fmt.Errorf("%s", msg)
 		}
-		return "", fmt.Errorf("reading secret %q from keychain %q: %w", key, service, err)
+		return "", err
 	}
 	return string(out), nil
 }
 
+func getSecret(service, key string) (string, error) {
+	out, err := runHelper("get", service, key)
+	if err != nil {
+		return "", fmt.Errorf("reading secret %q from keychain %q: %w", key, service, err)
+	}
+	return out, nil
+}
+
 // SetSecret stores a secret in the macOS Keychain.
 func SetSecret(service, key, value string) error {
-	helper, err := compileSwiftHelper()
+	_, err := runHelper("set", service, key, value)
 	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command(helper, "set", service, key, value)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg != "" {
-			return fmt.Errorf("storing secret %q in keychain %q: %s", key, service, msg)
-		}
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
 	}
 	return nil
