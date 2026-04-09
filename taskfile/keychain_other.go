@@ -13,7 +13,7 @@ func authenticateBiometric() error {
 }
 
 func getSecret(service, key string) (string, error) {
-	ring, err := openKeyring(service)
+	ring, err := keyring.Open(keyring.Config{ServiceName: service})
 	if err != nil {
 		return "", fmt.Errorf("opening keychain %q: %w", service, err)
 	}
@@ -28,7 +28,7 @@ func getSecret(service, key string) (string, error) {
 
 // SetSecret stores a secret in the OS credential store.
 func SetSecret(service, key, value string) error {
-	ring, err := openKeyring(service)
+	ring, err := keyring.Open(keyring.Config{ServiceName: service})
 	if err != nil {
 		return fmt.Errorf("opening keychain %q: %w", service, err)
 	}
@@ -37,11 +37,5 @@ func SetSecret(service, key, value string) error {
 		Key:   key,
 		Label: service + ": " + key,
 		Data:  []byte(value),
-	})
-}
-
-func openKeyring(service string) (keyring.Keyring, error) {
-	return keyring.Open(keyring.Config{
-		ServiceName: service,
 	})
 }
