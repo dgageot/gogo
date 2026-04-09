@@ -4,16 +4,35 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/ansxuman/go-touchid"
 )
 
+const touchIDSwift = `
+import LocalAuthentication
+import Foundation
+let context = LAContext()
+var error: NSError?
+guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+    fputs(error?.localizedDescription ?? "Biometrics unavailable", stderr)
+    exit(1)
+}
+let semaphore = DispatchSemaphore(value: 0)
+var authOK = false
+context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "authenticate") { success, _ in
+    authOK = success
+    semaphore.signal()
+}
+semaphore.wait()
+exit(authOK ? 0 : 2)
+`
+
 func authenticateBiometric() error {
-	ok, err := touchid.Auth(touchid.DeviceTypeAny, "gogo needs to access secrets")
+	cmd := exec.Command("swift", "-e", touchIDSwift, "gogo needs to access secrets")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("biometric authentication: %w", err)
-	}
-	if !ok {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return fmt.Errorf("biometric authentication: %s", msg)
+		}
 		return fmt.Errorf("biometric authentication denied")
 	}
 	return nil
@@ -29,7 +48,6 @@ func getSecret(service, key string) (string, error) {
 
 // SetSecret stores a secret in the macOS Keychain.
 func SetSecret(service, key, value string) error {
-	// Try to update first, then add if not found
 	err := exec.Command("security", "add-generic-password", "-s", service, "-a", key, "-w", value, "-U").Run()
 	if err != nil {
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
