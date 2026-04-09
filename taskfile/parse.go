@@ -185,8 +185,8 @@ var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}
 // expandTemplates replaces {{.VAR}} patterns with environment variable values.
 func expandTemplates(data []byte) []byte {
 	return templatePattern.ReplaceAllFunc(data, func(match []byte) []byte {
-		name := templatePattern.FindSubmatch(match)[1]
-		if val, ok := os.LookupEnv(string(name)); ok {
+		name := string(templatePattern.FindSubmatch(match)[1])
+		if val, ok := os.LookupEnv(name); ok {
 			return []byte(val)
 		}
 		return match
