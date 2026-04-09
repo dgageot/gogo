@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,16 +76,19 @@ func (r *Runner) Run(name string, cliArgs string) (err error) {
 
 	// Run dependencies concurrently
 	if len(task.Deps) > 0 {
-		errs := make(chan error, len(task.Deps))
-		for _, dep := range task.Deps {
+		errs := make([]error, len(task.Deps))
+		done := make(chan struct{}, len(task.Deps))
+		for i, dep := range task.Deps {
 			go func() {
-				errs <- r.Run(dep.Task, "")
+				errs[i] = r.Run(dep.Task, "")
+				done <- struct{}{}
 			}()
 		}
 		for range task.Deps {
-			if err := <-errs; err != nil {
-				return err
-			}
+			<-done
+		}
+		if err := errors.Join(errs...); err != nil {
+			return err
 		}
 	}
 
