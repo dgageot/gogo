@@ -177,9 +177,11 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 // resolveVar evaluates a single variable, running a shell command if needed.
 func (r *Runner) resolveVar(v Var, dir string) string {
 	if v.Sh != "" {
-		cmd := exec.Command("sh", "-c", v.Sh)
-		cmd.Dir = dir
-		out, err := cmd.Output()
+		out, err := (&exec.Cmd{
+			Path: "/bin/sh",
+			Args: []string{"sh", "-c", v.Sh},
+			Dir:  dir,
+		}).Output()
 		if err != nil {
 			return ""
 		}
