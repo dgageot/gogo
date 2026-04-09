@@ -43,7 +43,7 @@ func TestLoadDotenvFilesDeduplication(t *testing.T) {
 	path := filepath.Join(dir, ".env")
 	require.NoError(t, os.WriteFile(path, []byte("KEY=value\n"), 0o644))
 
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 
 	env1, err := loadDotenvFiles(dir, []string{".env"}, seen)
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestLoadDotenvFilesDeduplication(t *testing.T) {
 
 func TestLoadDotenvFilesSkipsMissing(t *testing.T) {
 	dir := t.TempDir()
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 
 	env, err := loadDotenvFiles(dir, []string{"nonexistent.env"}, seen)
 	require.NoError(t, err)

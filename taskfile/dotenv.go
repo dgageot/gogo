@@ -10,7 +10,7 @@ import (
 // loadDotenvFiles reads the given .env file paths, resolving them relative to dir.
 // It skips files that don't exist. Already-seen absolute paths (tracked via seen)
 // are skipped to avoid loading the same file twice across included Taskfiles.
-func loadDotenvFiles(dir string, paths []string, seen map[string]bool) (map[string]string, error) {
+func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[string]string, error) {
 	env := make(map[string]string)
 
 	for _, p := range paths {
@@ -29,10 +29,10 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]bool) (map[stri
 			return nil, err
 		}
 
-		if seen[abs] {
+		if _, ok := seen[abs]; ok {
 			continue
 		}
-		seen[abs] = true
+		seen[abs] = struct{}{}
 
 		vars, err := parseDotenv(abs)
 		if err != nil {

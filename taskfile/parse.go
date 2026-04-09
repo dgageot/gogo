@@ -275,7 +275,7 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	tf.Namespaces = make(map[string]string)
 
 	// Load dotenv files, deduplicating across includes
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	dotenvVars, err := loadDotenvFiles(dir, tf.Dotenv, seen)
 	if err != nil {
 		return nil, fmt.Errorf("loading dotenv: %w", err)
