@@ -61,7 +61,8 @@ func SetSecret(service, key, value string) error {
 	}
 
 	return ring.Set(keyring.Item{
-		Key:  key,
-		Data: []byte(value),
+		Key:   key,
+		Label: service + ": " + key,
+		Data:  []byte(value),
 	})
 }
