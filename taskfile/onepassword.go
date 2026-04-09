@@ -80,7 +80,7 @@ func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 }
 
 func resolveHint(ref string, err error) string {
-	path := strings.TrimPrefix(ref, "1password://")
+	path, _ := strings.CutPrefix(ref, "1password://")
 	parts := strings.SplitN(path, "/", 4)
 
 	vault := ""
