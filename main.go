@@ -69,12 +69,8 @@ func run() error {
 	runner := taskfile.NewRunner(tf, dir)
 
 	if watch {
-		var parsed time.Duration
-		if tf.Interval != "" {
-			parsed, _ = time.ParseDuration(tf.Interval)
-		}
-		interval := cmp.Or(parsed, 500*time.Millisecond)
-		return runner.Watch(taskName, cliArgs, interval)
+		parsed, _ := time.ParseDuration(tf.Interval)
+		return runner.Watch(taskName, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
 	}
 
 	return runner.Run(taskName, cliArgs)
