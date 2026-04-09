@@ -30,7 +30,7 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 		client, ok := clients[account]
 		if !ok {
 			var useDesktopApp bool
-			client, useDesktopApp, err = newOnePasswordClient(account)
+			client, useDesktopApp, err = newOnePasswordClient(ctx, account)
 			if err != nil {
 				return err
 			}
@@ -125,9 +125,7 @@ Make sure:
 	return nil
 }
 
-func newOnePasswordClient(account string) (client *onepassword.Client, useDesktopApp bool, err error) {
-	ctx := context.Background()
-
+func newOnePasswordClient(ctx context.Context, account string) (client *onepassword.Client, useDesktopApp bool, err error) {
 	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
 		client, err := onepassword.NewClient(
 			ctx,
