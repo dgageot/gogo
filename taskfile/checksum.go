@@ -54,6 +54,7 @@ func checksumPath(taskfileDir, taskName string) string {
 	return filepath.Join(taskfileDir, ".task", "checksum", safeName)
 }
 
+// readStoredChecksum returns the previously stored checksum for a task, or empty if none.
 func readStoredChecksum(taskfileDir, taskName string) string {
 	data, err := os.ReadFile(checksumPath(taskfileDir, taskName))
 	if err != nil {
