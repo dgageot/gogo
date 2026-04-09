@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/99designs/keyring v1.2.2
+	github.com/ansxuman/go-touchid v0.0.0-20260301024518-5fdb9a324462
 	github.com/goccy/go-yaml v1.19.2
 	github.com/stretchr/testify v1.11.1
 )
