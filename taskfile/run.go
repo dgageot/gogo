@@ -193,8 +193,8 @@ func (r *Runner) resolveVar(v Var, dir string) string {
 func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
 
-	for k, v := range vars {
-		env = append(env, k+"="+v)
+	for _, k := range slices.Sorted(maps.Keys(vars)) {
+		env = append(env, k+"="+vars[k])
 	}
 
 	lookup := func(key string) string {
@@ -203,8 +203,8 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 		}
 		return os.Getenv(key)
 	}
-	for k, v := range task.Env {
-		env = append(env, k+"="+os.Expand(v, lookup))
+	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
+		env = append(env, k+"="+os.Expand(task.Env[k], lookup))
 	}
 
 	return env
