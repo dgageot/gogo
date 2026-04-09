@@ -156,10 +156,9 @@ func (r *Runner) taskDir(task *Task) string {
 
 // resolveVars computes the effective variables for a task.
 func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
-	resolved := make(map[string]string)
-
-	// Built-in vars
-	resolved["TASKFILE_DIR"] = taskDir
+	resolved := map[string]string{
+		"TASKFILE_DIR": taskDir,
+	}
 
 	// Global vars
 	for k, v := range r.tf.Vars {
