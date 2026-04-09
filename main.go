@@ -44,17 +44,8 @@ func run() error {
 		}
 	}
 	args = filtered
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
 
-	rootDir, err := taskfile.FindRootDir(dir)
-	if err != nil {
-		return err
-	}
-
-	tf, err := taskfile.LoadWithIncludes(rootDir)
+	dir, tf, err := loadTaskfile()
 	if err != nil {
 		return err
 	}
@@ -87,18 +78,27 @@ func run() error {
 	return runner.Run(taskName, cliArgs)
 }
 
-func listTasks() error {
+func loadTaskfile() (string, *taskfile.Taskfile, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 
 	rootDir, err := taskfile.FindRootDir(dir)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 
 	tf, err := taskfile.LoadWithIncludes(rootDir)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return dir, tf, nil
+}
+
+func listTasks() error {
+	_, tf, err := loadTaskfile()
 	if err != nil {
 		return err
 	}
