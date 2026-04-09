@@ -71,4 +71,6 @@ func TestUnquote(t *testing.T) {
 	assert.Empty(t, unquote(`""`))
 	assert.Empty(t, unquote(`''`))
 	assert.Equal(t, "a", unquote("a"))
+	assert.Equal(t, `"hello'`, unquote(`"hello'`))
+	assert.Equal(t, `'hello"`, unquote(`'hello"`))
 }
