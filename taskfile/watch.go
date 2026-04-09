@@ -34,12 +34,11 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	for {
 		time.Sleep(interval)
 
-		checksum, err := sourcesChecksum(dir, task.Sources)
+		changed, newChecksum, err := r.hasSourcesChanged(dir, task.Sources, lastChecksum)
 		if err != nil {
-			return fmt.Errorf("computing sources checksum: %w", err)
+			return err
 		}
-
-		if checksum == lastChecksum {
+		if !changed {
 			continue
 		}
 
@@ -49,6 +48,15 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 			fmt.Fprintln(os.Stderr, err)
 		}
 
-		lastChecksum = checksum
+		lastChecksum = newChecksum
 	}
+}
+
+// hasSourcesChanged computes the sources checksum and reports whether it differs.
+func (r *Runner) hasSourcesChanged(dir string, sources []string, lastChecksum string) (bool, string, error) {
+	checksum, err := sourcesChecksum(dir, sources)
+	if err != nil {
+		return false, "", fmt.Errorf("computing sources checksum: %w", err)
+	}
+	return checksum != lastChecksum, checksum, nil
 }
