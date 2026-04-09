@@ -8,10 +8,12 @@ import (
 	"github.com/99designs/keyring"
 )
 
+// authenticateBiometric is a no-op on non-macOS platforms.
 func authenticateBiometric() error {
 	return nil
 }
 
+// getSecret retrieves a secret from the OS credential store.
 func getSecret(service, key string) (string, error) {
 	ring, err := keyring.Open(keyring.Config{ServiceName: service})
 	if err != nil {
