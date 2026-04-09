@@ -154,7 +154,6 @@ func (r *Runner) taskDir(task *Task) string {
 }
 
 // resolveVars computes the effective variables for a task.
-// resolveVar evaluates a single variable, running a shell command if needed.
 func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 	resolved := make(map[string]string)
 
@@ -174,18 +173,19 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 	return resolved
 }
 
+// resolveVar evaluates a single variable, running a shell command if needed.
 func (r *Runner) resolveVar(v Var, dir string) string {
-	if v.Sh == "" {
-		return v.Value
+	if v.Sh != "" {
+		cmd := exec.Command("sh", "-c", v.Sh)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
 	}
 
-	cmd := exec.Command("sh", "-c", v.Sh)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return v.Value
 }
 
 // buildEnv constructs the environment for a command execution.
