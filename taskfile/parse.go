@@ -78,15 +78,8 @@ func (d *Dep) UnmarshalYAML(unmarshal func(any) error) error {
 		d.Task = s
 		return nil
 	}
-	type depMap struct {
-		Task string `yaml:"task"`
-	}
-	var m depMap
-	if err := unmarshal(&m); err != nil {
-		return err
-	}
-	d.Task = m.Task
-	return nil
+	type plain Dep
+	return unmarshal((*plain)(d))
 }
 
 // Var represents a variable value. It can be a static string or a shell command.
