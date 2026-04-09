@@ -72,7 +72,7 @@ func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 		return "", "", fmt.Errorf("invalid 1Password reference %q, expected 1password://account/vault/item/field", ref)
 	}
 
-	if !strings.Contains(account, ".") {
+	if !strings.ContainsRune(account, '.') {
 		account += ".1password.com"
 	}
 
