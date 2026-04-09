@@ -234,6 +234,7 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 	return os.Expand(s, lookup)
 }
 
+// runCmd executes a shell command, logging it and wiring stdio.
 func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
 	logTask(colorGreen, taskName, command)
 
