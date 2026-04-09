@@ -224,14 +224,10 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 func findTasksMapping(mapping *ast.MappingNode) *ast.MappingNode {
 	for _, mv := range mapping.Values {
 		key, ok := mv.Key.(*ast.StringNode)
-		if !ok || key.Value != "tasks" {
-			continue
+		if ok && key.Value == "tasks" {
+			result, _ := mv.Value.(*ast.MappingNode)
+			return result
 		}
-		taskMapping, ok := mv.Value.(*ast.MappingNode)
-		if !ok {
-			return nil
-		}
-		return taskMapping
 	}
 	return nil
 }
