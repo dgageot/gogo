@@ -222,13 +222,10 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 			continue
 		}
 
-		task, exists := tf.Tasks[taskKey.Value]
-		if !exists {
-			continue
+		if task, exists := tf.Tasks[taskKey.Value]; exists {
+			task.Desc = desc
+			tf.Tasks[taskKey.Value] = task
 		}
-
-		task.Desc = desc
-		tf.Tasks[taskKey.Value] = task
 	}
 }
 
