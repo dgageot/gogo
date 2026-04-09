@@ -44,11 +44,14 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 // injectEnvVars builds the process environment with dotenv and secret vars injected.
 func injectEnvVars(tf *Taskfile) []string {
 	env := os.Environ()
-	for _, vars := range []map[string]string{tf.DotenvVars, tf.SecretVars} {
-		for _, k := range slices.Sorted(maps.Keys(vars)) {
-			if _, exists := os.LookupEnv(k); !exists {
-				env = append(env, k+"="+vars[k])
-			}
+	for _, k := range slices.Sorted(maps.Keys(tf.DotenvVars)) {
+		if _, exists := os.LookupEnv(k); !exists {
+			env = append(env, k+"="+tf.DotenvVars[k])
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(tf.SecretVars)) {
+		if _, exists := os.LookupEnv(k); !exists {
+			env = append(env, k+"="+tf.SecretVars[k])
 		}
 	}
 	return env
