@@ -83,9 +83,9 @@ func parseDotenv(path string) (map[string]string, error) {
 
 // unquote removes matching surrounding quotes from a value.
 func unquote(s string) string {
-	for _, q := range []byte{'"', '\''} {
-		if after, ok := strings.CutPrefix(s, string(q)); ok {
-			if before, ok := strings.CutSuffix(after, string(q)); ok {
+	for _, q := range []string{`"`, `'`} {
+		if after, ok := strings.CutPrefix(s, q); ok {
+			if before, ok := strings.CutSuffix(after, q); ok {
 				return before
 			}
 		}
