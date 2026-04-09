@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -36,7 +37,7 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 		seen[abs] = struct{}{}
 
 		vars, err := parseDotenv(abs)
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
