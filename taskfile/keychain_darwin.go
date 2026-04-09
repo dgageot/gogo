@@ -48,13 +48,6 @@ func touchID(_ reason: String) -> Bool {
 }
 
 func setSecret(service: String, key: String, value: String) -> Bool {
-    let deleteQuery: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: service,
-        kSecAttrAccount as String: key,
-    ]
-    SecItemDelete(deleteQuery as CFDictionary)
-
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: service,
@@ -62,7 +55,19 @@ func setSecret(service: String, key: String, value: String) -> Bool {
         kSecValueData as String: value.data(using: .utf8)!,
     ]
 
-    let status = SecItemAdd(query as CFDictionary, nil)
+    var status = SecItemAdd(query as CFDictionary, nil)
+    if status == errSecDuplicateItem {
+        let search: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+        ]
+        let update: [String: Any] = [
+            kSecValueData as String: value.data(using: .utf8)!,
+        ]
+        status = SecItemUpdate(search as CFDictionary, update as CFDictionary)
+    }
+
     if status != errSecSuccess {
         fputs("Failed to store secret: \(status)\n", stderr)
         return false
