@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"bufio"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,9 +40,7 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 			continue // skip missing files
 		}
 
-		for k, v := range vars {
-			env[k] = v
-		}
+		maps.Copy(env, vars)
 	}
 
 	return env, nil
