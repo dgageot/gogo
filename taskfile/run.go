@@ -210,10 +210,12 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 	}
 
 	// Replace {{.VAR}} templates
+	oldnew := make([]string, 0, (len(vars)+1)*2)
 	for k, v := range vars {
-		s = strings.ReplaceAll(s, "{{."+k+"}}", v)
+		oldnew = append(oldnew, "{{."+k+"}}", v)
 	}
-	s = strings.ReplaceAll(s, "{{.CLI_ARGS}}", cliArgs)
+	oldnew = append(oldnew, "{{.CLI_ARGS}}", cliArgs)
+	s = strings.NewReplacer(oldnew...).Replace(s)
 
 	// Expand ${VAR} references; leave unknown ones for the shell
 	return os.Expand(s, lookup)
