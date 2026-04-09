@@ -12,14 +12,13 @@ import (
 	"github.com/goccy/go-yaml/parser"
 )
 
-// Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
-
 // KeychainConfig describes which keychain service to read secrets from.
 type KeychainConfig struct {
 	Service string          `yaml:"service"`
 	Secrets []KeychainEntry `yaml:"secrets"`
 }
 
+// Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
 type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
