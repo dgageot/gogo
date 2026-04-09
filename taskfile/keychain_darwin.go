@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -175,7 +176,7 @@ func runHelper(args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
-			return "", fmt.Errorf("%s", msg)
+			return "", errors.New(msg)
 		}
 		return "", err
 	}
