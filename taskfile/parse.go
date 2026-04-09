@@ -192,50 +192,61 @@ func applyTaskComments(tf *Taskfile, data []byte) {
 			continue
 		}
 
-		for _, mv := range mapping.Values {
-			key, ok := mv.Key.(*ast.StringNode)
-			if !ok || key.Value != "tasks" {
+		taskMapping := findTasksMapping(mapping)
+		if taskMapping == nil {
+			continue
+		}
+
+		for _, taskMV := range taskMapping.Values {
+			taskKey, ok := taskMV.Key.(*ast.StringNode)
+			if !ok {
 				continue
 			}
 
-			taskMapping, ok := mv.Value.(*ast.MappingNode)
-			if !ok {
-				return
+			task, exists := tf.Tasks[taskKey.Value]
+			if !exists {
+				continue
 			}
 
-			for _, taskMV := range taskMapping.Values {
-				taskKey, ok := taskMV.Key.(*ast.StringNode)
-				if !ok {
-					continue
-				}
-
-				task, exists := tf.Tasks[taskKey.Value]
-				if !exists {
-					continue
-				}
-
-				comment := taskMV.GetComment()
-				if comment == nil {
-					continue
-				}
-
-				var lines []string
-				for _, c := range comment.Comments {
-					text := strings.TrimPrefix(c.Token.Value, "#")
-					text = strings.TrimSpace(text)
-					if text != "" {
-						lines = append(lines, text)
-					}
-				}
-
-				if len(lines) > 0 {
-					task.Desc = strings.Join(lines, " ")
-					tf.Tasks[taskKey.Value] = task
-				}
+			if desc := extractCommentText(taskMV); desc != "" {
+				task.Desc = desc
+				tf.Tasks[taskKey.Value] = task
 			}
-			return
+		}
+		return
+	}
+}
+
+func findTasksMapping(mapping *ast.MappingNode) *ast.MappingNode {
+	for _, mv := range mapping.Values {
+		key, ok := mv.Key.(*ast.StringNode)
+		if !ok || key.Value != "tasks" {
+			continue
+		}
+		taskMapping, ok := mv.Value.(*ast.MappingNode)
+		if !ok {
+			return nil
+		}
+		return taskMapping
+	}
+	return nil
+}
+
+func extractCommentText(node *ast.MappingValueNode) string {
+	comment := node.GetComment()
+	if comment == nil {
+		return ""
+	}
+
+	var lines []string
+	for _, c := range comment.Comments {
+		text := strings.TrimPrefix(c.Token.Value, "#")
+		text = strings.TrimSpace(text)
+		if text != "" {
+			lines = append(lines, text)
 		}
 	}
+	return strings.Join(lines, " ")
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
