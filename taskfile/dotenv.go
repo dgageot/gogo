@@ -13,6 +13,10 @@ import (
 // It skips files that don't exist. Already-seen absolute paths (tracked via seen)
 // are skipped to avoid loading the same file twice across included Taskfiles.
 func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[string]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+
 	env := make(map[string]string)
 
 	for _, p := range paths {
