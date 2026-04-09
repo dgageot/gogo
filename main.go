@@ -105,12 +105,9 @@ func listTasks() error {
 
 	names := slices.Sorted(maps.Keys(tf.Tasks))
 
-	maxLen := 0
-	for _, name := range names {
-		if len(name) > maxLen {
-			maxLen = len(name)
-		}
-	}
+	maxLen := len(slices.MaxFunc(names, func(a, b string) int {
+		return cmp.Compare(len(a), len(b))
+	}))
 
 	for _, name := range names {
 		task := tf.Tasks[name]
