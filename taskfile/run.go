@@ -14,9 +14,10 @@ import (
 
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf  *Taskfile
-	cwd string
-	env []string
+	tf      *Taskfile
+	cwd     string
+	env     []string
+	aliases map[string]string // alias -> task name
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -32,10 +33,19 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		}
 	}
 
+	// Build alias map for O(1) lookup
+	aliases := make(map[string]string)
+	for name, task := range tf.Tasks {
+		for _, alias := range task.Aliases {
+			aliases[alias] = name
+		}
+	}
+
 	return &Runner{
-		tf:  tf,
-		cwd: cwd,
-		env: env,
+		tf:      tf,
+		cwd:     cwd,
+		env:     env,
+		aliases: aliases,
 	}
 }
 
@@ -47,10 +57,8 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	}
 
 	// Try aliases
-	for taskName, task := range r.tf.Tasks {
-		if slices.Contains(task.Aliases, name) {
-			return taskName, true
-		}
+	if taskName, ok := r.aliases[name]; ok {
+		return taskName, true
 	}
 
 	// Try prefixing with namespace for cwd
