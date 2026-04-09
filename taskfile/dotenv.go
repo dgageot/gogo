@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -35,8 +36,11 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 		seen[abs] = struct{}{}
 
 		vars, err := parseDotenv(abs)
+		if os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
-			continue // skip missing files
+			return nil, fmt.Errorf("reading %s: %w", abs, err)
 		}
 
 		maps.Copy(env, vars)
