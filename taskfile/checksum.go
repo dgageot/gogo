@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,8 +41,7 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = io.WriteString(h, f)
-		_, _ = io.WriteString(h, "\n")
+		fmt.Fprintf(h, "%s\n", f)
 		h.Write(data)
 	}
 
