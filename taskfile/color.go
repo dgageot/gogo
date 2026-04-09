@@ -15,5 +15,5 @@ const (
 
 // logTask prints a colored task-prefixed message to stderr.
 func logTask(color, name, msg string) {
-	fmt.Fprintf(os.Stderr, "%s[%s]%s %s\n", color, name, colorReset, msg)
+	fmt.Fprintln(os.Stderr, color+"["+name+"]"+colorReset, msg)
 }
