@@ -62,7 +62,7 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 // Input:  1password://account/vault/item/field
 // Output: account, op://vault/item/field
 func parseOnePasswordRef(ref string) (account, opRef string, err error) {
-	path, ok := strings.CutPrefix(ref, "1password://")
+	path, ok := strings.CutPrefix(ref, onePasswordScheme)
 	if !ok {
 		return "", "", fmt.Errorf("invalid 1Password reference %q, expected 1password://account/vault/item/field", ref)
 	}
@@ -80,7 +80,7 @@ func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 }
 
 func resolveHint(ref string, err error) string {
-	path, _ := strings.CutPrefix(ref, "1password://")
+	path, _ := strings.CutPrefix(ref, onePasswordScheme)
 	parts := strings.SplitN(path, "/", 4)
 
 	vault := ""
