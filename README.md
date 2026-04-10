@@ -44,6 +44,19 @@ Watch sources and re-run on changes:
 gogo -w test
 ```
 
+## Secrets
+
+gogo can retrieve secrets from the macOS Keychain or 1Password and inject them as environment variables into your tasks. Secrets are resolved lazily and protected by Touch ID on macOS.
+
+```yaml
+secrets:
+  API_KEY: keychain://myservice/api-key
+
+deploy:
+  secrets: [API_KEY]
+  cmd: deploy --api-key $API_KEY
+```
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.
