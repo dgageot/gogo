@@ -2,6 +2,8 @@ package taskfile
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -17,7 +19,8 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	keychainAuthenticated := false
 	opEntries := make(map[string]string)
 
-	for name, ref := range entries {
+	for _, name := range slices.Sorted(maps.Keys(entries)) {
+		ref := entries[name]
 		switch {
 		case strings.HasPrefix(ref, keychainScheme):
 			if !keychainAuthenticated {
