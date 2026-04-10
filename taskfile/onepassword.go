@@ -6,7 +6,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/1password/onepassword-sdk-go"
 )
@@ -17,7 +16,6 @@ import (
 // Authentication is determined automatically:
 //   - If OP_SERVICE_ACCOUNT_TOKEN is set, it is used (CI/CD, automation)
 //   - Otherwise, the desktop app integration is used with the account from the ref
-const onePasswordTimeout = 5 * time.Second
 
 func loadOnePasswordSecrets(entries, env map[string]string) error {
 	// Cache clients per account to avoid creating multiple clients.
@@ -33,11 +31,7 @@ func loadOnePasswordSecrets(entries, env map[string]string) error {
 		if !ok {
 			logTask(colorCyan, "1password", "connecting to "+account)
 
-			// Use a timeout only for the initial connection, not for subsequent
-			// operations that may require Touch ID.
-			connectCtx, cancel := context.WithTimeout(context.Background(), onePasswordTimeout)
-			client, err = newOnePasswordClient(connectCtx, account)
-			cancel()
+			client, err = newOnePasswordClient(account)
 			if err != nil {
 				return err
 			}
@@ -134,32 +128,9 @@ Make sure:
 var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
 
 // newOnePasswordClient creates a 1Password client, preferring service account token over desktop app.
-// The call is wrapped in a timeout because the SDK may not respect context cancellation.
-func newOnePasswordClient(ctx context.Context, account string) (*onepassword.Client, error) {
-	type result struct {
-		client *onepassword.Client
-		err    error
-	}
-	ch := make(chan result, 1)
+func newOnePasswordClient(account string) (*onepassword.Client, error) {
+	ctx := context.Background()
 
-	go func() {
-		client, err := newOnePasswordClientBlocking(ctx, account)
-		ch <- result{client, err}
-	}()
-
-	select {
-	case r := <-ch:
-		return r.client, r.err
-	case <-ctx.Done():
-		return nil, fmt.Errorf(`1Password connection timed out for account %q
-
-Make sure:
-  1. The 1Password desktop app is running and unlocked
-  2. SDK integration is enabled: Settings > Developer > "Integrate with other apps"`, account)
-	}
-}
-
-func newOnePasswordClientBlocking(ctx context.Context, account string) (*onepassword.Client, error) {
 	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
 		client, err := onepassword.NewClient(
 			ctx,
