@@ -68,9 +68,12 @@ func resolveKeychainRef(ref string) (string, error) {
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
 func parseKeychainRef(ref string) (service, key string, err error) {
-	path, _ := strings.CutPrefix(ref, keychainScheme)
+	path, ok := strings.CutPrefix(ref, keychainScheme)
+	if !ok {
+		return "", "", fmt.Errorf("invalid keychain reference %q, expected keychain://service/key", ref)
+	}
 
-	service, key, ok := strings.Cut(path, "/")
+	service, key, ok = strings.Cut(path, "/")
 	if !ok || service == "" || key == "" {
 		return "", "", fmt.Errorf("invalid keychain reference %q, expected keychain://service/key", ref)
 	}
