@@ -128,18 +128,8 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	// Run dependencies concurrently
-	if len(task.Deps) > 0 {
-		var wg sync.WaitGroup
-		errs := make([]error, len(task.Deps))
-		for i, dep := range task.Deps {
-			wg.Go(func() {
-				errs[i] = r.Run(dep.Task, "")
-			})
-		}
-		wg.Wait()
-		if err := errors.Join(errs...); err != nil {
-			return err
-		}
+	if err := r.runDeps(task.Deps); err != nil {
+		return err
 	}
 
 	// Resolve variables
@@ -180,6 +170,24 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	return nil
+}
+
+// runDeps executes task dependencies concurrently.
+func (r *Runner) runDeps(deps []Dep) error {
+	if len(deps) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errs := make([]error, len(deps))
+	for i, dep := range deps {
+		wg.Go(func() {
+			errs[i] = r.Run(dep.Task, "")
+		})
+	}
+	wg.Wait()
+
+	return errors.Join(errs...)
 }
 
 // taskDir returns the working directory for a task.
