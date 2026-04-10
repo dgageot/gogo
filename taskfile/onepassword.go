@@ -104,9 +104,9 @@ func listVaultNames(ctx context.Context, client *onepassword.Client) []string {
 	if err != nil {
 		return nil
 	}
-	names := make([]string, len(vaults))
-	for i, v := range vaults {
-		names[i] = v.Title
+	var names []string
+	for _, v := range vaults {
+		names = append(names, v.Title)
 	}
 	slices.Sort(names)
 	return names
