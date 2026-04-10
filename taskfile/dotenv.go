@@ -13,7 +13,7 @@ import (
 // It skips files that don't exist. Already-seen absolute paths (tracked via seen)
 // are skipped to avoid loading the same file twice across included Taskfiles.
 func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[string]string, error) {
-	env := make(map[string]string)
+	result := make(map[string]string)
 
 	for _, p := range paths {
 		abs := resolvePath(dir, p)
@@ -31,10 +31,10 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 			return nil, fmt.Errorf("reading %s: %w", abs, err)
 		}
 
-		maps.Copy(env, vars)
+		maps.Copy(result, vars)
 	}
 
-	return env, nil
+	return result, nil
 }
 
 // parseDotenv reads a .env file and returns key-value pairs.
