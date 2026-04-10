@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,7 +47,7 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 
 		secret, err := client.Secrets().Resolve(ctx, opRef)
 		if err != nil {
-			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", entry.Ref, err, resolveHint(entry.Ref, err))
+			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", entry.Ref, err, resolveHint(ctx, client, entry.Ref, err))
 		}
 
 		env[entry.Env] = secret
@@ -77,7 +78,7 @@ func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 }
 
 // resolveHint returns a user-friendly hint based on the 1Password error.
-func resolveHint(ref string, err error) string {
+func resolveHint(ctx context.Context, client *onepassword.Client, ref string, err error) string {
 	path, _ := strings.CutPrefix(ref, onePasswordScheme)
 	parts := strings.SplitN(path, "/", 4)
 
@@ -85,7 +86,11 @@ func resolveHint(ref string, err error) string {
 
 	switch {
 	case strings.Contains(msg, "no vault matched") && len(parts) > 1:
-		return fmt.Sprintf("Vault %q was not found. Check that the vault name is correct and that your account has access to it.", parts[1])
+		hint := fmt.Sprintf("Vault %q was not found.", parts[1])
+		if names := listVaultNames(ctx, client); len(names) > 0 {
+			hint += " Available vaults: " + strings.Join(names, ", ")
+		}
+		return hint
 	case strings.Contains(msg, "no item matched") && len(parts) > 2:
 		return fmt.Sprintf("Item %q was not found in vault %q. Check that the item name is correct.", parts[2], parts[1])
 	case strings.Contains(msg, "no field matched") && len(parts) > 3:
@@ -93,6 +98,20 @@ func resolveHint(ref string, err error) string {
 	default:
 		return "Check that the secret reference follows the format 1password://account/vault/item/field"
 	}
+}
+
+// listVaultNames returns the sorted names of all accessible vaults.
+func listVaultNames(ctx context.Context, client *onepassword.Client) []string {
+	vaults, err := client.Vaults().List(ctx)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, len(vaults))
+	for i, v := range vaults {
+		names[i] = v.Title
+	}
+	slices.Sort(names)
+	return names
 }
 
 // validateDesktopAppConnection checks that the desktop app integration is working
