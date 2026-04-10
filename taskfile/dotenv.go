@@ -48,17 +48,14 @@ func parseDotenv(path string) (map[string]string, error) {
 
 	env := make(map[string]string)
 	for line := range strings.Lines(string(data)) {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		key, value, ok := strings.Cut(trimmed, "=")
-		if !ok {
-			continue
+		if key, value, ok := strings.Cut(line, "="); ok {
+			env[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
 		}
-
-		env[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
 	}
 
 	return env, nil
