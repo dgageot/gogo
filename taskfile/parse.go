@@ -281,15 +281,6 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 
 	tf.DotenvVars = dotenvVars
 
-	// Load secrets
-	if len(tf.Secrets) > 0 {
-		secrets, err := loadSecrets(tf.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("loading secrets: %w", err)
-		}
-		tf.SecretVars = secrets
-	}
-
 	return tf, nil
 }
 

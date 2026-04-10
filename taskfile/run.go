@@ -15,10 +15,12 @@ import (
 
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf      *Taskfile
-	cwd     string
-	env     []string
-	aliases map[string]string // alias -> task name
+	tf          *Taskfile
+	cwd         string
+	env         []string
+	aliases     map[string]string // alias -> task name
+	secretsOnce sync.Once
+	secretsErr  error
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -83,8 +85,30 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	return name, false
 }
 
+// loadSecrets resolves secrets lazily on first task execution.
+func (r *Runner) ensureSecrets() error {
+	r.secretsOnce.Do(func() {
+		if len(r.tf.Secrets) == 0 {
+			return
+		}
+		secrets, err := loadSecrets(r.tf.Secrets)
+		if err != nil {
+			r.secretsErr = fmt.Errorf("loading secrets: %w", err)
+			return
+		}
+		r.tf.SecretVars = secrets
+		// Rebuild env with secrets
+		r.env = injectEnvVars(r.tf)
+	})
+	return r.secretsErr
+}
+
 // Run executes the named task.
 func (r *Runner) Run(name, cliArgs string) (err error) {
+	if err := r.ensureSecrets(); err != nil {
+		return err
+	}
+
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)
