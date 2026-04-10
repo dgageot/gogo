@@ -3,6 +3,7 @@ package taskfile
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -22,7 +23,8 @@ func loadOnePasswordSecrets(entries, env map[string]string) error {
 	// Cache clients per account to avoid creating multiple clients.
 	clients := make(map[string]*onepassword.Client)
 
-	for name, ref := range entries {
+	for _, name := range slices.Sorted(maps.Keys(entries)) {
+		ref := entries[name]
 		account, opRef, err := parseOnePasswordRef(ref)
 		if err != nil {
 			return err
