@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/1password/onepassword-sdk-go"
 )
@@ -119,17 +120,20 @@ func listVaultNames(ctx context.Context, client *onepassword.Client) []string {
 // successfully but all operations fail with misleading errors.
 func validateDesktopAppConnection(ctx context.Context, client *onepassword.Client, account string) error {
 	if _, err := client.Vaults().List(ctx); err != nil {
-		return fmt.Errorf(`1Password desktop app integration is not working for account %q: %w
-
-Make sure:
+		hint := fmt.Sprintf(`Make sure:
   1. The 1Password desktop app is running and unlocked
   2. SDK integration is enabled: Settings > Developer > "Integrate with other apps"
-  3. The account name %q matches the one shown in the 1Password sidebar`, account, err, account)
+  3. The account name %q matches the one shown in the 1Password sidebar
+
+If everything looks correct, try restarting the 1Password desktop app.`, account)
+		return fmt.Errorf("1Password desktop app integration is not working for account %q: %w\n\n%s", account, err, hint)
 	}
 	return nil
 }
 
 var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
+
+const opConnectTimeout = 10 * time.Second
 
 // newOnePasswordClient creates a 1Password client, preferring service account token over desktop app.
 func newOnePasswordClient(account string) (*onepassword.Client, error) {
@@ -144,11 +148,12 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 		opts = append(opts, onepassword.WithDesktopAppIntegration(account))
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), opConnectTimeout)
+	defer cancel()
 
 	client, err := onepassword.NewClient(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("creating 1Password client for account %q: %w", account, err)
+		return nil, opConnectionError(account, err)
 	}
 
 	// Validate desktop app connection early when not using service account.
@@ -159,4 +164,12 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	}
 
 	return client, nil
+}
+
+func opConnectionError(account string, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		hint := "The 1Password desktop app may be unresponsive. Try restarting it and retry."
+		return fmt.Errorf("timed out connecting to 1Password for account %q\n\n%s", account, hint)
+	}
+	return fmt.Errorf("creating 1Password client for account %q: %w", account, err)
 }
