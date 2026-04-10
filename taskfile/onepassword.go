@@ -34,6 +34,7 @@ func loadOnePasswordSecrets(entries, env map[string]string) error {
 		if !ok {
 			logTask(colorCyan, "1password", "connecting to "+account)
 
+			var err error
 			client, err = newOnePasswordClient(account)
 			if err != nil {
 				return err
