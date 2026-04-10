@@ -33,6 +33,7 @@ type Runner struct {
 	cwd     string
 	env     []string
 	aliases map[string]string // alias -> task name
+	warned  map[string]bool   // secrets already warned about
 	mu      sync.Mutex
 }
 
@@ -53,6 +54,7 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		cwd:     cwd,
 		env:     env,
 		aliases: aliases,
+		warned:  make(map[string]bool),
 	}
 }
 
@@ -309,7 +311,10 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	for _, name := range sortedSecrets {
 		if val, ok := r.tf.SecretVars[name]; ok {
 			if _, exists := os.LookupEnv(name); exists {
-				logTask(colorYellow, "warning", fmt.Sprintf("secret %q is shadowed by an existing environment variable", name))
+				if !r.warned[name] {
+					logTask(colorYellow, "warning", fmt.Sprintf("secret %q is shadowed by an existing environment variable", name))
+					r.warned[name] = true
+				}
 			} else {
 				env = append(env, envPair(name, val))
 			}
