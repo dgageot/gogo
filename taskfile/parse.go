@@ -132,6 +132,15 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	return tf, nil
 }
 
+// mergeNewKeys copies entries from src into dst, skipping keys already present in dst.
+func mergeNewKeys(dst, src map[string]string) {
+	for k, v := range src {
+		if _, exists := dst[k]; !exists {
+			dst[k] = v
+		}
+	}
+}
+
 // loadInclude parses a child Taskfile and merges it into the parent.
 func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]struct{}, dotenvVars map[string]string) error {
 	incDir := filepath.Join(parentDir, namespace)
@@ -148,12 +157,7 @@ func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]stru
 	if err != nil {
 		return fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
 	}
-	// Child values only fill in gaps (parent takes precedence)
-	for k, v := range childDotenv {
-		if _, exists := dotenvVars[k]; !exists {
-			dotenvVars[k] = v
-		}
-	}
+	mergeNewKeys(dotenvVars, childDotenv)
 
 	for name, task := range child.Tasks {
 		if !filepath.IsAbs(task.Dir) {
