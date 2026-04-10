@@ -306,15 +306,12 @@ func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) st
 func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
 	logTask(colorGreen, taskName, command)
 
-	cmd := &exec.Cmd{
-		Path:   "/bin/sh",
-		Args:   []string{"sh", "-c", command},
-		Dir:    dir,
-		Env:    env,
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-	}
+	cmd := exec.Command("/bin/sh", "-c", command)
+	cmd.Dir = dir
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("task %q: %w", taskName, err)
