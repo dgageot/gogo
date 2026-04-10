@@ -15,7 +15,7 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	env := make(map[string]string)
 
 	keychainAuthenticated := false
-	opEntries := make(map[string]string)
+	var opEntries map[string]string
 
 	for name, ref := range entries {
 		switch {
@@ -35,6 +35,9 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 			env[name] = value
 
 		case strings.HasPrefix(ref, onePasswordScheme):
+			if opEntries == nil {
+				opEntries = make(map[string]string)
+			}
 			opEntries[name] = ref
 
 		default:
