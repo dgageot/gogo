@@ -1,0 +1,27 @@
+- section: Getting Started
+  items:
+    - title: Installation
+      url: /getting-started/installation/
+    - title: Quick Start
+      url: /getting-started/quickstart/
+
+- section: Features
+  items:
+    - title: Taskfile Syntax
+      url: /features/taskfile-syntax/
+    - title: Variables
+      url: /features/variables/
+    - title: Dependencies
+      url: /features/dependencies/
+    - title: Sources & Checksums
+      url: /features/sources-checksums/
+    - title: Watch Mode
+      url: /features/watch-mode/
+    - title: Dotenv
+      url: /features/dotenv/
+    - title: Secrets
+      url: /features/secrets/
+    - title: Includes
+      url: /features/includes/
+    - title: CLI Reference
+      url: /features/cli/

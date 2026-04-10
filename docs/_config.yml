@@ -1,0 +1,36 @@
+title: gogo
+description: A simple task runner.
+url: "https://dgageot.github.io"
+baseurl: "/gogo"
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: true
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - _config.dev.yml
+  - Dockerfile
+  - .markdownlint-cli2.yaml
+  - .prettierrc
+  - .prettierignore
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"

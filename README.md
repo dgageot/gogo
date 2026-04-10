@@ -1,6 +1,6 @@
 # gogo
 
-A simple task runner for Go projects.
+A simple task runner.
 
 ## Installation
 
