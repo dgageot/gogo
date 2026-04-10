@@ -301,12 +301,10 @@ func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]stru
 	}
 
 	for name, task := range child.Tasks {
-		qualifiedName := namespace + ":" + name
-		// Resolve relative dir to the child's directory
 		if !filepath.IsAbs(task.Dir) {
 			task.Dir = filepath.Join(child.Dir, task.Dir)
 		}
-		tf.Tasks[qualifiedName] = task
+		tf.Tasks[namespace+":"+name] = task
 	}
 
 	return nil
