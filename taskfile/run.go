@@ -111,6 +111,8 @@ func (r *Runner) ensureSecrets(names []string) error {
 	}
 
 	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	needed := make(map[string]string)
 	for _, name := range names {
 		if _, ok := r.tf.SecretVars[name]; ok {
@@ -120,7 +122,6 @@ func (r *Runner) ensureSecrets(names []string) error {
 			needed[name] = ref
 		}
 	}
-	r.mu.Unlock()
 
 	if len(needed) == 0 {
 		return nil
@@ -131,9 +132,7 @@ func (r *Runner) ensureSecrets(names []string) error {
 		return fmt.Errorf("loading secrets: %w", err)
 	}
 
-	r.mu.Lock()
 	maps.Copy(r.tf.SecretVars, secrets)
-	r.mu.Unlock()
 
 	return nil
 }
