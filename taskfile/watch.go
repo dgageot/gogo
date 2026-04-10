@@ -21,7 +21,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	dir := r.taskDir(&task)
 
 	// Run once immediately
-	if err := r.Run(name, cliArgs); err != nil {
+	if err := r.Run(resolved, cliArgs); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
@@ -45,7 +45,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 
 		logTask(colorYellow, resolved, "sources changed, re-running...")
 
-		if err := r.Run(name, cliArgs); err != nil {
+		if err := r.Run(resolved, cliArgs); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
 
