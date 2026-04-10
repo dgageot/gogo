@@ -13,20 +13,10 @@ import (
 // sourcesChecksum computes a SHA256 checksum of all files matching the given
 // glob patterns, resolved relative to dir.
 func sourcesChecksum(dir string, patterns []string) (string, error) {
-	var files []string
-	for _, pattern := range patterns {
-		if !filepath.IsAbs(pattern) {
-			pattern = filepath.Join(dir, pattern)
-		}
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return "", fmt.Errorf("glob %q: %w", pattern, err)
-		}
-		files = append(files, matches...)
+	files, err := globFiles(dir, patterns)
+	if err != nil {
+		return "", err
 	}
-
-	slices.Sort(files)
-	files = slices.Compact(files)
 
 	h := sha256.New()
 	for _, f := range files {
@@ -39,6 +29,24 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// globFiles expands glob patterns relative to dir, returning a sorted, deduplicated file list.
+func globFiles(dir string, patterns []string) ([]string, error) {
+	var files []string
+	for _, pattern := range patterns {
+		if !filepath.IsAbs(pattern) {
+			pattern = filepath.Join(dir, pattern)
+		}
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("glob %q: %w", pattern, err)
+		}
+		files = append(files, matches...)
+	}
+
+	slices.Sort(files)
+	return slices.Compact(files), nil
 }
 
 // checksumPath returns the file path for a task's stored checksum.
