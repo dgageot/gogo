@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,7 +35,7 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 		if err != nil {
 			continue // skip directories and unreadable files
 		}
-		fmt.Fprintln(h, f)
+		_, _ = io.WriteString(h, f+"\n")
 		h.Write(data)
 	}
 
