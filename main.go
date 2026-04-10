@@ -39,22 +39,12 @@ func run() error {
 		return secretSet(os.Args[3:])
 	}
 
-	var a args
-	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &a)
+	a, err := parseArgs()
 	if err != nil {
 		return err
 	}
-
-	if err := p.Parse(os.Args[1:]); err != nil {
-		switch {
-		case errors.Is(err, arg.ErrHelp):
-			p.WriteHelp(os.Stdout)
-			return nil
-		case errors.Is(err, arg.ErrVersion):
-			return nil
-		default:
-			return err
-		}
+	if a == nil {
+		return nil // help or version was printed
 	}
 
 	if a.List {
@@ -75,6 +65,29 @@ func run() error {
 	}
 
 	return runner.Run(a.Task, cliArgs)
+}
+
+// parseArgs parses command-line arguments. Returns nil if help/version was shown.
+func parseArgs() (*args, error) {
+	var a args
+	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &a)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := p.Parse(os.Args[1:]); err != nil {
+		switch {
+		case errors.Is(err, arg.ErrHelp):
+			p.WriteHelp(os.Stdout)
+			return nil, nil
+		case errors.Is(err, arg.ErrVersion):
+			return nil, nil
+		default:
+			return nil, err
+		}
+	}
+
+	return &a, nil
 }
 
 func loadTaskfile() (string, *taskfile.Taskfile, error) {
