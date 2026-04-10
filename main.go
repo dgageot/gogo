@@ -102,23 +102,28 @@ func listTasks() error {
 		return err
 	}
 
-	names := slices.Sorted(maps.Keys(tf.Tasks))
-	names = slices.DeleteFunc(names, func(name string) bool {
-		return tf.Tasks[name].Desc == ""
-	})
-
-	maxLen := 0
-	for _, name := range names {
-		maxLen = max(maxLen, len(name))
+	type entry struct {
+		name string
+		desc string
 	}
 
-	for _, name := range names {
+	var entries []entry
+	maxLen := 0
+	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
 		task := tf.Tasks[name]
+		if task.Desc == "" {
+			continue
+		}
 		desc := task.Desc
 		if len(task.Aliases) > 0 {
 			desc += " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
-		fmt.Printf("%-*s  %s\n", maxLen, name, desc)
+		entries = append(entries, entry{name, desc})
+		maxLen = max(maxLen, len(name))
+	}
+
+	for _, e := range entries {
+		fmt.Printf("%-*s  %s\n", maxLen, e.name, e.desc)
 	}
 
 	return nil
