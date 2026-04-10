@@ -14,7 +14,7 @@ const (
 
 // loadSecrets resolves all secret entries by dispatching on the URI scheme.
 func loadSecrets(entries map[string]string) (map[string]string, error) {
-	env := make(map[string]string)
+	secrets := make(map[string]string)
 
 	keychainAuthenticated := false
 	opEntries := make(map[string]string)
@@ -42,7 +42,7 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 				return nil, err
 			}
 
-			env[name] = value
+			secrets[name] = value
 
 		case strings.HasPrefix(ref, onePasswordScheme):
 			opEntries[name] = ref
@@ -53,10 +53,10 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	}
 
 	if len(opEntries) > 0 {
-		return env, loadOnePasswordSecrets(opEntries, env)
+		return secrets, loadOnePasswordSecrets(opEntries, secrets)
 	}
 
-	return env, nil
+	return secrets, nil
 }
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
