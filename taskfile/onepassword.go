@@ -17,7 +17,7 @@ import (
 // Authentication is determined automatically:
 //   - If OP_SERVICE_ACCOUNT_TOKEN is set, it is used (CI/CD, automation)
 //   - Otherwise, the desktop app integration is used with the account from the ref
-func loadOnePasswordSecrets(entries, env map[string]string) error {
+func loadOnePasswordSecrets(entries, secrets map[string]string) error {
 	ctx := context.Background()
 
 	// Cache clients per account to avoid creating multiple clients.
@@ -49,7 +49,7 @@ func loadOnePasswordSecrets(entries, env map[string]string) error {
 			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", ref, err, resolveHint(ctx, client, ref, err))
 		}
 
-		env[name] = secret
+		secrets[name] = secret
 	}
 
 	return nil
