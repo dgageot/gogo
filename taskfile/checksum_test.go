@@ -53,6 +53,6 @@ func TestChecksumStorage(t *testing.T) {
 	assert.Equal(t, "def456", readStoredChecksum(dir, "cli:build"))
 
 	// Verify file is named with underscore
-	_, err := os.Stat(filepath.Join(dir, ".task", "checksum", "cli_build"))
+	_, err := os.Stat(filepath.Join(dir, ".gogo", "checksum", "cli_build"))
 	assert.NoError(t, err)
 }

@@ -17,7 +17,7 @@ tasks:
       - go.sum
 ```
 
-On the first run, the task executes and the checksum is stored in `.task/checksum/`. On subsequent runs, gogo recomputes the checksum and skips the task if it matches.
+On the first run, the task executes and the checksum is stored in `.gogo/checksum/`. On subsequent runs, gogo recomputes the checksum and skips the task if it matches.
 
 ## Glob Patterns
 
@@ -33,11 +33,11 @@ Note: `filepath.Glob` does not support recursive `**` patterns or brace expansio
 
 ## Checksum Storage
 
-Checksums are stored in `.task/checksum/` relative to the taskfile directory. You should add `.task/` to your `.gitignore`:
+Checksums are stored in `.gogo/checksum/` relative to the taskfile directory. You should add `.gogo/` to your `.gitignore`:
 
 ```
 # .gitignore
-.task/
+.gogo/
 ```
 
 ## Up-to-Date Output

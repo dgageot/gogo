@@ -52,7 +52,7 @@ func globFiles(dir string, patterns []string) ([]string, error) {
 // checksumPath returns the file path for a task's stored checksum.
 func checksumPath(taskfileDir, taskName string) string {
 	safeName := strings.ReplaceAll(taskName, ":", "_")
-	return filepath.Join(taskfileDir, ".task", "checksum", safeName)
+	return filepath.Join(taskfileDir, ".gogo", "checksum", safeName)
 }
 
 // readStoredChecksum returns the previously stored checksum for a task, or empty if none.
