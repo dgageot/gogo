@@ -78,6 +78,29 @@ func TestLoadDotenvFilesSkipsMissing(t *testing.T) {
 	assert.Empty(t, env)
 }
 
+func TestBuildEnvWithTaskDotenv(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.task"), []byte("TASK_VAR=task_value\n"), 0o644))
+
+	tf := &Taskfile{Dir: dir, Tasks: make(map[string]Task), DotenvVars: make(map[string]string), SecretVars: make(map[string]string)}
+	r := NewRunner(tf, dir)
+
+	task := &Task{Dotenv: []string{".env.task"}}
+	env, err := r.buildEnv(task, dir, nil)
+	require.NoError(t, err)
+	assert.Contains(t, env, "TASK_VAR=task_value")
+}
+
+func TestBuildEnvWithoutTaskDotenv(t *testing.T) {
+	tf := &Taskfile{Dir: t.TempDir(), Tasks: make(map[string]Task), DotenvVars: make(map[string]string), SecretVars: make(map[string]string)}
+	r := NewRunner(tf, tf.Dir)
+
+	task := &Task{}
+	env, err := r.buildEnv(task, tf.Dir, nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, env) // at least inherited env vars
+}
+
 func TestUnquote(t *testing.T) {
 	assert.Equal(t, "hello", unquote(`"hello"`))
 	assert.Equal(t, "hello", unquote(`'hello'`))

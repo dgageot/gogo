@@ -20,6 +20,7 @@ type Task struct {
 	Cmds    []Cmd             `yaml:"cmds"`
 	Deps    []Dep             `yaml:"deps"`
 	Dir     string            `yaml:"dir"`
+	Dotenv  []string          `yaml:"dotenv"`
 	Env     map[string]string `yaml:"env"`
 	Vars    map[string]Var    `yaml:"vars"`
 	Cmd     Cmd               `yaml:"cmd"`

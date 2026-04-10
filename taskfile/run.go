@@ -188,7 +188,10 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	// Build environment
-	env := r.buildEnv(&task, vars)
+	env, err := r.buildEnv(&task, dir, vars)
+	if err != nil {
+		return err
+	}
 
 	// Execute commands
 	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env)
@@ -302,8 +305,21 @@ func varLookup(vars map[string]string) func(string) string {
 }
 
 // buildEnv constructs the environment for a command execution.
-func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
+func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.env)
+
+	// Inject task-level dotenv vars (don't override existing env vars)
+	if len(task.Dotenv) > 0 {
+		taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))
+		if err != nil {
+			return nil, fmt.Errorf("loading task dotenv: %w", err)
+		}
+		for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
+			if _, exists := os.LookupEnv(k); !exists {
+				env = append(env, envPair(k, taskDotenv[k]))
+			}
+		}
+	}
 
 	// Inject only the secrets requested by the task
 	sortedSecrets := slices.Clone(task.Secrets)
@@ -330,7 +346,7 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 		env = append(env, envPair(k, os.Expand(task.Env[k], lookup)))
 	}
 
-	return env
+	return env, nil
 }
 
 // expandVars substitutes template and shell variables in a command string.
