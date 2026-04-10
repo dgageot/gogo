@@ -13,21 +13,12 @@ import (
 	"github.com/goccy/go-yaml/parser"
 )
 
-// SecretEntry maps a secret reference to an environment variable.
-// The ref field uses a URI scheme to identify the provider:
-//   - keychain://service/key
-//   - 1password://account/vault/item/field
-type SecretEntry struct {
-	Ref string `yaml:"ref"`
-	Env string `yaml:"env"`
-}
-
 // Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
 type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
 	Dotenv     []string          `yaml:"dotenv"`
-	Secrets    []SecretEntry     `yaml:"secrets"`
+	Secrets    map[string]string `yaml:"secrets"`
 	Vars       map[string]Var    `yaml:"vars"`
 	Tasks      map[string]Task   `yaml:"tasks"`
 	Dir        string            `yaml:"-"`

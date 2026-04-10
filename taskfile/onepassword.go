@@ -19,12 +19,12 @@ import (
 //   - Otherwise, the desktop app integration is used with the account from the ref
 const onePasswordTimeout = 5 * time.Second
 
-func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error {
+func loadOnePasswordSecrets(entries, env map[string]string) error {
 	// Cache clients per account to avoid creating multiple clients.
 	clients := make(map[string]*onepassword.Client)
 
-	for _, entry := range entries {
-		account, opRef, err := parseOnePasswordRef(entry.Ref)
+	for name, ref := range entries {
+		account, opRef, err := parseOnePasswordRef(ref)
 		if err != nil {
 			return err
 		}
@@ -44,15 +44,15 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 			clients[account] = client
 		}
 
-		logTask(colorCyan, "1password", "reading "+entry.Ref)
+		logTask(colorCyan, "1password", "reading "+ref)
 
 		ctx := context.Background()
 		secret, err := client.Secrets().Resolve(ctx, opRef)
 		if err != nil {
-			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", entry.Ref, err, resolveHint(ctx, client, entry.Ref, err))
+			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", ref, err, resolveHint(ctx, client, ref, err))
 		}
 
-		env[entry.Env] = secret
+		env[name] = secret
 	}
 
 	return nil

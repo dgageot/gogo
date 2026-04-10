@@ -91,16 +91,13 @@ func (r *Runner) ensureSecrets(names []string) error {
 
 	// Collect entries that still need to be resolved.
 	r.mu.Lock()
-	var needed []SecretEntry
+	needed := make(map[string]string)
 	for _, name := range names {
 		if _, ok := r.tf.SecretVars[name]; ok {
 			continue
 		}
-		for _, entry := range r.tf.Secrets {
-			if entry.Env == name {
-				needed = append(needed, entry)
-				break
-			}
+		if ref, ok := r.tf.Secrets[name]; ok {
+			needed[name] = ref
 		}
 	}
 	r.mu.Unlock()

@@ -11,15 +11,15 @@ const (
 )
 
 // loadSecrets resolves all secret entries by dispatching on the URI scheme.
-func loadSecrets(entries []SecretEntry) (map[string]string, error) {
+func loadSecrets(entries map[string]string) (map[string]string, error) {
 	env := make(map[string]string)
 
 	keychainAuthenticated := false
-	var opEntries []SecretEntry
+	opEntries := make(map[string]string)
 
-	for _, entry := range entries {
+	for name, ref := range entries {
 		switch {
-		case strings.HasPrefix(entry.Ref, keychainScheme):
+		case strings.HasPrefix(ref, keychainScheme):
 			if !keychainAuthenticated {
 				if err := authenticateBiometric(); err != nil {
 					return nil, err
@@ -27,18 +27,18 @@ func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 				keychainAuthenticated = true
 			}
 
-			value, err := resolveKeychainEntry(entry)
+			value, err := resolveKeychainRef(ref)
 			if err != nil {
 				return nil, err
 			}
 
-			env[entry.Env] = value
+			env[name] = value
 
-		case strings.HasPrefix(entry.Ref, onePasswordScheme):
-			opEntries = append(opEntries, entry)
+		case strings.HasPrefix(ref, onePasswordScheme):
+			opEntries[name] = ref
 
 		default:
-			return nil, fmt.Errorf("unknown secret scheme in %q", entry.Ref)
+			return nil, fmt.Errorf("unknown secret scheme in %q", ref)
 		}
 	}
 
@@ -51,9 +51,9 @@ func loadSecrets(entries []SecretEntry) (map[string]string, error) {
 	return env, nil
 }
 
-// resolveKeychainEntry reads a single secret from the OS keychain.
-func resolveKeychainEntry(entry SecretEntry) (string, error) {
-	service, key, err := parseKeychainRef(entry.Ref)
+// resolveKeychainRef reads a single secret from the OS keychain.
+func resolveKeychainRef(ref string) (string, error) {
+	service, key, err := parseKeychainRef(ref)
 	if err != nil {
 		return "", err
 	}
