@@ -46,7 +46,7 @@ import Security
 
 let args = CommandLine.arguments
 guard args.count >= 4 else {
-    fputs("usage: {set|get} <service> <key> [value]\n", stderr)
+    fputs("usage: {set|get} <service> <key>\n", stderr)
     exit(1)
 }
 
@@ -126,9 +126,9 @@ func getSecret(service: String, key: String) -> String? {
 
 switch action {
 case "set":
-    guard let data = FileHandle.standardInput.readDataToEndOfFile() as Data?,
-          let value = String(data: data, encoding: .utf8) else {
-        fputs("failed to read secret from stdin\n", stderr)
+    let data = FileHandle.standardInput.readDataToEndOfFile()
+    guard let value = String(data: data, encoding: .utf8) else {
+        fputs("failed to read secret from stdin (invalid UTF-8)\n", stderr)
         exit(1)
     }
     exit(setSecret(service: service, key: key, value: value) ? 0 : 1)
