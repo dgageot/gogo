@@ -273,7 +273,9 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
 
 	// Inject only the secrets requested by the task
-	for _, name := range slices.Sorted(slices.Values(task.Secrets)) {
+	sortedSecrets := slices.Clone(task.Secrets)
+	slices.Sort(sortedSecrets)
+	for _, name := range sortedSecrets {
 		if val, ok := r.tf.SecretVars[name]; ok {
 			if _, exists := os.LookupEnv(name); !exists {
 				env = append(env, envPair(name, val))
