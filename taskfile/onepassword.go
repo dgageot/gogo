@@ -16,7 +16,6 @@ import (
 // Authentication is determined automatically:
 //   - If OP_SERVICE_ACCOUNT_TOKEN is set, it is used (CI/CD, automation)
 //   - Otherwise, the desktop app integration is used with the account from the ref
-
 func loadOnePasswordSecrets(entries, env map[string]string) error {
 	ctx := context.Background()
 
