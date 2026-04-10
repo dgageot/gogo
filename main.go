@@ -58,13 +58,12 @@ func run() error {
 
 	cliArgs := strings.Join(a.CLIArgs, " ")
 	runner := taskfile.NewRunner(tf, dir)
+	defer runner.ClearSecrets()
 
 	if a.Watch {
 		parsed, _ := time.ParseDuration(tf.Interval)
 		return runner.Watch(a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
 	}
-
-	defer runner.ClearSecrets()
 
 	return runner.Run(a.Task, cliArgs)
 }
