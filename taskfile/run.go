@@ -71,7 +71,8 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	}
 
 	// Try prefixing with namespace for cwd
-	for dir, ns := range r.tf.Namespaces {
+	for _, dir := range slices.Sorted(maps.Keys(r.tf.Namespaces)) {
+		ns := r.tf.Namespaces[dir]
 		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
 			continue
 		}
