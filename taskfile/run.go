@@ -175,7 +175,7 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 			}
 			continue
 		}
-		if err := r.runCmd(resolved, r.expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+		if err := r.runCmd(resolved, expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
 			return err
 		}
 	}
@@ -272,7 +272,7 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 }
 
 // expandVars substitutes template and shell variables in a command string.
-func (r *Runner) expandVars(s string, vars map[string]string, cliArgs string) string {
+func expandVars(s string, vars map[string]string, cliArgs string) string {
 	lookup := func(key string) string {
 		if key == "CLI_ARGS" {
 			return cliArgs
