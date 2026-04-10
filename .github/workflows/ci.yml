@@ -49,7 +49,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - uses: mlugg/setup-zig@a45628674a83a4b0a1a13e39f3c3f60ea0e4450e # v2.1.1
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.14.1
       - run: go build -o /dev/null .
