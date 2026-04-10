@@ -300,7 +300,9 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	slices.Sort(sortedSecrets)
 	for _, name := range sortedSecrets {
 		if val, ok := r.tf.SecretVars[name]; ok {
-			if _, exists := os.LookupEnv(name); !exists {
+			if _, exists := os.LookupEnv(name); exists {
+				logTask(colorYellow, "warning", fmt.Sprintf("secret %q is shadowed by an existing environment variable", name))
+			} else {
 				env = append(env, envPair(name, val))
 			}
 		}
