@@ -204,19 +204,19 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 
 	// Global vars
 	for k, v := range r.tf.Vars {
-		resolved[k] = r.resolveVar(v, r.tf.Dir)
+		resolved[k] = resolveVar(v, r.tf.Dir)
 	}
 
 	// Task vars override
 	for k, v := range task.Vars {
-		resolved[k] = r.resolveVar(v, taskDir)
+		resolved[k] = resolveVar(v, taskDir)
 	}
 
 	return resolved
 }
 
 // resolveVar evaluates a single variable, running a shell command if needed.
-func (r *Runner) resolveVar(v Var, dir string) string {
+func resolveVar(v Var, dir string) string {
 	if v.Sh != "" {
 		out, err := (&exec.Cmd{
 			Path: "/bin/sh",
