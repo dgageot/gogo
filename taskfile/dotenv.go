@@ -46,7 +46,7 @@ func parseDotenv(path string) (map[string]string, error) {
 		return nil, err
 	}
 
-	env := make(map[string]string)
+	vars := make(map[string]string)
 	for line := range strings.Lines(string(data)) {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -54,11 +54,11 @@ func parseDotenv(path string) (map[string]string, error) {
 		}
 
 		if key, value, ok := strings.Cut(line, "="); ok {
-			env[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
+			vars[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
 		}
 	}
 
-	return env, nil
+	return vars, nil
 }
 
 // unquote removes matching surrounding quotes from a value.
