@@ -160,8 +160,7 @@ func runHelper(args ...string) (string, error) {
 		return "", err
 	}
 
-	cmd := exec.Command(helper, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := exec.Command(helper, args...).CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return "", errors.New(msg)
