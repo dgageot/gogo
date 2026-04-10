@@ -1,0 +1,20 @@
+version: 2
+
+builds:
+  - main: .
+    binary: gogo
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format_overrides:
+      - goos: windows
+        format: zip
+
+changelog:
+  sort: asc
