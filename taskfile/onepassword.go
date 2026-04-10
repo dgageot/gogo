@@ -17,9 +17,7 @@ import (
 // Authentication is determined automatically:
 //   - If OP_SERVICE_ACCOUNT_TOKEN is set, it is used (CI/CD, automation)
 //   - Otherwise, the desktop app integration is used with the account from the ref
-func loadOnePasswordSecrets(entries, secrets map[string]string) error {
-	ctx := context.Background()
-
+func loadOnePasswordSecrets(ctx context.Context, entries, secrets map[string]string) error {
 	// Cache clients per account to avoid creating multiple clients.
 	clients := make(map[string]*onepassword.Client)
 

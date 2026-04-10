@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -53,7 +54,7 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	}
 
 	if len(opEntries) > 0 {
-		return secrets, loadOnePasswordSecrets(opEntries, secrets)
+		return secrets, loadOnePasswordSecrets(context.Background(), opEntries, secrets)
 	}
 
 	return secrets, nil
