@@ -26,10 +26,6 @@ type Runner struct {
 func NewRunner(tf *Taskfile, cwd string) *Runner {
 	env := injectEnvVars(tf)
 
-	if tf.SecretVars == nil {
-		tf.SecretVars = make(map[string]string)
-	}
-
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
 	for name, task := range tf.Tasks {
