@@ -157,10 +157,7 @@ func newOnePasswordClientBlocking(ctx context.Context, account string) (*onepass
 		opIntegrationInfo,
 	)
 	if err != nil {
-		return nil, fmt.Errorf(`creating 1Password client with desktop app (account %q): %w
-
-Make sure the 1Password desktop app is installed and has SDK integration enabled:
-  → Open 1Password > Settings > Developer > enable "Integrate with other apps"`, account, err)
+		return nil, fmt.Errorf("creating 1Password client with desktop app (account %q): %w", account, err)
 	}
 
 	// Validate the desktop app connection early.
