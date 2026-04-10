@@ -134,7 +134,8 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	ctx := context.Background()
 
 	opts := []onepassword.ClientOption{opIntegrationInfo}
-	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
+	token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN")
+	if token != "" {
 		opts = append(opts, onepassword.WithServiceAccountToken(token))
 	} else {
 		opts = append(opts, onepassword.WithDesktopAppIntegration(account))
@@ -146,7 +147,7 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	}
 
 	// Validate desktop app connection early when not using service account.
-	if os.Getenv("OP_SERVICE_ACCOUNT_TOKEN") == "" {
+	if token == "" {
 		if err := validateDesktopAppConnection(ctx, client, account); err != nil {
 			return nil, err
 		}
