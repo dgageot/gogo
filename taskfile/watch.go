@@ -31,9 +31,10 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		return fmt.Errorf("computing sources checksum: %w", err)
 	}
 
-	for {
-		time.Sleep(interval)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
+	for range ticker.C {
 		newChecksum, err := sourcesChecksum(dir, task.Sources)
 		if err != nil {
 			return fmt.Errorf("computing sources checksum: %w", err)
@@ -50,4 +51,6 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 
 		lastChecksum = newChecksum
 	}
+
+	return nil
 }
