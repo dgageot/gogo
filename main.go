@@ -106,10 +106,6 @@ func listTasks() error {
 		return tf.Tasks[name].Desc == ""
 	})
 
-	if len(names) == 0 {
-		return nil
-	}
-
 	maxLen := 0
 	for _, name := range names {
 		maxLen = max(maxLen, len(name))
