@@ -1,0 +1,54 @@
+tasks:
+  # Build, lint, and test
+  default:
+    deps: [build, lint, test]
+
+  # Build, lint, and test on source changes
+  dev:
+    deps: [build, lint, test]
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+
+  # Build the binary
+  build:
+    cmds:
+      - go build -trimpath -ldflags "-s -w" -o bin/gogo .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+
+  # Remove build artifacts
+  clean:
+    cmds:
+      - rm -rf bin
+
+  # Run linters
+  lint:
+    cmds:
+      - golangci-lint run
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+      - .golangci.yml
+
+  # Run tests
+  test:
+    cmds:
+      - go test ./...
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+
+  # Cross-compile for all platforms
+  build-cross:
+    cmds:
+      - >
+        docker buildx build
+        --target=cross
+        --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64
+        .
