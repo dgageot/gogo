@@ -31,14 +31,31 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
+        include:
+          - goos: linux
+            goarch: amd64
+            zig_target: x86_64-linux-gnu
+          - goos: linux
+            goarch: arm64
+            zig_target: aarch64-linux-gnu
+          - goos: darwin
+            goarch: amd64
+            zig_target: x86_64-macos
+          - goos: darwin
+            goarch: arm64
+            zig_target: aarch64-macos
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+      - uses: mlugg/setup-zig@a45628674a83a4b0a1a13e39f3c3f60ea0e4450e # v2.1.1
+        with:
+          version: 0.14.1
       - run: go build -o /dev/null .
         env:
+          CGO_ENABLED: "1"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CC: zig cc -target ${{ matrix.zig_target }}
+          CXX: zig c++ -target ${{ matrix.zig_target }}
