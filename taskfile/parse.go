@@ -119,17 +119,20 @@ func Parse(dir string) (*Taskfile, error) {
 
 	// Extract comments from AST to use as task descriptions
 	applyTaskComments(&tf, data)
+	normalizeCmds(tf.Tasks)
 
-	// Normalize single cmd into cmds list
-	for name, task := range tf.Tasks {
+	return &tf, nil
+}
+
+// normalizeCmds converts single cmd field to cmds list for each task.
+func normalizeCmds(tasks map[string]Task) {
+	for name, task := range tasks {
 		if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
 			task.Cmds = []Cmd{task.Cmd}
 			task.Cmd = Cmd{}
-			tf.Tasks[name] = task
+			tasks[name] = task
 		}
 	}
-
-	return &tf, nil
 }
 
 var taskfileNames = []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"}
