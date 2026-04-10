@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	yaml "github.com/goccy/go-yaml"
 )
@@ -90,8 +89,6 @@ func FindRootDir(dir string) (string, error) {
 
 	return found, nil
 }
-
-var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
 // expandTemplates replaces {{.VAR}} patterns with environment variable values.
 func expandTemplates(data []byte) []byte {
