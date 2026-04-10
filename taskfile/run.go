@@ -85,7 +85,6 @@ func (r *Runner) ensureSecrets(names []string) error {
 		return nil
 	}
 
-	// Collect entries that still need to be resolved.
 	r.mu.Lock()
 	needed := make(map[string]string)
 	for _, name := range names {
