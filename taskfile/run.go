@@ -194,7 +194,12 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			}
 			continue
 		}
-		if err := r.runCmd(taskName, expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+
+		// Log the original command template to avoid leaking expanded secrets.
+		logTask(colorGreen, taskName, cmd.Cmd)
+
+		expanded := expandVars(cmd.Cmd, vars, cliArgs)
+		if err := r.execCmd(taskName, expanded, dir, env); err != nil {
 			return err
 		}
 	}
@@ -338,10 +343,8 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 	return os.Expand(s, lookup)
 }
 
-// runCmd executes a shell command, logging it and wiring stdio.
-func (r *Runner) runCmd(taskName, command, dir string, env []string) error {
-	logTask(colorGreen, taskName, command)
-
+// execCmd executes a shell command, wiring stdio.
+func (r *Runner) execCmd(taskName, command, dir string, env []string) error {
 	cmd := exec.Command("/bin/sh", "-c", command)
 	cmd.Dir = dir
 	cmd.Env = env
