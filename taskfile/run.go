@@ -15,17 +15,20 @@ import (
 
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf          *Taskfile
-	cwd         string
-	env         []string
-	aliases     map[string]string // alias -> task name
-	secretsOnce sync.Once
-	secretsErr  error
+	tf      *Taskfile
+	cwd     string
+	env     []string
+	aliases map[string]string // alias -> task name
+	mu      sync.Mutex
 }
 
 // NewRunner creates a task runner for the given taskfile.
 func NewRunner(tf *Taskfile, cwd string) *Runner {
 	env := injectEnvVars(tf)
+
+	if tf.SecretVars == nil {
+		tf.SecretVars = make(map[string]string)
+	}
 
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
@@ -43,17 +46,12 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 	}
 }
 
-// injectEnvVars builds the process environment with dotenv and secret vars injected.
+// injectEnvVars builds the process environment with dotenv vars injected.
 func injectEnvVars(tf *Taskfile) []string {
 	env := os.Environ()
 	for _, k := range slices.Sorted(maps.Keys(tf.DotenvVars)) {
 		if _, exists := os.LookupEnv(k); !exists {
 			env = append(env, k+"="+tf.DotenvVars[k])
-		}
-	}
-	for _, k := range slices.Sorted(maps.Keys(tf.SecretVars)) {
-		if _, exists := os.LookupEnv(k); !exists {
-			env = append(env, k+"="+tf.SecretVars[k])
 		}
 	}
 	return env
@@ -85,36 +83,57 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	return name, false
 }
 
-// loadSecrets resolves secrets lazily on first task execution.
-func (r *Runner) ensureSecrets() error {
-	r.secretsOnce.Do(func() {
-		if len(r.tf.Secrets) == 0 {
-			return
+// ensureSecrets resolves only the secrets requested by names, skipping any already loaded.
+func (r *Runner) ensureSecrets(names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+
+	// Collect entries that still need to be resolved.
+	r.mu.Lock()
+	var needed []SecretEntry
+	for _, name := range names {
+		if _, ok := r.tf.SecretVars[name]; ok {
+			continue
 		}
-		secrets, err := loadSecrets(r.tf.Secrets)
-		if err != nil {
-			r.secretsErr = fmt.Errorf("loading secrets: %w", err)
-			return
+		for _, entry := range r.tf.Secrets {
+			if entry.Env == name {
+				needed = append(needed, entry)
+				break
+			}
 		}
-		r.tf.SecretVars = secrets
-		// Rebuild env with secrets
-		r.env = injectEnvVars(r.tf)
-	})
-	return r.secretsErr
+	}
+	r.mu.Unlock()
+
+	if len(needed) == 0 {
+		return nil
+	}
+
+	secrets, err := loadSecrets(needed)
+	if err != nil {
+		return fmt.Errorf("loading secrets: %w", err)
+	}
+
+	r.mu.Lock()
+	maps.Copy(r.tf.SecretVars, secrets)
+	r.mu.Unlock()
+
+	return nil
 }
 
 // Run executes the named task.
 func (r *Runner) Run(name, cliArgs string) (err error) {
-	if err := r.ensureSecrets(); err != nil {
-		return err
-	}
-
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
 		return fmt.Errorf("task %q not found", name)
 	}
 
 	task := r.tf.Tasks[resolved]
+
+	// Load only the secrets this task needs
+	if err := r.ensureSecrets(task.Secrets); err != nil {
+		return err
+	}
 
 	// Run dependencies concurrently
 	if len(task.Deps) > 0 {
@@ -234,6 +253,15 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, err
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
+
+	// Inject only the secrets requested by the task
+	for _, name := range task.Secrets {
+		if val, ok := r.tf.SecretVars[name]; ok {
+			if _, exists := os.LookupEnv(name); !exists {
+				env = append(env, name+"="+val)
+			}
+		}
+	}
 
 	for _, k := range slices.Sorted(maps.Keys(vars)) {
 		env = append(env, k+"="+vars[k])

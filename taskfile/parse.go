@@ -47,6 +47,7 @@ type Task struct {
 	Cmd     Cmd               `yaml:"cmd"`
 	Sources []string          `yaml:"sources"`
 	Aliases []string          `yaml:"aliases"`
+	Secrets []string          `yaml:"secrets"`
 	Desc    string            `yaml:"-"` // set from YAML comments, not from a field
 }
 

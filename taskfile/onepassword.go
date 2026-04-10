@@ -20,9 +20,6 @@ import (
 const onePasswordTimeout = 5 * time.Second
 
 func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), onePasswordTimeout)
-	defer cancel()
-
 	// Cache clients per account to avoid creating multiple clients.
 	clients := make(map[string]*onepassword.Client)
 
@@ -36,7 +33,11 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 		if !ok {
 			logTask(colorCyan, "1password", "connecting to "+account)
 
-			client, err = newOnePasswordClient(ctx, account)
+			// Use a timeout only for the initial connection, not for subsequent
+			// operations that may require Touch ID.
+			connectCtx, cancel := context.WithTimeout(context.Background(), onePasswordTimeout)
+			client, err = newOnePasswordClient(connectCtx, account)
+			cancel()
 			if err != nil {
 				return err
 			}
@@ -45,6 +46,7 @@ func loadOnePasswordSecrets(entries []SecretEntry, env map[string]string) error 
 
 		logTask(colorCyan, "1password", "reading "+entry.Ref)
 
+		ctx := context.Background()
 		secret, err := client.Secrets().Resolve(ctx, opRef)
 		if err != nil {
 			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", entry.Ref, err, resolveHint(ctx, client, entry.Ref, err))
