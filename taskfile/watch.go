@@ -42,14 +42,13 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		if newChecksum == lastChecksum {
 			continue
 		}
+		lastChecksum = newChecksum
 
 		logTask(colorYellow, resolved, "sources changed, re-running...")
 
 		if err := r.Run(resolved, cliArgs); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
-
-		lastChecksum = newChecksum
 	}
 
 	return nil
