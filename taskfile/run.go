@@ -42,12 +42,17 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 	}
 }
 
+// envPair formats a key-value pair as an environment variable string.
+func envPair(k, v string) string {
+	return k + "=" + v
+}
+
 // injectEnvVars builds the process environment with dotenv vars injected.
 func injectEnvVars(tf *Taskfile) []string {
 	env := os.Environ()
 	for _, k := range slices.Sorted(maps.Keys(tf.DotenvVars)) {
 		if _, exists := os.LookupEnv(k); !exists {
-			env = append(env, k+"="+tf.DotenvVars[k])
+			env = append(env, envPair(k, tf.DotenvVars[k]))
 		}
 	}
 	return env
@@ -256,13 +261,13 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	for _, name := range slices.Sorted(slices.Values(task.Secrets)) {
 		if val, ok := r.tf.SecretVars[name]; ok {
 			if _, exists := os.LookupEnv(name); !exists {
-				env = append(env, name+"="+val)
+				env = append(env, envPair(name, val))
 			}
 		}
 	}
 
 	for _, k := range slices.Sorted(maps.Keys(vars)) {
-		env = append(env, k+"="+vars[k])
+		env = append(env, envPair(k, vars[k]))
 	}
 
 	lookup := func(key string) string {
@@ -272,7 +277,7 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 		return os.Getenv(key)
 	}
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		env = append(env, k+"="+os.Expand(task.Env[k], lookup))
+		env = append(env, envPair(k, os.Expand(task.Env[k], lookup)))
 	}
 
 	return env
