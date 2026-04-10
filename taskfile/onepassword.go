@@ -18,6 +18,8 @@ import (
 //   - Otherwise, the desktop app integration is used with the account from the ref
 
 func loadOnePasswordSecrets(entries, env map[string]string) error {
+	ctx := context.Background()
+
 	// Cache clients per account to avoid creating multiple clients.
 	clients := make(map[string]*onepassword.Client)
 
@@ -40,7 +42,6 @@ func loadOnePasswordSecrets(entries, env map[string]string) error {
 
 		logTask(colorCyan, "1password", "reading "+ref)
 
-		ctx := context.Background()
 		secret, err := client.Secrets().Resolve(ctx, opRef)
 		if err != nil {
 			return fmt.Errorf("resolving 1Password secret %q: %w\n\n%s", ref, err, resolveHint(ctx, client, ref, err))
