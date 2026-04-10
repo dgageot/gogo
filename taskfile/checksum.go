@@ -52,7 +52,7 @@ func readStoredChecksum(taskfileDir, taskName string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(data))
+	return string(data)
 }
 
 // writeChecksum stores the checksum for a task.
@@ -61,5 +61,5 @@ func writeChecksum(taskfileDir, taskName, checksum string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(checksum+"\n"), 0o644)
+	return os.WriteFile(path, []byte(checksum), 0o644)
 }
