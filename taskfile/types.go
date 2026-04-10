@@ -36,6 +36,11 @@ type Cmd struct {
 	Vars map[string]Var `yaml:"vars"`
 }
 
+// isSet returns true if the Cmd has a command or task reference.
+func (c *Cmd) isSet() bool {
+	return c.Cmd != "" || c.Task != ""
+}
+
 // UnmarshalYAML allows Cmd to be either a string or a map.
 func (c *Cmd) UnmarshalYAML(unmarshal func(any) error) error {
 	var s string

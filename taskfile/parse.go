@@ -44,7 +44,7 @@ func Parse(dir string) (*Taskfile, error) {
 // normalizeCmds converts single cmd field to cmds list for each task.
 func normalizeCmds(tasks map[string]Task) {
 	for name, task := range tasks {
-		if task.Cmd.Cmd != "" || task.Cmd.Task != "" {
+		if task.Cmd.isSet() {
 			task.Cmds = []Cmd{task.Cmd}
 			task.Cmd = Cmd{}
 			tasks[name] = task
