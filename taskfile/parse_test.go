@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,7 +9,12 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	tf, err := LoadWithIncludes("/Users/dgageot/src/ai")
+	dir := "/Users/dgageot/src/ai"
+	if _, err := os.Stat(dir); err != nil {
+		t.Skip("test directory not available")
+	}
+
+	tf, err := LoadWithIncludes(dir)
 	require.NoError(t, err)
 
 	assert.Equal(t, "1", tf.Version)
