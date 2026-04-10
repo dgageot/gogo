@@ -137,6 +137,14 @@ func (r *Runner) ensureSecrets(names []string) error {
 	return nil
 }
 
+// ClearSecrets removes all resolved secrets from memory.
+func (r *Runner) ClearSecrets() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	clear(r.tf.SecretVars)
+}
+
 // Run executes the named task.
 func (r *Runner) Run(name, cliArgs string) (err error) {
 	resolved, ok := r.resolveTaskName(name)

@@ -64,6 +64,8 @@ func run() error {
 		return runner.Watch(a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
 	}
 
+	defer runner.ClearSecrets()
+
 	return runner.Run(a.Task, cliArgs)
 }
 
