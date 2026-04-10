@@ -87,8 +87,9 @@ func unquote(s string) string {
 // resolvePath resolves a path relative to dir, expanding ~ to the home directory.
 func resolvePath(dir, p string) string {
 	if after, ok := strings.CutPrefix(p, "~/"); ok {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, after)
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, after)
+		}
 	}
 	if !filepath.IsAbs(p) {
 		return filepath.Join(dir, p)
