@@ -132,12 +132,10 @@ func secretSet(args []string) error {
 		return errors.New("usage: gogo secret set <service> <key> <value>")
 	}
 
-	service, key, value := args[0], args[1], args[2]
-
-	if err := taskfile.SetSecret(service, key, value); err != nil {
+	if err := taskfile.SetSecret(args[0], args[1], args[2]); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Secret %q stored in keychain %q\n", key, service)
+	fmt.Fprintf(os.Stderr, "Secret %q stored in keychain %q\n", args[1], args[0])
 	return nil
 }
