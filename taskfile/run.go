@@ -85,7 +85,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 
 // ensureSecrets resolves only the secrets requested by names, skipping any already loaded.
 func (r *Runner) ensureSecrets(names []string) error {
-	if len(names) == 0 {
+	if len(names) == 0 || len(r.tf.Secrets) == 0 {
 		return nil
 	}
 
