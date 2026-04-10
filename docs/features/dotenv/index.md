@@ -4,7 +4,9 @@ title: Dotenv
 
 # Dotenv
 
-gogo can load environment variables from `.env` files. Variables are injected into all task commands but don't override existing environment variables.
+gogo can load environment variables from `.env` files. The `dotenv` field is a **top-level** setting — it cannot be used inside individual tasks. Variables are injected into all task commands but don't override existing environment variables.
+
+> **Note**: `dotenv` is only valid at the top level of a taskfile, not inside a task definition. To set environment variables for a specific task, use the task's `env` field instead.
 
 ```yaml
 dotenv:

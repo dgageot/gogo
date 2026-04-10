@@ -16,7 +16,7 @@ gogo looks for a taskfile in the current directory, trying these names in order:
 |-------|------|-------------|
 | `version` | string | Optional version identifier |
 | `includes` | list of strings | Subdirectories containing other taskfiles |
-| `dotenv` | list of strings | Paths to `.env` files to load |
+| `dotenv` | list of strings | Paths to `.env` files to load (top-level only, not per-task) |
 | `secrets` | map | Secret references (keychain or 1Password) |
 | `vars` | map | Global variables |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
