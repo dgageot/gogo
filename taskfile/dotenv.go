@@ -16,12 +16,7 @@ func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[
 	env := make(map[string]string)
 
 	for _, p := range paths {
-		p = resolvePath(dir, p)
-
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return nil, err
-		}
+		abs := resolvePath(dir, p)
 
 		if _, ok := seen[abs]; ok {
 			continue
