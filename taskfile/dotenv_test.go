@@ -35,7 +35,7 @@ SPACED_KEY = spaced_value
 
 func TestParseDotenvMissingFile(t *testing.T) {
 	_, err := parseDotenv("/nonexistent/.env")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestLoadDotenvFilesDeduplication(t *testing.T) {
