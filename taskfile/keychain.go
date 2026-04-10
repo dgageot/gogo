@@ -50,9 +50,7 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	}
 
 	if len(opEntries) > 0 {
-		if err := loadOnePasswordSecrets(opEntries, env); err != nil {
-			return nil, err
-		}
+		return env, loadOnePasswordSecrets(opEntries, env)
 	}
 
 	return env, nil
