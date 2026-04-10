@@ -132,8 +132,6 @@ var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
 
 // newOnePasswordClient creates a 1Password client, preferring service account token over desktop app.
 func newOnePasswordClient(account string) (*onepassword.Client, error) {
-	ctx := context.Background()
-
 	opts := []onepassword.ClientOption{opIntegrationInfo}
 	token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN")
 	if token != "" {
@@ -141,6 +139,8 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	} else {
 		opts = append(opts, onepassword.WithDesktopAppIntegration(account))
 	}
+
+	ctx := context.Background()
 
 	client, err := onepassword.NewClient(ctx, opts...)
 	if err != nil {
