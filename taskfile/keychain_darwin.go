@@ -33,8 +33,7 @@ var compileSwiftHelper = sync.OnceValues(func() (string, error) {
 		return "", err
 	}
 
-	cmd := exec.Command("swiftc", "-O", "-o", binary, source)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := exec.Command("swiftc", "-O", "-o", binary, source).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("compiling keychain helper: %w\n%s", err, out)
 	}
 
