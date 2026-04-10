@@ -7,13 +7,14 @@ title: Sources & Checksums
 Tasks can declare source file patterns. gogo computes a SHA256 checksum of all matching files and skips execution if nothing changed since the last run.
 
 ```yaml
-build:
-  cmd: go build -o myapp ./...
-  sources:
-    - "*.go"
-    - "cmd/*.go"
-    - go.mod
-    - go.sum
+tasks:
+  build:
+    cmd: go build -o myapp ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
+      - go.mod
+      - go.sum
 ```
 
 On the first run, the task executes and the checksum is stored in `.task/checksum/`. On subsequent runs, gogo recomputes the checksum and skips the task if it matches.
