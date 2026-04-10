@@ -11,12 +11,12 @@ import (
 )
 
 var compileSwiftHelper = sync.OnceValues(func() (string, error) {
-	dir, err := os.UserCacheDir()
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
 
-	cacheDir := filepath.Join(dir, "gogo")
+	cacheDir = filepath.Join(cacheDir, "gogo")
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		return "", err
 	}
