@@ -162,18 +162,22 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	env := r.buildEnv(&task, vars)
 
 	// Execute commands
-	for _, cmd := range task.Cmds {
+	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env)
+}
+
+// runCmds executes a list of commands in sequence.
+func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string) error {
+	for _, cmd := range cmds {
 		if cmd.Task != "" {
 			if err := r.Run(cmd.Task, cliArgs); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := r.runCmd(resolved, expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
+		if err := r.runCmd(taskName, expandVars(cmd.Cmd, vars, cliArgs), dir, env); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
