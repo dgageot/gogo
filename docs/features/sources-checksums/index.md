@@ -10,7 +10,8 @@ Tasks can declare source file patterns. gogo computes a SHA256 checksum of all m
 build:
   cmd: go build -o myapp ./...
   sources:
-    - "**/*.go"
+    - "*.go"
+    - "cmd/*.go"
     - go.mod
     - go.sum
 ```
@@ -19,14 +20,15 @@ On the first run, the task executes and the checksum is stored in `.task/checksu
 
 ## Glob Patterns
 
-Source patterns use Go's `filepath.Glob` syntax:
+Source patterns use Go's [`filepath.Glob`](https://pkg.go.dev/path/filepath#Glob) syntax:
 
 | Pattern | Matches |
 |---------|---------|
 | `*.go` | Go files in the task directory |
-| `**/*.go` | Go files in all subdirectories |
 | `cmd/*.go` | Go files in the cmd directory |
-| `go.{mod,sum}` | go.mod and go.sum |
+| `go.mod` | The go.mod file |
+
+Note: `filepath.Glob` does not support recursive `**` patterns or brace expansion like `{mod,sum}`. List each directory or file explicitly.
 
 ## Checksum Storage
 

@@ -26,11 +26,12 @@ includes:
 
 ```yaml
 # project/backend/gogo.yaml
-build:
-  cmd: go build ./...
+tasks:
+  build:
+    cmd: go build ./...
 
-test:
-  cmd: go test ./...
+  test:
+    cmd: go test ./...
 ```
 
 ## Namespaced Tasks

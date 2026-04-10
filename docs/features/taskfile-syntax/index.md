@@ -22,8 +22,6 @@ gogo looks for a taskfile in the current directory, trying these names in order:
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
 | `tasks` | map | Task definitions (see below) |
 
-Tasks can also be defined at the top level, alongside these fields. Any key that isn't a reserved field name is treated as a task.
-
 ## Task Definition
 
 Each task supports the following fields:
@@ -45,26 +43,29 @@ Each task supports the following fields:
 A command can be a simple string:
 
 ```yaml
-build:
-  cmd: go build ./...
+tasks:
+  build:
+    cmd: go build ./...
 ```
 
 Or a list of commands:
 
 ```yaml
-lint:
-  cmds:
-    - gofmt -w .
-    - golangci-lint run
+tasks:
+  lint:
+    cmds:
+      - gofmt -w .
+      - golangci-lint run
 ```
 
 A command can also reference another task:
 
 ```yaml
-all:
-  cmds:
-    - task: build
-    - task: test
+tasks:
+  all:
+    cmds:
+      - task: build
+      - task: test
 ```
 
 ## Task Descriptions
@@ -72,13 +73,14 @@ all:
 Comments above a task key are used as the task description, shown by `gogo -l`:
 
 ```yaml
-# Build the Go binary
-build:
-  cmd: go build ./...
+tasks:
+  # Build the Go binary
+  build:
+    cmd: go build ./...
 
-# Run unit tests
-test:
-  cmd: go test ./...
+  # Run unit tests
+  test:
+    cmd: go test ./...
 ```
 
 ```sh
@@ -92,9 +94,10 @@ test   Run unit tests
 Tasks can have alternative names:
 
 ```yaml
-test:
-  aliases: [t]
-  cmd: go test ./...
+tasks:
+  test:
+    aliases: [t]
+    cmd: go test ./...
 ```
 
 ```sh

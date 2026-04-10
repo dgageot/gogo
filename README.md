@@ -10,19 +10,21 @@ go install github.com/dgageot/gogo@latest
 
 ## Usage
 
-Create a `taskfile.yaml` in your project root:
+Create a `gogo.yaml` in your project root:
 
 ```yaml
-default:
-  cmd: echo "Hello, World!"
+tasks:
+  default:
+    cmd: echo "Hello, World!"
 
-build:
-  cmd: go build ./...
+  build:
+    cmd: go build ./...
 
-test:
-  cmd: go test ./...
-  sources:
-    - "**/*.go"
+  test:
+    cmd: go test ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
 ```
 
 Run a task:
@@ -52,9 +54,10 @@ gogo can retrieve secrets from the macOS Keychain or 1Password and inject them a
 secrets:
   API_KEY: keychain://myservice/api-key
 
-deploy:
-  secrets: [API_KEY]
-  cmd: deploy --api-key $API_KEY
+tasks:
+  deploy:
+    secrets: [API_KEY]
+    cmd: deploy --api-key $API_KEY
 ```
 
 ## License

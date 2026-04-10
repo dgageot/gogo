@@ -7,19 +7,21 @@ title: Quick Start
 Create a `gogo.yaml` in your project root:
 
 ```yaml
-# Say hello
-default:
-  cmd: echo "Hello from gogo!"
+tasks:
+  # Say hello
+  default:
+    cmd: echo "Hello from gogo!"
 
-# Build the project
-build:
-  cmd: go build ./...
+  # Build the project
+  build:
+    cmd: go build ./...
 
-# Run tests
-test:
-  cmd: go test ./...
-  sources:
-    - "**/*.go"
+  # Run tests
+  test:
+    cmd: go test ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
 ```
 
 Run a task:

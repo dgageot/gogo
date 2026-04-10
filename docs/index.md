@@ -48,23 +48,24 @@ title: gogo
 
 ```yaml
 # gogo.yaml
+tasks:
+  # Build the project
+  build:
+    cmd: go build ./...
 
-# Build the project
-build:
-  cmd: go build ./...
+  # Run all tests
+  test:
+    deps: [build]
+    cmd: go test ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
 
-# Run all tests
-test:
-  deps: [build]
-  cmd: go test ./...
-  sources:
-    - "**/*.go"
-
-# Format and lint
-lint:
-  cmds:
-    - gofmt -w .
-    - golangci-lint run
+  # Format and lint
+  lint:
+    cmds:
+      - gofmt -w .
+      - golangci-lint run
 ```
 
 ```sh

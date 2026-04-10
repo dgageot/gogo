@@ -15,8 +15,9 @@ vars:
   BINARY_NAME: myapp
   VERSION: 1.0.0
 
-build:
-  cmd: go build -ldflags "-X main.version={{ "{{" }}.VERSION}}" -o {{ "{{" }}.BINARY_NAME}} ./...
+tasks:
+  build:
+    cmd: go build -ldflags "-X main.version={{ "{{" }}.VERSION}}" -o {{ "{{" }}.BINARY_NAME}} ./...
 ```
 
 ## Dynamic Variables
@@ -30,8 +31,9 @@ vars:
   DATE:
     sh: date -u +%Y-%m-%dT%H:%M:%SZ
 
-build:
-  cmd: go build -ldflags "-X main.sha={{ "{{" }}.GIT_SHA}} -X main.date={{ "{{" }}.DATE}}" ./...
+tasks:
+  build:
+    cmd: go build -ldflags "-X main.sha={{ "{{" }}.GIT_SHA}} -X main.date={{ "{{" }}.DATE}}" ./...
 ```
 
 ## Task-Scoped Variables
@@ -42,17 +44,18 @@ Tasks can define their own variables that override global ones:
 vars:
   ENV: development
 
-deploy:
-  vars:
-    ENV: production
-  cmd: deploy --env {{ "{{" }}.ENV}}
+tasks:
+  deploy:
+    vars:
+      ENV: production
+    cmd: deploy --env {{ "{{" }}.ENV}}
 ```
 
 ## Built-in Variables
 
 | Variable | Description |
 |----------|-------------|
-| `TASKFILE_DIR` | The directory containing the taskfile |
+| `TASKFILE_DIR` | The working directory for the task (defaults to the taskfile directory) |
 | `CLI_ARGS` | Extra arguments passed after `--` |
 
 ## CLI Arguments
@@ -60,8 +63,9 @@ deploy:
 Arguments after `--` are available as `{{ "{{" }}.CLI_ARGS}}`:
 
 ```yaml
-test:
-  cmd: go test {{ "{{" }}.CLI_ARGS}} ./...
+tasks:
+  test:
+    cmd: go test {{ "{{" }}.CLI_ARGS}} ./...
 ```
 
 ```sh
@@ -73,8 +77,9 @@ gogo test -- -v -run TestFoo
 Variables in the taskfile are expanded from environment variables using `{{ "{{" }}.VAR}}` syntax at parse time:
 
 ```yaml
-deploy:
-  cmd: deploy --region {{ "{{" }}.AWS_REGION}}
+tasks:
+  deploy:
+    cmd: deploy --region {{ "{{" }}.AWS_REGION}}
 ```
 
 If `AWS_REGION` is set in the environment, it will be substituted before the taskfile is processed.
@@ -87,9 +92,10 @@ Tasks can set environment variables for their commands. Values support `${VAR}` 
 vars:
   PORT: "8080"
 
-serve:
-  env:
-    PORT: "${PORT}"
-    NODE_ENV: production
-  cmd: node server.js
+tasks:
+  serve:
+    env:
+      PORT: "${PORT}"
+      NODE_ENV: production
+    cmd: node server.js
 ```

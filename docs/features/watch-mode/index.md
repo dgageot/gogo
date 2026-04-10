@@ -24,10 +24,12 @@ The default interval is 500ms. Override it in the taskfile:
 ```yaml
 interval: 1s
 
-test:
-  cmd: go test ./...
-  sources:
-    - "**/*.go"
+tasks:
+  test:
+    cmd: go test ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
 ```
 
 The `interval` field accepts any Go duration string: `100ms`, `1s`, `2s`, etc.
@@ -36,11 +38,13 @@ The `interval` field accepts any Go duration string: `100ms`, `1s`, `2s`, etc.
 
 ```yaml
 # gogo.yaml
-test:
-  cmd: go test ./...
-  sources:
-    - "**/*.go"
-    - go.mod
+tasks:
+  test:
+    cmd: go test ./...
+    sources:
+      - "*.go"
+      - "cmd/*.go"
+      - go.mod
 ```
 
 ```sh

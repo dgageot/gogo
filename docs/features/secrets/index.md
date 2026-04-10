@@ -12,9 +12,10 @@ gogo can retrieve secrets from the macOS Keychain or 1Password and inject them a
 secrets:
   API_KEY: keychain://myservice/api-key
 
-deploy:
-  secrets: [API_KEY]
-  cmd: deploy --api-key $API_KEY
+tasks:
+  deploy:
+    secrets: [API_KEY]
+    cmd: deploy --api-key $API_KEY
 ```
 
 The format is `keychain://service/key`. On macOS, gogo uses a Swift helper that authenticates with Touch ID before reading secrets.
@@ -31,9 +32,10 @@ gogo secret set myservice api-key sk-abc123
 secrets:
   DB_PASSWORD: 1password://myaccount/vault/item/field
 
-migrate:
-  secrets: [DB_PASSWORD]
-  cmd: migrate --password $DB_PASSWORD
+tasks:
+  migrate:
+    secrets: [DB_PASSWORD]
+    cmd: migrate --password $DB_PASSWORD
 ```
 
 The format is `1password://account/vault/item/field`. The account portion can be a short name (e.g. `myteam`) which is expanded to `myteam.1password.com`.
