@@ -257,6 +257,16 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, err
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
 
+// varLookup returns a function that resolves variable names from vars, then from the environment.
+func varLookup(vars map[string]string) func(string) string {
+	return func(key string) string {
+		if val, ok := vars[key]; ok {
+			return val
+		}
+		return os.Getenv(key)
+	}
+}
+
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 	env := slices.Clone(r.env)
@@ -274,12 +284,7 @@ func (r *Runner) buildEnv(task *Task, vars map[string]string) []string {
 		env = append(env, envPair(k, vars[k]))
 	}
 
-	lookup := func(key string) string {
-		if val, ok := vars[key]; ok {
-			return val
-		}
-		return os.Getenv(key)
-	}
+	lookup := varLookup(vars)
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
 		env = append(env, envPair(k, os.Expand(task.Env[k], lookup)))
 	}
