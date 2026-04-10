@@ -75,13 +75,13 @@ func unquote(s string) string {
 
 // resolvePath resolves a path relative to dir, expanding ~ to the home directory.
 func resolvePath(dir, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
 	if after, ok := strings.CutPrefix(p, "~/"); ok {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, after)
 		}
 	}
-	if !filepath.IsAbs(p) {
-		return filepath.Join(dir, p)
-	}
-	return p
+	return filepath.Join(dir, p)
 }
