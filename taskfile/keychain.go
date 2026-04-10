@@ -27,7 +27,14 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 				keychainAuthenticated = true
 			}
 
-			value, err := resolveKeychainRef(ref)
+			service, key, err := parseKeychainRef(ref)
+			if err != nil {
+				return nil, err
+			}
+
+			logTask(colorCyan, "keychain", "reading "+key+" from "+service)
+
+			value, err := getSecret(service, key)
 			if err != nil {
 				return nil, err
 			}
@@ -49,18 +56,6 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 	}
 
 	return env, nil
-}
-
-// resolveKeychainRef reads a single secret from the OS keychain.
-func resolveKeychainRef(ref string) (string, error) {
-	service, key, err := parseKeychainRef(ref)
-	if err != nil {
-		return "", err
-	}
-
-	logTask(colorCyan, "keychain", "reading "+key+" from "+service)
-
-	return getSecret(service, key)
 }
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
