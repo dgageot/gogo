@@ -179,8 +179,7 @@ func getSecret(service, key string) (string, error) {
 
 // SetSecret stores a secret in the macOS Keychain.
 func SetSecret(service, key, value string) error {
-	_, err := runHelper("set", service, key, value)
-	if err != nil {
+	if _, err := runHelper("set", service, key, value); err != nil {
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
 	}
 	return nil
