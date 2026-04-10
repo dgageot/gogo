@@ -126,11 +126,12 @@ func getSecret(service: String, key: String) -> String? {
 
 switch action {
 case "set":
-    guard args.count >= 5 else {
-        fputs("usage: set <service> <key> <value>\n", stderr)
+    guard let data = FileHandle.standardInput.readDataToEndOfFile() as Data?,
+          let value = String(data: data, encoding: .utf8) else {
+        fputs("failed to read secret from stdin\n", stderr)
         exit(1)
     }
-    exit(setSecret(service: service, key: key, value: args[4]) ? 0 : 1)
+    exit(setSecret(service: service, key: key, value: value) ? 0 : 1)
 case "get":
     guard touchID("gogo needs to access secrets") else {
         fputs("Authentication failed\n", stderr)
@@ -153,13 +154,19 @@ func authenticateBiometric() error {
 }
 
 // runHelper compiles the Swift keychain helper (if needed) and runs it with the given args.
-func runHelper(args ...string) (string, error) {
+// If stdin is non-empty, it is passed to the helper's standard input.
+func runHelper(stdin string, args ...string) (string, error) {
 	helper, err := compileSwiftHelper()
 	if err != nil {
 		return "", err
 	}
 
-	out, err := exec.Command(helper, args...).CombinedOutput()
+	cmd := exec.Command(helper, args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return "", errors.New(msg)
@@ -170,7 +177,7 @@ func runHelper(args ...string) (string, error) {
 }
 
 func getSecret(service, key string) (string, error) {
-	out, err := runHelper("get", service, key)
+	out, err := runHelper("", "get", service, key)
 	if err != nil {
 		return "", fmt.Errorf("reading secret %q from keychain %q: %w", key, service, err)
 	}
@@ -178,8 +185,9 @@ func getSecret(service, key string) (string, error) {
 }
 
 // SetSecret stores a secret in the macOS Keychain.
+// The value is passed via stdin to avoid exposing it in process arguments.
 func SetSecret(service, key, value string) error {
-	if _, err := runHelper("set", service, key, value); err != nil {
+	if _, err := runHelper(value, "set", service, key); err != nil {
 		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
 	}
 	return nil
