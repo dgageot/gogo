@@ -35,9 +35,13 @@ func SetSecret(service, key, value string) error {
 		return fmt.Errorf("opening keychain %q: %w", service, err)
 	}
 
-	return ring.Set(keyring.Item{
+	if err := ring.Set(keyring.Item{
 		Key:   key,
 		Label: service + ": " + key,
 		Data:  []byte(value),
-	})
+	}); err != nil {
+		return fmt.Errorf("storing secret %q in keychain %q: %w", key, service, err)
+	}
+
+	return nil
 }
