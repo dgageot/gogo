@@ -3,8 +3,33 @@ package taskfile
 import (
 	"fmt"
 	"os"
+	"slices"
 	"time"
 )
+
+// collectSources gathers all source patterns from the task and its dependencies (recursively).
+func (r *Runner) collectSources(taskName string, visited map[string]bool) []string {
+	if visited[taskName] {
+		return nil
+	}
+	visited[taskName] = true
+
+	task, ok := r.tf.Tasks[taskName]
+	if !ok {
+		return nil
+	}
+
+	sources := slices.Clone(task.Sources)
+	for _, dep := range task.Deps {
+		resolved, ok := r.resolveTaskName(dep.Task)
+		if !ok {
+			continue
+		}
+		sources = append(sources, r.collectSources(resolved, visited)...)
+	}
+
+	return sources
+}
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
 func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
@@ -14,7 +39,9 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	}
 
 	task := r.tf.Tasks[resolved]
-	if len(task.Sources) == 0 {
+
+	sources := r.collectSources(resolved, make(map[string]bool))
+	if len(sources) == 0 {
 		return fmt.Errorf("task %q has no sources, cannot watch", name)
 	}
 
@@ -26,7 +53,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	}
 
 	// Track checksum after initial run to avoid immediate re-run
-	lastChecksum, err := sourcesChecksum(dir, task.Sources)
+	lastChecksum, err := sourcesChecksum(dir, sources)
 	if err != nil {
 		return fmt.Errorf("computing sources checksum: %w", err)
 	}
@@ -35,7 +62,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		newChecksum, err := sourcesChecksum(dir, task.Sources)
+		newChecksum, err := sourcesChecksum(dir, sources)
 		if err != nil {
 			return fmt.Errorf("computing sources checksum: %w", err)
 		}
