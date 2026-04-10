@@ -90,17 +90,6 @@ func FindRootDir(dir string) (string, error) {
 	return found, nil
 }
 
-// expandTemplates replaces {{.VAR}} patterns with environment variable values.
-func expandTemplates(data []byte) []byte {
-	return templatePattern.ReplaceAllFunc(data, func(match []byte) []byte {
-		name := string(templatePattern.FindSubmatch(match)[1])
-		if val, ok := os.LookupEnv(name); ok {
-			return []byte(val)
-		}
-		return match
-	})
-}
-
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
 func LoadWithIncludes(dir string) (*Taskfile, error) {
 	tf, err := Parse(dir)
