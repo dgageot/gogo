@@ -133,30 +133,23 @@ var opIntegrationInfo = onepassword.WithIntegrationInfo("gogo", "v1.0.0")
 func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	ctx := context.Background()
 
+	opts := []onepassword.ClientOption{opIntegrationInfo}
 	if token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN"); token != "" {
-		client, err := onepassword.NewClient(
-			ctx,
-			onepassword.WithServiceAccountToken(token),
-			opIntegrationInfo,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("creating 1Password client with service account: %w", err)
-		}
-		return client, nil
+		opts = append(opts, onepassword.WithServiceAccountToken(token))
+	} else {
+		opts = append(opts, onepassword.WithDesktopAppIntegration(account))
 	}
 
-	client, err := onepassword.NewClient(
-		ctx,
-		onepassword.WithDesktopAppIntegration(account),
-		opIntegrationInfo,
-	)
+	client, err := onepassword.NewClient(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("creating 1Password client with desktop app (account %q): %w", account, err)
+		return nil, fmt.Errorf("creating 1Password client for account %q: %w", account, err)
 	}
 
-	// Validate the desktop app connection early.
-	if err := validateDesktopAppConnection(ctx, client, account); err != nil {
-		return nil, err
+	// Validate desktop app connection early when not using service account.
+	if os.Getenv("OP_SERVICE_ACCOUNT_TOKEN") == "" {
+		if err := validateDesktopAppConnection(ctx, client, account); err != nil {
+			return nil, err
+		}
 	}
 
 	return client, nil
