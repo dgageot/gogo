@@ -3,8 +3,10 @@ package taskfile
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	yaml "github.com/goccy/go-yaml"
 )
@@ -140,7 +142,8 @@ func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]stru
 		}
 	}
 
-	for name, task := range child.Tasks {
+	for _, name := range slices.Sorted(maps.Keys(child.Tasks)) {
+		task := child.Tasks[name]
 		if !filepath.IsAbs(task.Dir) {
 			task.Dir = filepath.Join(child.Dir, task.Dir)
 		}
