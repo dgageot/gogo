@@ -17,7 +17,6 @@ gogo looks for a taskfile in the current directory, trying these names in order:
 | `version` | string | Optional version identifier |
 | `includes` | list of strings | Subdirectories containing other taskfiles |
 | `dotenv` | list of strings | Paths to `.env` files to load |
-| `secrets` | map | Secret references (keychain or 1Password) |
 | `vars` | map | Global variables |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
 | `tasks` | map | Task definitions (see below) |
@@ -33,11 +32,10 @@ Each task supports the following fields:
 | `deps` | list | Tasks to run before this one (concurrently) |
 | `dir` | string | Working directory for the task |
 | `dotenv` | list | Paths to `.env` files to load for this task |
-| `env` | map | Environment variables |
+| `env` | map | Environment variables (supports `op://` references for 1Password secrets) |
 | `vars` | map | Task-scoped variables |
 | `sources` | list | Glob patterns for incremental builds and watch mode |
 | `aliases` | list | Alternative names for the task |
-| `secrets` | list | Secret names to inject as environment variables |
 
 ## Commands
 

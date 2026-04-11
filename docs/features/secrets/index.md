@@ -4,51 +4,28 @@ title: Secrets
 
 # Secrets
 
-gogo can retrieve secrets from the macOS Keychain or 1Password and inject them as environment variables. Secrets are loaded lazily — only when a task that needs them is executed.
+gogo integrates with [1Password CLI](https://developer.1password.com/docs/cli/) to inject secrets as environment variables. When a task's environment contains `op://` references, gogo automatically wraps the command with `op run` to resolve them.
 
-## Keychain Secrets (macOS)
+## Usage
 
 ```yaml
-secrets:
-  API_KEY: keychain://myservice/api-key
-
 tasks:
   deploy:
-    secrets: [API_KEY]
-    cmd: deploy --api-key $API_KEY
+    env:
+      DB_PASSWORD: op://vault/item/field
+      API_KEY: op://vault/api-credentials/key
+    cmd: deploy --password $DB_PASSWORD --api-key $API_KEY
 ```
 
-The format is `keychain://service/key`. On macOS, gogo uses a Swift helper that authenticates with Touch ID before reading secrets.
-
-### Storing Keychain Secrets
-
-```sh
-gogo secret set myservice api-key sk-abc123
-```
-
-## 1Password Secrets
-
-```yaml
-secrets:
-  DB_PASSWORD: 1password://myaccount/vault/item/field
-
-tasks:
-  migrate:
-    secrets: [DB_PASSWORD]
-    cmd: migrate --password $DB_PASSWORD
-```
-
-The format is `1password://account/vault/item/field`. The account portion can be a short name (e.g. `myteam`) which is expanded to `myteam.1password.com`.
-
-### Authentication
-
-- If `OP_SERVICE_ACCOUNT_TOKEN` is set, it's used automatically (CI/CD)
-- Otherwise, the 1Password desktop app integration is used — make sure the app is running and SDK integration is enabled in Settings > Developer
+The `op://` references use the standard [1Password secret reference](https://developer.1password.com/docs/cli/secret-references/) format.
 
 ## How It Works
 
-1. Secrets are defined globally in the `secrets` map with name → reference
-2. Each task lists which secrets it needs in its `secrets` field
-3. When the task runs, only the requested secrets are resolved
-4. Secret values are injected as environment variables
-5. Existing environment variables are never overridden
+1. Define `op://` references in a task's `env` map
+2. When the task runs, gogo detects the `op://` values
+3. The command is wrapped with `op run`, which resolves all references and injects the actual secret values
+4. `op` handles authentication automatically, including triggering Touch ID when 1Password is locked
+
+## Requirements
+
+The `op` CLI must be installed and available on the PATH. Install it from https://developer.1password.com/docs/cli/get-started/

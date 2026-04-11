@@ -5,14 +5,12 @@ type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
 	Dotenv     []string          `yaml:"dotenv"`
-	Secrets    map[string]string `yaml:"secrets"`
 	Vars       map[string]Var    `yaml:"vars"`
 	Tasks      map[string]Task   `yaml:"tasks"`
 	Dir        string            `yaml:"-"`
 	Interval   string            `yaml:"interval"`
 	Namespaces map[string]string `yaml:"-"` // dir -> namespace
 	DotenvVars map[string]string `yaml:"-"` // resolved dotenv variables
-	SecretVars map[string]string `yaml:"-"` // resolved keychain secrets
 }
 
 // Task represents a single task definition.
@@ -26,7 +24,6 @@ type Task struct {
 	Cmd     Cmd               `yaml:"cmd"`
 	Sources []string          `yaml:"sources"`
 	Aliases []string          `yaml:"aliases"`
-	Secrets []string          `yaml:"secrets"`
 	Desc    string            `yaml:"-"` // set from YAML comments, not from a field
 }
 

@@ -34,11 +34,6 @@ func main() {
 }
 
 func run() error {
-	// Handle "secret set" subcommand before arg parsing
-	if len(os.Args) >= 3 && os.Args[1] == "secret" && os.Args[2] == "set" {
-		return secretSet(os.Args[3:])
-	}
-
 	a, err := parseArgs()
 	if err != nil {
 		return err
@@ -58,7 +53,6 @@ func run() error {
 
 	cliArgs := strings.Join(a.CLIArgs, " ")
 	runner := taskfile.NewRunner(tf, dir)
-	defer runner.ClearSecrets()
 
 	if a.Watch {
 		parsed, _ := time.ParseDuration(tf.Interval)
@@ -139,20 +133,5 @@ func listTasks() error {
 		fmt.Printf("%-*s  %s\n", maxLen, name, desc)
 	}
 
-	return nil
-}
-
-func secretSet(args []string) error {
-	if len(args) != 3 {
-		return errors.New("usage: gogo secret set <service> <key> <value>")
-	}
-
-	service, key, value := args[0], args[1], args[2]
-
-	if err := taskfile.SetSecret(service, key, value); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(os.Stderr, "Secret %q stored in keychain %q\n", key, service)
 	return nil
 }

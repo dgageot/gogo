@@ -48,17 +48,17 @@ gogo -w test
 
 ## Secrets
 
-gogo can retrieve secrets from the macOS Keychain or 1Password and inject them as environment variables into your tasks. Secrets are resolved lazily and protected by Touch ID on macOS.
+gogo integrates with [1Password CLI](https://developer.1password.com/docs/cli/) to inject secrets into tasks. Use `op://` references in your task environment:
 
 ```yaml
-secrets:
-  API_KEY: keychain://myservice/api-key
-
 tasks:
   deploy:
-    secrets: [API_KEY]
-    cmd: deploy --api-key $API_KEY
+    env:
+      DB_PASSWORD: op://vault/item/field
+    cmd: deploy --password $DB_PASSWORD
 ```
+
+When `op://` values are detected, gogo wraps the command with `op run` which resolves secrets and handles authentication (including Touch ID).
 
 ## License
 

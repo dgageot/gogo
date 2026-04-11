@@ -101,7 +101,6 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	}
 
 	tf.Namespaces = make(map[string]string)
-	tf.SecretVars = make(map[string]string)
 
 	// Load dotenv files, deduplicating across includes
 	seen := make(map[string]struct{})

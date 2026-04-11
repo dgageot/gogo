@@ -33,8 +33,6 @@ type Runner struct {
 	cwd     string
 	env     []string
 	aliases map[string]string // alias -> task name
-	warned  map[string]bool   // secrets already warned about
-	mu      sync.Mutex
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -54,7 +52,6 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		cwd:     cwd,
 		env:     env,
 		aliases: aliases,
-		warned:  make(map[string]bool),
 	}
 }
 
@@ -101,47 +98,6 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	return name, false
 }
 
-// ensureSecrets resolves only the secrets requested by names, skipping any already loaded.
-func (r *Runner) ensureSecrets(names []string) error {
-	if len(names) == 0 || len(r.tf.Secrets) == 0 {
-		return nil
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	needed := make(map[string]string)
-	for _, name := range names {
-		if _, ok := r.tf.SecretVars[name]; ok {
-			continue
-		}
-		if ref, ok := r.tf.Secrets[name]; ok {
-			needed[name] = ref
-		}
-	}
-
-	if len(needed) == 0 {
-		return nil
-	}
-
-	secrets, err := loadSecrets(needed)
-	if err != nil {
-		return fmt.Errorf("loading secrets: %w", err)
-	}
-
-	maps.Copy(r.tf.SecretVars, secrets)
-
-	return nil
-}
-
-// ClearSecrets removes all resolved secrets from memory.
-func (r *Runner) ClearSecrets() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	clear(r.tf.SecretVars)
-}
-
 // resolveTask finds a task by name and returns its resolved name and definition.
 func (r *Runner) resolveTask(name string) (string, Task, error) {
 	resolved, ok := r.resolveTaskName(name)
@@ -155,11 +111,6 @@ func (r *Runner) resolveTask(name string) (string, Task, error) {
 func (r *Runner) Run(name, cliArgs string) (err error) {
 	resolved, task, err := r.resolveTask(name)
 	if err != nil {
-		return err
-	}
-
-	// Load only the secrets this task needs
-	if err := r.ensureSecrets(task.Secrets); err != nil {
 		return err
 	}
 
@@ -196,11 +147,18 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	}
 
 	// Execute commands
-	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env)
+	useOpRun := hasOpSecrets(task.Env)
+	if useOpRun {
+		if _, err := exec.LookPath("op"); err != nil {
+			return fmt.Errorf("task %q uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", resolved, err)
+		}
+	}
+
+	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, useOpRun)
 }
 
 // runCmds executes a list of commands in sequence.
-func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string) error {
+func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun bool) error {
 	for _, cmd := range cmds {
 		if cmd.Task != "" {
 			if err := r.Run(cmd.Task, cliArgs); err != nil {
@@ -213,7 +171,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		logTask(colorGreen, taskName, cmd.Cmd)
 
 		expanded := expandVars(cmd.Cmd, vars, cliArgs)
-		if err := r.execCmd(taskName, expanded, dir, env); err != nil {
+		if err := r.execCmd(taskName, expanded, dir, env, useOpRun); err != nil {
 			return err
 		}
 	}
@@ -296,6 +254,16 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, err
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
 
+// hasOpSecrets reports whether any task env values contain op:// references.
+func hasOpSecrets(env map[string]string) bool {
+	for _, v := range env {
+		if strings.HasPrefix(v, "op://") {
+			return true
+		}
+	}
+	return false
+}
+
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.env)
@@ -309,20 +277,6 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 		for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
 			if _, exists := os.LookupEnv(k); !exists {
 				env = append(env, envPair(k, taskDotenv[k]))
-			}
-		}
-	}
-
-	// Inject only the secrets requested by the task
-	for _, name := range slices.Sorted(slices.Values(task.Secrets)) {
-		if val, ok := r.tf.SecretVars[name]; ok {
-			if _, exists := os.LookupEnv(name); exists {
-				if !r.warned[name] {
-					logTask(colorYellow, "warning", fmt.Sprintf("secret %q is shadowed by an existing environment variable", name))
-					r.warned[name] = true
-				}
-			} else {
-				env = append(env, envPair(name, val))
 			}
 		}
 	}
@@ -370,8 +324,14 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 }
 
 // execCmd executes a shell command, wiring stdio.
-func (r *Runner) execCmd(taskName, command, dir string, env []string) error {
-	cmd := exec.Command("/bin/sh", "-c", command)
+// If useOpRun is true, the command is wrapped with "op run" to resolve op:// secrets.
+func (r *Runner) execCmd(taskName, command, dir string, env []string, useOpRun bool) error {
+	var cmd *exec.Cmd
+	if useOpRun {
+		cmd = exec.Command("op", "run", "--", "/bin/sh", "-c", command)
+	} else {
+		cmd = exec.Command("/bin/sh", "-c", command)
+	}
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdin = os.Stdin

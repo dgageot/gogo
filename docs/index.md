@@ -35,7 +35,7 @@ title: gogo
   <div class="feature">
     <div class="feature-icon">🔐</div>
     <h3>Secrets</h3>
-    <p>Retrieve secrets from the macOS Keychain or 1Password, injected as environment variables.</p>
+    <p>Inject secrets from 1Password into tasks using <code>op://</code> references.</p>
   </div>
   <div class="feature">
     <div class="feature-icon">📦</div>
