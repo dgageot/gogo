@@ -43,8 +43,8 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
-	for name, task := range tf.Tasks {
-		for _, alias := range task.Aliases {
+	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
+		for _, alias := range tf.Tasks[name].Aliases {
 			aliases[alias] = name
 		}
 	}
