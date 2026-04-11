@@ -22,10 +22,10 @@ type Task struct {
 	Env       map[string]string `yaml:"env"`
 	Vars      map[string]Var    `yaml:"vars"`
 	Cmd       Cmd               `yaml:"cmd"`
-	Sources   []string          `yaml:"sources"`
-	Generates []string          `yaml:"generates"`
-	Aliases   []string          `yaml:"aliases"`
-	Platforms []string          `yaml:"platforms"`
+	Sources   StringList        `yaml:"sources"`
+	Generates StringList        `yaml:"generates"`
+	Aliases   StringList        `yaml:"aliases"`
+	Platforms StringList        `yaml:"platforms"`
 	Requires  Requires          `yaml:"requires"`
 	Desc      string            `yaml:"-"` // set from YAML comments, not from a field
 }
@@ -34,6 +34,24 @@ type Task struct {
 type Requires struct {
 	Vars []string `yaml:"vars"`
 	Env  []string `yaml:"env"`
+}
+
+// StringList is a []string that can be unmarshalled from either a single string or a list.
+type StringList []string
+
+// UnmarshalYAML allows StringList to be either a string or a sequence.
+func (sl *StringList) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		*sl = []string{s}
+		return nil
+	}
+	var list []string
+	if err := unmarshal(&list); err != nil {
+		return err
+	}
+	*sl = list
+	return nil
 }
 
 // Cmd represents a command in a task. It can be a simple string or a task reference.
