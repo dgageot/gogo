@@ -167,17 +167,21 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		return err
 	}
 
-	// Deduplicate: if this task is already running or has run, wait and return its result.
-	once := &runOnce{done: make(chan struct{})}
-	if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
-		prev := prev.(*runOnce)
-		<-prev.done
-		return prev.err
+	// Deduplicate tasks called without extra vars (deps, plain references).
+	// Tasks called with extra vars may produce different results, so skip dedup.
+	hasExtraVars := len(extraVars) > 0 && len(extraVars[0]) > 0
+	if !hasExtraVars {
+		once := &runOnce{done: make(chan struct{})}
+		if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
+			prev := prev.(*runOnce)
+			<-prev.done
+			return prev.err
+		}
+		defer func() {
+			once.err = err
+			close(once.done)
+		}()
 	}
-	defer func() {
-		once.err = err
-		close(once.done)
-	}()
 
 	task := r.tf.Tasks[resolved]
 
