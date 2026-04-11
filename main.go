@@ -116,14 +116,18 @@ func listTasks() error {
 		return err
 	}
 
-	type entry struct {
-		name string
-		desc string
+	sortedNames := slices.Sorted(maps.Keys(tf.Tasks))
+
+	// First pass: compute max name length for alignment
+	maxLen := 0
+	for _, name := range sortedNames {
+		if tf.Tasks[name].Desc != "" {
+			maxLen = max(maxLen, len(name))
+		}
 	}
 
-	var entries []entry
-	maxLen := 0
-	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
+	// Second pass: print tasks with descriptions
+	for _, name := range sortedNames {
 		task := tf.Tasks[name]
 		if task.Desc == "" {
 			continue
@@ -132,12 +136,7 @@ func listTasks() error {
 		if len(task.Aliases) > 0 {
 			desc += " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
-		entries = append(entries, entry{name, desc})
-		maxLen = max(maxLen, len(name))
-	}
-
-	for _, e := range entries {
-		fmt.Printf("%-*s  %s\n", maxLen, e.name, e.desc)
+		fmt.Printf("%-*s  %s\n", maxLen, name, desc)
 	}
 
 	return nil
