@@ -64,12 +64,9 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 func parseKeychainRef(ref string) (service, key string, err error) {
 	const expected = "expected keychain://service/key"
 
-	path, ok := strings.CutPrefix(ref, keychainScheme)
-	if !ok {
-		return "", "", fmt.Errorf("invalid keychain reference %q, %s", ref, expected)
-	}
+	path := strings.TrimPrefix(ref, keychainScheme)
 
-	service, key, ok = strings.Cut(path, "/")
+	service, key, ok := strings.Cut(path, "/")
 	if !ok || service == "" || key == "" {
 		return "", "", fmt.Errorf("invalid keychain reference %q, %s", ref, expected)
 	}
