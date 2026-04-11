@@ -179,6 +179,11 @@ func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []stri
 		return false, nil
 	}
 
+	// If no sources matched, always run (can't determine freshness)
+	if len(sources) == 0 {
+		return false, nil
+	}
+
 	// Find the newest source modification time
 	var newestSource time.Time
 	for _, f := range sources {

@@ -169,3 +169,13 @@ func TestRecursivePatternWithSubdir(t *testing.T) {
 	}
 	assert.Len(t, files, 2)
 }
+
+func TestOutputsNewerThanSourcesNoSources(t *testing.T) {
+	dir := t.TempDir()
+
+	// Output exists but no sources match -> should not be considered up-to-date
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "output"), []byte("data"), 0o644))
+	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"output"})
+	require.NoError(t, err)
+	assert.False(t, upToDate, "should not be up-to-date when no sources match")
+}
