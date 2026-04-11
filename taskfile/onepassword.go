@@ -34,11 +34,11 @@ func loadOnePasswordSecrets(ctx context.Context, entries, secrets map[string]str
 		if !ok {
 			logTask(colorCyan, "1password", "connecting to "+account)
 
-			var err error
-			client, err = newOnePasswordClient(account)
+			newClient, err := newOnePasswordClient(account)
 			if err != nil {
 				return err
 			}
+			client = newClient
 			clients[account] = client
 		}
 
