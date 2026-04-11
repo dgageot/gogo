@@ -45,6 +45,10 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 // discoverFiles finds all files matching the given glob patterns.
 // Patterns containing "**" are matched recursively; others use filepath.Glob.
 func discoverFiles(dir string, patterns []string) ([]string, error) {
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+
 	var recurPatterns []string
 	var simplePatterns []string
 
