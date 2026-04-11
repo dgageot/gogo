@@ -3,6 +3,7 @@ package taskfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,4 +145,27 @@ func TestOutputsNewerThanSources(t *testing.T) {
 	upToDate, err = outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
 	require.NoError(t, err)
 	assert.False(t, upToDate)
+}
+
+func TestRecursivePatternWithSubdir(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create files in sub/ and other/
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub", "nested"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "other"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("root"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "a.go"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "nested", "b.go"), []byte("b"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other", "c.go"), []byte("c"), 0o644))
+
+	// sub/**/*.go should only match files under sub/
+	files, err := discoverFiles(dir, []string{"sub/**/*.go"})
+	require.NoError(t, err)
+
+	for _, f := range files {
+		rel, _ := filepath.Rel(dir, f)
+		assert.True(t, strings.HasPrefix(rel, "sub"),
+			"file %q should be under sub/", rel)
+	}
+	assert.Len(t, files, 2)
 }

@@ -51,13 +51,25 @@ func discoverFiles(dir string, patterns []string) ([]string, error) {
 		return nil, nil
 	}
 
-	var recurPatterns []string
+	type recurPattern struct {
+		baseDir  string
+		filePart string
+	}
+
+	var recurPatterns []recurPattern
 	var simplePatterns []string
 
 	for _, pattern := range patterns {
-		if strings.Contains(pattern, "**") {
-			_, filePart := filepath.Split(pattern)
-			recurPatterns = append(recurPatterns, filePart)
+		if before, after, ok := strings.Cut(pattern, "**"); ok {
+			baseDir := strings.TrimRight(before, string(filepath.Separator))
+			filePart := strings.TrimLeft(after, string(filepath.Separator))
+			if filePart == "" {
+				filePart = "*"
+			}
+			recurPatterns = append(recurPatterns, recurPattern{
+				baseDir:  baseDir,
+				filePart: filePart,
+			})
 		} else {
 			simplePatterns = append(simplePatterns, pattern)
 		}
@@ -65,8 +77,13 @@ func discoverFiles(dir string, patterns []string) ([]string, error) {
 
 	var files []string
 
-	if len(recurPatterns) > 0 {
-		files = walkRecursive(dir, recurPatterns)
+	// Group recursive patterns by base directory
+	for _, rp := range recurPatterns {
+		baseDir := dir
+		if rp.baseDir != "" {
+			baseDir = filepath.Join(dir, rp.baseDir)
+		}
+		files = append(files, walkRecursive(baseDir, []string{rp.filePart})...)
 	}
 
 	for _, pattern := range simplePatterns {
