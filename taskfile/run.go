@@ -322,9 +322,7 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 	}
 
 	// Inject only the secrets requested by the task
-	sortedSecrets := slices.Clone(task.Secrets)
-	slices.Sort(sortedSecrets)
-	for _, name := range sortedSecrets {
+	for _, name := range slices.Sorted(slices.Values(task.Secrets)) {
 		if val, ok := r.tf.SecretVars[name]; ok {
 			if _, exists := os.LookupEnv(name); exists {
 				if !r.warned[name] {
