@@ -261,17 +261,17 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 
 // resolveVar evaluates a single variable, running a shell command if needed.
 func resolveVar(v Var, dir string) string {
-	if v.Sh != "" {
-		cmd := exec.Command("/bin/sh", "-c", v.Sh)
-		cmd.Dir = dir
-		out, err := cmd.Output()
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(out))
+	if v.Sh == "" {
+		return v.Value
 	}
 
-	return v.Value
+	cmd := exec.Command("/bin/sh", "-c", v.Sh)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // isUpToDate checks if the task sources are unchanged since the last run.
