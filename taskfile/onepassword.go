@@ -140,7 +140,7 @@ func newOnePasswordClient(account string) (*onepassword.Client, error) {
 	opts := []onepassword.ClientOption{opIntegrationInfo}
 	token := os.Getenv("OP_SERVICE_ACCOUNT_TOKEN")
 	if token != "" {
-		if len(strings.TrimSpace(token)) != len(token) {
+		if strings.TrimSpace(token) != token {
 			return nil, errors.New("OP_SERVICE_ACCOUNT_TOKEN contains leading or trailing whitespace")
 		}
 		opts = append(opts, onepassword.WithServiceAccountToken(token))
