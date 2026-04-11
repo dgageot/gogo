@@ -35,7 +35,7 @@ func main() {
 
 func run() error {
 	// Handle "secret set" subcommand before arg parsing
-	if len(os.Args) >= 3 && strings.Join(os.Args[1:3], " ") == "secret set" {
+	if len(os.Args) >= 3 && os.Args[1] == "secret" && os.Args[2] == "set" {
 		return secretSet(os.Args[3:])
 	}
 
