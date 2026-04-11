@@ -3,6 +3,7 @@ package taskfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -215,4 +216,72 @@ func TestRunDeduplicatesDeps(t *testing.T) {
 	data, err := os.ReadFile(counter)
 	require.NoError(t, err)
 	assert.Equal(t, "x\n", string(data))
+}
+
+func TestMatchesPlatform(t *testing.T) {
+	// Empty list matches everything
+	assert.True(t, matchesPlatform(nil))
+	assert.True(t, matchesPlatform([]string{}))
+
+	// Current OS matches
+	assert.True(t, matchesPlatform([]string{runtime.GOOS}))
+
+	// Current OS/ARCH matches
+	assert.True(t, matchesPlatform([]string{runtime.GOOS + "/" + runtime.GOARCH}))
+
+	// Wrong OS doesn't match
+	assert.False(t, matchesPlatform([]string{"plan9"}))
+
+	// Wrong OS/ARCH doesn't match
+	assert.False(t, matchesPlatform([]string{"plan9/mips"}))
+
+	// One matching entry is enough
+	assert.True(t, matchesPlatform([]string{"plan9", runtime.GOOS}))
+}
+
+func TestPlatformSkipsTask(t *testing.T) {
+	dir := t.TempDir()
+	output := filepath.Join(dir, "output.txt")
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Platforms: []string{"plan9"},
+				Cmds:      []Cmd{{Cmd: "printf ran > " + output}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("build", "")
+	require.NoError(t, err)
+
+	_, err = os.Stat(output)
+	assert.True(t, os.IsNotExist(err), "task should have been skipped")
+}
+
+func TestPlatformRunsTask(t *testing.T) {
+	dir := t.TempDir()
+	output := filepath.Join(dir, "output.txt")
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Platforms: []string{runtime.GOOS},
+				Cmds:      []Cmd{{Cmd: "printf ran > " + output}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("build", "")
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(output)
+	require.NoError(t, err)
+	assert.Equal(t, "ran", string(got))
 }

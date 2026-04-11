@@ -25,6 +25,7 @@ type Task struct {
 	Sources   []string          `yaml:"sources"`
 	Generates []string          `yaml:"generates"`
 	Aliases   []string          `yaml:"aliases"`
+	Platforms []string          `yaml:"platforms"`
 	Requires  Requires          `yaml:"requires"`
 	Desc      string            `yaml:"-"` // set from YAML comments, not from a field
 }

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -77,6 +78,29 @@ func injectEnvVars(tf *Taskfile) []string {
 		}
 	}
 	return env
+}
+
+// matchesPlatform checks if the current OS/arch matches the platforms list.
+// Each entry can be "os", "os/arch", or just "arch" (without a slash, matched against GOARCH if not a known OS).
+// An empty list matches all platforms.
+func matchesPlatform(platforms []string) bool {
+	if len(platforms) == 0 {
+		return true
+	}
+	for _, p := range platforms {
+		goos, goarch, hasSlash := strings.Cut(p, "/")
+		switch {
+		case hasSlash:
+			if goos == runtime.GOOS && goarch == runtime.GOARCH {
+				return true
+			}
+		case goos == runtime.GOOS:
+			return true
+		case goos == runtime.GOARCH:
+			return true
+		}
+	}
+	return false
 }
 
 // checkRequires validates that all required vars and env are set.
@@ -150,6 +174,12 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 	}()
 
 	task := r.tf.Tasks[resolved]
+
+	// Skip task if current platform doesn't match
+	if !matchesPlatform(task.Platforms) {
+		logTask(colorYellow, resolved, "skipped (platform mismatch)")
+		return nil
+	}
 
 	// Run dependencies concurrently
 	if err := r.runDeps(task.Deps); err != nil {
