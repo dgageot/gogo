@@ -93,7 +93,7 @@ func walkRecursive(dir string, patterns []string) []string {
 		for _, e := range entries {
 			name := e.Name()
 			if e.IsDir() {
-				if name[0] == '.' {
+				if strings.HasPrefix(name, ".") {
 					continue
 				}
 				wg.Go(func() { walk(filepath.Join(dirPath, name)) })
