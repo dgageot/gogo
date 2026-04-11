@@ -46,6 +46,13 @@ tasks:
       - go.mod
       - go.sum
 
+  # Format Go source files
+  format:
+    cmds:
+      - goimports -w .
+    sources:
+      - "**/*.go"
+
   # Cross-compile for all platforms
   build-cross:
     cmds:
