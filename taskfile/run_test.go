@@ -107,3 +107,77 @@ func TestRunWithExtraVarsShell(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "dynamic", string(got))
 }
+
+func TestRequiresVarsMissing(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Requires: Requires{Vars: []string{"VERSION"}},
+				Cmds:     []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("deploy", "")
+	assert.EqualError(t, err, `task "deploy" requires variable "VERSION" to be set`)
+}
+
+func TestRequiresVarsProvided(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Requires: Requires{Vars: []string{"VERSION"}},
+				Vars:     map[string]Var{"VERSION": {Value: "1.0"}},
+				Cmds:     []Cmd{{Cmd: "true"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("deploy", "")
+	assert.NoError(t, err)
+}
+
+func TestRequiresEnvMissing(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Requires: Requires{Env: []string{"DEPLOY_TOKEN"}},
+				Cmds:     []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("deploy", "")
+	assert.EqualError(t, err, `task "deploy" requires environment variable "DEPLOY_TOKEN" to be set`)
+}
+
+func TestRequiresEnvProvided(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Requires: Requires{Env: []string{"DEPLOY_TOKEN"}},
+				Cmds:     []Cmd{{Cmd: "true"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	t.Setenv("DEPLOY_TOKEN", "secret")
+	runner := NewRunner(tf, dir)
+	err := runner.Run("deploy", "")
+	assert.NoError(t, err)
+}

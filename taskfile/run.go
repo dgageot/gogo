@@ -72,6 +72,21 @@ func injectEnvVars(tf *Taskfile) []string {
 	return env
 }
 
+// checkRequires validates that all required vars and env are set.
+func checkRequires(taskName string, task *Task, vars map[string]string) error {
+	for _, name := range task.Requires.Vars {
+		if vars[name] == "" {
+			return fmt.Errorf("task %q requires variable %q to be set", taskName, name)
+		}
+	}
+	for _, name := range task.Requires.Env {
+		if _, ok := os.LookupEnv(name); !ok {
+			return fmt.Errorf("task %q requires environment variable %q to be set", taskName, name)
+		}
+	}
+	return nil
+}
+
 // resolveTaskName finds the actual task name, trying the exact name first,
 // then aliases, then prefixing with the namespace matching the current working directory.
 func (r *Runner) resolveTaskName(name string) (string, bool) {
@@ -129,6 +144,11 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		for k, v := range ev {
 			vars[k] = resolveVar(v, dir)
 		}
+	}
+
+	// Validate required variables and environment
+	if err := checkRequires(resolved, &task, vars); err != nil {
+		return err
 	}
 
 	// Check sources for up-to-date
