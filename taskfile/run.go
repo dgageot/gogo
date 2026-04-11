@@ -351,9 +351,10 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 
 // expandVars substitutes template and shell variables in a command string.
 func expandVars(s string, vars map[string]string, cliArgs string) string {
-	vars["CLI_ARGS"] = cliArgs
-
 	lookup := func(key string) string {
+		if key == "CLI_ARGS" {
+			return cliArgs
+		}
 		if val, ok := vars[key]; ok {
 			return val
 		}
