@@ -35,6 +35,7 @@ type Runner struct {
 	env     []string
 	aliases map[string]string // alias -> task name
 	DryRun  bool              // if true, print commands without executing them
+	Force   bool              // if true, ignore sources and generates (always run)
 	ran     sync.Map          // task name -> *runOnce
 }
 
@@ -213,7 +214,7 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 	}
 
 	// Check sources for up-to-date
-	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved)
+	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved, r.Force)
 	if err != nil {
 		return err
 	}
@@ -336,8 +337,8 @@ func resolveVar(v Var, dir string) string {
 // When generates is set, it checks that all outputs exist and are newer than all sources.
 // Otherwise, it falls back to checksum-based comparison.
 // Returns whether the task is up-to-date, the current checksum (empty when using generates), and any error.
-func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, error) {
-	if len(task.Sources) == 0 {
+func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool, string, error) {
+	if force || len(task.Sources) == 0 {
 		return false, "", nil
 	}
 

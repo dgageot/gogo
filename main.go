@@ -18,6 +18,7 @@ import (
 type args struct {
 	List    bool     `arg:"-l,--list" help:"list available tasks"`
 	Watch   bool     `arg:"-w,--watch" help:"watch sources and re-run on changes"`
+	Force   bool     `arg:"-f,--force" help:"ignore sources and generates (always run)"`
 	DryRun  bool     `arg:"-n,--dry" help:"print commands without executing them"`
 	Task    string   `arg:"positional" default:"default" help:"task to run"`
 	CLIArgs []string `arg:"positional" help:"arguments passed to the task (after --)"`
@@ -55,6 +56,7 @@ func run() error {
 	cliArgs := strings.Join(a.CLIArgs, " ")
 	runner := taskfile.NewRunner(tf, dir)
 	runner.DryRun = a.DryRun
+	runner.Force = a.Force
 
 	if a.Watch {
 		parsed, _ := time.ParseDuration(tf.Interval)
