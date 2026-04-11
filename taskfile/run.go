@@ -107,8 +107,8 @@ func (r *Runner) resolveTask(name string) (string, Task, error) {
 	return resolved, r.tf.Tasks[resolved], nil
 }
 
-// Run executes the named task.
-func (r *Runner) Run(name, cliArgs string) (err error) {
+// Run executes the named task. Extra vars (from task call sites) override task-level vars.
+func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err error) {
 	resolved, task, err := r.resolveTask(name)
 	if err != nil {
 		return err
@@ -122,6 +122,13 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 	// Resolve variables
 	dir := r.taskDir(&task)
 	vars := r.resolveVars(&task, dir)
+
+	// Apply extra vars from call site
+	for _, ev := range extraVars {
+		for k, v := range ev {
+			vars[k] = resolveVar(v, dir)
+		}
+	}
 
 	// Check sources for up-to-date
 	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved)
@@ -161,7 +168,7 @@ func (r *Runner) Run(name, cliArgs string) (err error) {
 func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun bool) error {
 	for _, cmd := range cmds {
 		if cmd.Task != "" {
-			if err := r.Run(cmd.Task, cliArgs); err != nil {
+			if err := r.Run(cmd.Task, cliArgs, cmd.Vars); err != nil {
 				return err
 			}
 			continue
