@@ -33,6 +33,7 @@ type Runner struct {
 	cwd     string
 	env     []string
 	aliases map[string]string // alias -> task name
+	DryRun  bool              // if true, print commands without executing them
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -176,6 +177,10 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 
 		// Log the original command template to avoid leaking expanded secrets.
 		logTask(colorGreen, taskName, cmd.Cmd)
+
+		if r.DryRun {
+			continue
+		}
 
 		expanded := expandVars(cmd.Cmd, vars, cliArgs)
 		if err := r.execCmd(taskName, expanded, dir, env, useOpRun); err != nil {
