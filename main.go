@@ -104,6 +104,15 @@ func loadTaskfile() (string, *taskfile.Taskfile, error) {
 	return cwd, tf, nil
 }
 
+// isInternalTask reports whether a task name is internal (starts with _).
+// For namespaced tasks like "ns:_helper", the task part after the last colon is checked.
+func isInternalTask(name string) bool {
+	if i := strings.LastIndex(name, ":"); i >= 0 {
+		name = name[i+1:]
+	}
+	return strings.HasPrefix(name, "_")
+}
+
 func listTasks() error {
 	_, tf, err := loadTaskfile()
 	if err != nil {
@@ -115,7 +124,7 @@ func listTasks() error {
 	// First pass: compute max name length for alignment
 	maxLen := 0
 	for _, name := range sortedNames {
-		if tf.Tasks[name].Desc != "" {
+		if tf.Tasks[name].Desc != "" && !isInternalTask(name) {
 			maxLen = max(maxLen, len(name))
 		}
 	}
@@ -123,7 +132,7 @@ func listTasks() error {
 	// Second pass: print tasks with descriptions
 	for _, name := range sortedNames {
 		task := tf.Tasks[name]
-		if task.Desc == "" {
+		if task.Desc == "" || isInternalTask(name) {
 			continue
 		}
 		desc := task.Desc
