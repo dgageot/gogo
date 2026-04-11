@@ -118,6 +118,12 @@ func checkRequires(taskName string, task *Task, vars map[string]string) error {
 	return nil
 }
 
+// ResetRan clears the deduplication state, allowing tasks to run again.
+// This is used by watch mode between iterations.
+func (r *Runner) ResetRan() {
+	r.ran = sync.Map{}
+}
+
 // resolveTaskName finds the actual task name, trying the exact name first,
 // then aliases, then prefixing with the namespace matching the current working directory.
 func (r *Runner) resolveTaskName(name string) (string, bool) {

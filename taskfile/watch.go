@@ -71,6 +71,9 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 
 		logTask(colorYellow, resolved, "sources changed, re-running...")
 
+		// Reset dedup state so tasks can re-run
+		r.ResetRan()
+
 		if err := r.Run(resolved, cliArgs); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}

@@ -14,8 +14,9 @@ gogo [options] [task] [-- args...]
 
 | Flag | Description |
 |------|-------------|
-| `-l`, `--list` | List available tasks (only tasks with comments) |
+| `-l`, `--list` | List available tasks (only tasks with descriptions) |
 | `-w`, `--watch` | Watch sources and re-run on changes |
+| `-n`, `--dry` | Print commands without executing them |
 | `--help` | Show help |
 
 ## Arguments
@@ -40,25 +41,14 @@ gogo backend:test
 # List tasks
 gogo -l
 
+# Dry run — see what would execute
+gogo -n build
+
 # Watch and re-run
 gogo -w test
 
 # Pass arguments to a task
 gogo test -- -v -run TestFoo
-```
-
-## Subcommands
-
-### `gogo secret set`
-
-Store a secret in the macOS Keychain:
-
-```sh
-gogo secret set <service> <key> <value>
-```
-
-```sh
-gogo secret set myservice api-key sk-abc123
 ```
 
 ## Taskfile Discovery

@@ -51,3 +51,37 @@ tasks:
 ```
 
 Unlike dependencies, task references in `cmds` run sequentially.
+
+Variables can be passed to called tasks:
+
+```yaml
+tasks:
+  all:
+    cmds:
+      - task: build
+        vars:
+          MODE: release
+```
+
+## Deduplication
+
+Tasks are executed at most once per run. If the same task appears multiple times in the dependency graph, only the first execution proceeds — subsequent references wait for it to complete and reuse its result:
+
+```yaml
+tasks:
+  all:
+    deps: [frontend, backend]
+
+  frontend:
+    deps: [generate]
+    cmd: build-frontend
+
+  backend:
+    deps: [generate]
+    cmd: build-backend
+
+  generate:
+    cmd: go generate ./...
+```
+
+Here, `generate` runs only once even though both `frontend` and `backend` depend on it.

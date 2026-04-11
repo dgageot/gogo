@@ -18,13 +18,17 @@ tasks:
     cmd: echo "Hello, World!"
 
   build:
-    cmd: go build ./...
+    cmd: go build -o bin/myapp ./...
+    sources:
+      - "**/*.go"
+      - go.mod
+    generates:
+      - bin/myapp
 
   test:
     cmd: go test ./...
     sources:
-      - "*.go"
-      - "cmd/*.go"
+      - "**/*.go"
 ```
 
 Run a task:
@@ -45,6 +49,25 @@ Watch sources and re-run on changes:
 ```sh
 gogo -w test
 ```
+
+Dry run — see what would execute:
+
+```sh
+gogo -n build
+```
+
+## Features
+
+- **Incremental builds** via source checksums or timestamp-based `sources`/`generates`
+- **Watch mode** for automatic re-runs on file changes
+- **Concurrent dependencies** with automatic deduplication
+- **Variables** with template expansion and shell commands
+- **Dotenv** support (global and per-task)
+- **Includes** for splitting taskfiles across subdirectories
+- **Platform filtering** to restrict tasks to specific OS/arch
+- **Required variables** validation before execution
+- **1Password secrets** integration via `op://` references
+- **Dry run** mode to preview commands
 
 ## Secrets
 
