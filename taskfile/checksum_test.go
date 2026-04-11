@@ -40,6 +40,68 @@ func TestSourcesChecksumNoMatches(t *testing.T) {
 	assert.NotEmpty(t, sum, "empty file set should still produce a checksum")
 }
 
+func TestSourcesChecksumRecursive(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create nested structure
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub", "deep"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("package main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "lib.go"), []byte("package lib"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "deep", "deep.go"), []byte("package deep"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "skip.txt"), []byte("not go"), 0o644))
+
+	sum, err := sourcesChecksum(dir, []string{"**/*.go"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, sum)
+
+	// Changing a deeply nested file changes the checksum
+	oldSum := sum
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "deep", "deep.go"), []byte("package deep2"), 0o644))
+
+	sum, err = sourcesChecksum(dir, []string{"**/*.go"})
+	require.NoError(t, err)
+	assert.NotEqual(t, oldSum, sum)
+}
+
+func TestSourcesChecksumSkipsGitDir(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".git", "objects"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "objects", "abc.go"), []byte("git object"), 0o644))
+
+	sum1, err := sourcesChecksum(dir, []string{"**/*.go"})
+	require.NoError(t, err)
+
+	// Adding a file inside .git should not change the checksum
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "objects", "def.go"), []byte("another"), 0o644))
+
+	sum2, err := sourcesChecksum(dir, []string{"**/*.go"})
+	require.NoError(t, err)
+	assert.Equal(t, sum1, sum2)
+}
+
+func TestSourcesChecksumMixedPatterns(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "lib.go"), []byte("package lib"), 0o644))
+
+	sum, err := sourcesChecksum(dir, []string{"**/*.go", "go.mod"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, sum)
+
+	// Changing go.mod changes the checksum
+	oldSum := sum
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test2"), 0o644))
+
+	sum, err = sourcesChecksum(dir, []string{"**/*.go", "go.mod"})
+	require.NoError(t, err)
+	assert.NotEqual(t, oldSum, sum)
+}
+
 func TestChecksumStorage(t *testing.T) {
 	dir := t.TempDir()
 
