@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,4 +118,30 @@ func TestChecksumStorage(t *testing.T) {
 	// Verify file is named with underscore
 	_, err := os.Stat(filepath.Join(dir, ".gogo", "checksum", "cli_build"))
 	assert.NoError(t, err)
+}
+
+func TestOutputsNewerThanSources(t *testing.T) {
+	dir := t.TempDir()
+
+	src := filepath.Join(dir, "main.go")
+	out := filepath.Join(dir, "main")
+
+	// No outputs yet -> not up-to-date
+	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
+	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
+	require.NoError(t, err)
+	assert.False(t, upToDate)
+
+	// Create output newer than source -> up-to-date
+	require.NoError(t, os.WriteFile(out, []byte("binary"), 0o644))
+	upToDate, err = outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
+	require.NoError(t, err)
+	assert.True(t, upToDate)
+
+	// Touch source to be newer -> not up-to-date
+	now := time.Now().Add(time.Second)
+	require.NoError(t, os.Chtimes(src, now, now))
+	upToDate, err = outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
+	require.NoError(t, err)
+	assert.False(t, upToDate)
 }

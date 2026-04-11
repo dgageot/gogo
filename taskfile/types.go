@@ -15,17 +15,18 @@ type Taskfile struct {
 
 // Task represents a single task definition.
 type Task struct {
-	Cmds     []Cmd             `yaml:"cmds"`
-	Deps     []Dep             `yaml:"deps"`
-	Dir      string            `yaml:"dir"`
-	Dotenv   []string          `yaml:"dotenv"`
-	Env      map[string]string `yaml:"env"`
-	Vars     map[string]Var    `yaml:"vars"`
-	Cmd      Cmd               `yaml:"cmd"`
-	Sources  []string          `yaml:"sources"`
-	Aliases  []string          `yaml:"aliases"`
-	Requires Requires          `yaml:"requires"`
-	Desc     string            `yaml:"-"` // set from YAML comments, not from a field
+	Cmds      []Cmd             `yaml:"cmds"`
+	Deps      []Dep             `yaml:"deps"`
+	Dir       string            `yaml:"dir"`
+	Dotenv    []string          `yaml:"dotenv"`
+	Env       map[string]string `yaml:"env"`
+	Vars      map[string]Var    `yaml:"vars"`
+	Cmd       Cmd               `yaml:"cmd"`
+	Sources   []string          `yaml:"sources"`
+	Generates []string          `yaml:"generates"`
+	Aliases   []string          `yaml:"aliases"`
+	Requires  Requires          `yaml:"requires"`
+	Desc      string            `yaml:"-"` // set from YAML comments, not from a field
 }
 
 // Requires defines variables and environment variables that must be set for a task to run.

@@ -3,11 +3,13 @@ package taskfile
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // sourcesChecksum computes a SHA256 checksum of all files matching the given
@@ -140,4 +142,48 @@ func writeChecksum(taskfileDir, taskName, checksum string) error {
 		return err
 	}
 	return os.WriteFile(p, []byte(checksum), 0o644)
+}
+
+// outputsNewerThanSources checks if all generated files exist and are newer
+// than all source files. Returns true only when every output is up-to-date.
+func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []string) (bool, error) {
+	sources, err := discoverFiles(dir, sourcePatterns)
+	if err != nil {
+		return false, fmt.Errorf("discovering sources: %w", err)
+	}
+
+	outputs, err := discoverFiles(dir, generatePatterns)
+	if err != nil {
+		return false, fmt.Errorf("discovering outputs: %w", err)
+	}
+
+	// If no outputs exist yet, the task must run
+	if len(outputs) == 0 {
+		return false, nil
+	}
+
+	// Find the newest source modification time
+	var newestSource time.Time
+	for _, f := range sources {
+		info, err := os.Stat(f)
+		if err != nil {
+			return false, err
+		}
+		if t := info.ModTime(); t.After(newestSource) {
+			newestSource = t
+		}
+	}
+
+	// Check that every output exists and is newer than the newest source
+	for _, f := range outputs {
+		info, err := os.Stat(f)
+		if err != nil {
+			return false, nil //nolint:nilerr // missing output means not up-to-date
+		}
+		if info.ModTime().Before(newestSource) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

@@ -293,10 +293,18 @@ func resolveVar(v Var, dir string) string {
 }
 
 // isUpToDate checks if the task sources are unchanged since the last run.
-// Returns whether the task is up-to-date, the current checksum, and any error.
+// When generates is set, it checks that all outputs exist and are newer than all sources.
+// Otherwise, it falls back to checksum-based comparison.
+// Returns whether the task is up-to-date, the current checksum (empty when using generates), and any error.
 func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, error) {
 	if len(task.Sources) == 0 {
 		return false, "", nil
+	}
+
+	// When generates is set, use timestamp-based comparison
+	if len(task.Generates) > 0 {
+		upToDate, err := outputsNewerThanSources(dir, task.Sources, task.Generates)
+		return upToDate, "", err
 	}
 
 	checksum, err := sourcesChecksum(dir, task.Sources)
