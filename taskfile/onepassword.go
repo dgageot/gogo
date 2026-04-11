@@ -61,10 +61,7 @@ func loadOnePasswordSecrets(ctx context.Context, entries, secrets map[string]str
 func parseOnePasswordRef(ref string) (account, opRef string, err error) {
 	const expected = "expected 1password://account/vault/item/field"
 
-	path, ok := strings.CutPrefix(ref, onePasswordScheme)
-	if !ok {
-		return "", "", fmt.Errorf("invalid 1Password reference %q, %s", ref, expected)
-	}
+	path := strings.TrimPrefix(ref, onePasswordScheme)
 
 	account, rest, ok := strings.Cut(path, "/")
 	if !ok || account == "" || rest == "" {
