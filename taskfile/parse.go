@@ -147,6 +147,21 @@ func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]stru
 		if !filepath.IsAbs(task.Dir) {
 			task.Dir = filepath.Join(child.Dir, task.Dir)
 		}
+
+		// Namespace dep and cmd task references
+		for i, dep := range task.Deps {
+			if _, ok := child.Tasks[dep.Task]; ok {
+				task.Deps[i].Task = namespace + ":" + dep.Task
+			}
+		}
+		for i, cmd := range task.Cmds {
+			if cmd.Task != "" {
+				if _, ok := child.Tasks[cmd.Task]; ok {
+					task.Cmds[i].Task = namespace + ":" + cmd.Task
+				}
+			}
+		}
+
 		tf.Tasks[namespace+":"+name] = task
 	}
 
