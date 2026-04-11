@@ -10,7 +10,6 @@ const (
 	colorReset  = "\x1b[0m"
 	colorGreen  = "\x1b[32m"
 	colorYellow = "\x1b[33m"
-	colorCyan   = "\x1b[36m"
 )
 
 // logTask prints a colored task-prefixed message to stderr.
