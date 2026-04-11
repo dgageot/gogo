@@ -181,3 +181,38 @@ func TestRequiresEnvProvided(t *testing.T) {
 	err := runner.Run("deploy", "")
 	assert.NoError(t, err)
 }
+
+func TestRunDeduplicatesDeps(t *testing.T) {
+	dir := t.TempDir()
+	counter := filepath.Join(dir, "counter.txt")
+
+	// shared is a dep of both a and b; it should only run once
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"all": {
+				Deps: []Dep{{Task: "a"}, {Task: "b"}},
+			},
+			"a": {
+				Deps: []Dep{{Task: "shared"}},
+				Cmds: []Cmd{{Cmd: "true"}},
+			},
+			"b": {
+				Deps: []Dep{{Task: "shared"}},
+				Cmds: []Cmd{{Cmd: "true"}},
+			},
+			"shared": {
+				Cmds: []Cmd{{Cmd: "echo x >> " + counter}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Run("all", "")
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(counter)
+	require.NoError(t, err)
+	assert.Equal(t, "x\n", string(data))
+}

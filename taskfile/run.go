@@ -34,6 +34,13 @@ type Runner struct {
 	env     []string
 	aliases map[string]string // alias -> task name
 	DryRun  bool              // if true, print commands without executing them
+	ran     sync.Map          // task name -> *runOnce
+}
+
+// runOnce tracks a single task execution for deduplication.
+type runOnce struct {
+	done chan struct{}
+	err  error
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -125,10 +132,24 @@ func (r *Runner) resolveTask(name string) (string, Task, error) {
 
 // Run executes the named task. Extra vars (from task call sites) override task-level vars.
 func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err error) {
-	resolved, task, err := r.resolveTask(name)
+	resolved, _, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}
+
+	// Deduplicate: if this task is already running or has run, wait and return its result.
+	once := &runOnce{done: make(chan struct{})}
+	if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
+		prev := prev.(*runOnce)
+		<-prev.done
+		return prev.err
+	}
+	defer func() {
+		once.err = err
+		close(once.done)
+	}()
+
+	task := r.tf.Tasks[resolved]
 
 	// Run dependencies concurrently
 	if err := r.runDeps(task.Deps); err != nil {
