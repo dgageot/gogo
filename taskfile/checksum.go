@@ -103,15 +103,13 @@ func walkRecursive(dir string, patterns []string) []string {
 				wg.Go(func() { walk(filepath.Join(dirPath, name)) })
 				continue
 			}
-			for _, p := range patterns {
+			if slices.ContainsFunc(patterns, func(p string) bool {
 				matched, _ := filepath.Match(p, name)
-				if !matched {
-					continue
-				}
+				return matched
+			}) {
 				mu.Lock()
 				files = append(files, filepath.Join(dirPath, name))
 				mu.Unlock()
-				break
 			}
 		}
 	}
