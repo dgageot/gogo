@@ -74,11 +74,6 @@ func injectEnvVars(tf *Taskfile) []string {
 	return env
 }
 
-// dirPrefix returns the directory path with a trailing separator for prefix matching.
-func dirPrefix(dir string) string {
-	return dir + string(filepath.Separator)
-}
-
 // resolveTaskName finds the actual task name, trying the exact name first,
 // then aliases, then prefixing with the namespace matching the current working directory.
 func (r *Runner) resolveTaskName(name string) (string, bool) {
@@ -94,7 +89,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	// Try prefixing with namespace for cwd
 	for _, dir := range slices.Sorted(maps.Keys(r.tf.Namespaces)) {
 		ns := r.tf.Namespaces[dir]
-		if !strings.HasPrefix(dirPrefix(r.cwd), dirPrefix(dir)) {
+		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
 			continue
 		}
 		qualified := ns + ":" + name
