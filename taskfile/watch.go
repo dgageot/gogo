@@ -8,11 +8,11 @@ import (
 )
 
 // collectSources gathers all source patterns from the task and its dependencies (recursively).
-func (r *Runner) collectSources(taskName string, visited map[string]bool) []string {
-	if visited[taskName] {
+func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []string {
+	if _, ok := visited[taskName]; ok {
 		return nil
 	}
-	visited[taskName] = true
+	visited[taskName] = struct{}{}
 
 	task, ok := r.tf.Tasks[taskName]
 	if !ok {
@@ -38,7 +38,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		return err
 	}
 
-	sources := r.collectSources(resolved, make(map[string]bool))
+	sources := r.collectSources(resolved, make(map[string]struct{}))
 	if len(sources) == 0 {
 		return fmt.Errorf("task %q has no sources, cannot watch", name)
 	}
