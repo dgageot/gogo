@@ -53,11 +53,7 @@ func loadSecrets(entries map[string]string) (map[string]string, error) {
 		}
 	}
 
-	if len(opEntries) > 0 {
-		return secrets, loadOnePasswordSecrets(context.Background(), opEntries, secrets)
-	}
-
-	return secrets, nil
+	return secrets, loadOnePasswordSecrets(context.Background(), opEntries, secrets)
 }
 
 // parseKeychainRef extracts service and key from "keychain://service/key".
