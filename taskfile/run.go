@@ -142,14 +142,21 @@ func (r *Runner) ClearSecrets() {
 	clear(r.tf.SecretVars)
 }
 
-// Run executes the named task.
-func (r *Runner) Run(name, cliArgs string) (err error) {
+// resolveTask finds a task by name and returns its resolved name and definition.
+func (r *Runner) resolveTask(name string) (string, Task, error) {
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
-		return fmt.Errorf("task %q not found", name)
+		return "", Task{}, fmt.Errorf("task %q not found", name)
 	}
+	return resolved, r.tf.Tasks[resolved], nil
+}
 
-	task := r.tf.Tasks[resolved]
+// Run executes the named task.
+func (r *Runner) Run(name, cliArgs string) (err error) {
+	resolved, task, err := r.resolveTask(name)
+	if err != nil {
+		return err
+	}
 
 	// Load only the secrets this task needs
 	if err := r.ensureSecrets(task.Secrets); err != nil {

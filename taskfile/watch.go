@@ -33,12 +33,10 @@ func (r *Runner) collectSources(taskName string, visited map[string]bool) []stri
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
 func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
-	resolved, ok := r.resolveTaskName(name)
-	if !ok {
-		return fmt.Errorf("task %q not found", name)
+	resolved, task, err := r.resolveTask(name)
+	if err != nil {
+		return err
 	}
-
-	task := r.tf.Tasks[resolved]
 
 	sources := r.collectSources(resolved, make(map[string]bool))
 	if len(sources) == 0 {
