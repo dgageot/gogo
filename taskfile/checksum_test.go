@@ -147,6 +147,23 @@ func TestOutputsNewerThanSources(t *testing.T) {
 	assert.False(t, upToDate)
 }
 
+func TestOutputsNewerThanSourcesWithSourcesAlsoListedAsOutputs(t *testing.T) {
+	dir := t.TempDir()
+
+	src := filepath.Join(dir, "main.go")
+	out := filepath.Join(dir, "main")
+
+	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
+	require.NoError(t, os.WriteFile(out, []byte("binary"), 0o644))
+
+	now := time.Now().Add(time.Second)
+	require.NoError(t, os.Chtimes(src, now, now))
+
+	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"main", "*.go"})
+	require.NoError(t, err)
+	assert.False(t, upToDate, "sources listed in generates must not mask stale outputs")
+}
+
 func TestRecursivePatternWithSubdir(t *testing.T) {
 	dir := t.TempDir()
 

@@ -153,13 +153,13 @@ func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []stri
 		return false, fmt.Errorf("discovering sources: %w", err)
 	}
 
-	outputs, err := discoverFiles(dir, generatePatterns)
+	generatedOutputs, err := discoverFiles(dir, generatePatterns)
 	if err != nil {
 		return false, fmt.Errorf("discovering outputs: %w", err)
 	}
 
 	// If no outputs exist yet, the task must run
-	if len(outputs) == 0 {
+	if len(generatedOutputs) == 0 {
 		return false, nil
 	}
 
@@ -181,7 +181,7 @@ func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []stri
 	}
 
 	// Check that every output exists and is newer than the newest source
-	for _, f := range outputs {
+	for _, f := range generatedOutputs {
 		info, err := os.Stat(f)
 		if err != nil {
 			return false, nil //nolint:nilerr // missing output means not up-to-date
