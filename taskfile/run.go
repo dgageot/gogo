@@ -305,14 +305,14 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 		"TASKFILE_DIR": taskDir,
 	}
 
-	// Global vars
-	for k, v := range r.tf.Vars {
-		resolved[k] = resolveVar(v, r.tf.Dir)
+	// Global vars (sorted for deterministic resolution)
+	for _, k := range slices.Sorted(maps.Keys(r.tf.Vars)) {
+		resolved[k] = resolveVar(r.tf.Vars[k], r.tf.Dir)
 	}
 
-	// Task vars override
-	for k, v := range task.Vars {
-		resolved[k] = resolveVar(v, taskDir)
+	// Task vars override (sorted for deterministic resolution)
+	for _, k := range slices.Sorted(maps.Keys(task.Vars)) {
+		resolved[k] = resolveVar(task.Vars[k], taskDir)
 	}
 
 	return resolved
