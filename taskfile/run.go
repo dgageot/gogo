@@ -401,6 +401,7 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 }
 
 // expandVars substitutes template and shell variables in a command string.
+// {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, and environment.
 func expandVars(s string, vars map[string]string, cliArgs string) string {
 	lookup := func(key string) string {
 		if key == "CLI_ARGS" {
@@ -415,13 +416,21 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 		return "${" + key + "}"
 	}
 
-	// Replace {{.VAR}} templates
+	// Replace {{.VAR}} templates with their resolved values.
+	// Use os.Expand on the result to handle ${VAR} references,
+	// but protect already-expanded values from re-expansion by
+	// converting {{.VAR}} first in isolation.
 	s = templatePattern.ReplaceAllStringFunc(s, func(match string) string {
 		name := templatePattern.FindStringSubmatch(match)[1]
-		return lookup(name)
+		val := lookup(name)
+		// If the value is the fallback ${key}, return it as-is for os.Expand.
+		if val == "${"+name+"}" {
+			return val
+		}
+		// Escape $ in the value so os.Expand won't re-expand it.
+		return strings.ReplaceAll(val, "$", "$$")
 	})
 
-	// Expand ${VAR} references; leave unknown ones for the shell
 	return os.Expand(s, lookup)
 }
 
