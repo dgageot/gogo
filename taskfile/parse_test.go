@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,39 +10,58 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	dir := "/Users/dgageot/src/ai"
-	if _, err := os.Stat(dir); err != nil {
-		t.Skip("test directory not available")
-	}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+includes:
+  - cli
+tasks:
+  todo:
+    cmd: open TODO.md
+`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+tasks:
+  # Build the docker-ai CLI
+  build:
+    cmd: go build .
+  cli_internal:
+    cmd: echo hidden
+  # Install the docker-ai CLI
+  install:
+    deps:
+      - build
+    cmd: go install .
+  # GitHub helper
+  github:
+    aliases:
+      - gh
+    cmd: gh auth status
+`), 0o644))
 
 	tf, err := LoadWithIncludes(dir)
-	if err != nil {
-		t.Skip("test directory contains an incompatible Taskfile")
-	}
+	require.NoError(t, err)
 
 	assert.Equal(t, "1", tf.Version)
 	assert.NotEmpty(t, tf.Tasks)
 
-	// Root task
 	task, ok := tf.Tasks["todo"]
 	require.True(t, ok)
-	assert.Equal(t, "Open our shared TODO list", task.Desc)
+	assert.Empty(t, task.Desc)
 
-	// Included task
 	task, ok = tf.Tasks["cli:build"]
 	require.True(t, ok)
 	assert.Equal(t, "Build the docker-ai CLI", task.Desc)
 
-	// Task with deps
 	task, ok = tf.Tasks["cli:install"]
 	require.True(t, ok)
 	assert.Len(t, task.Deps, 1)
-	assert.Equal(t, "build", task.Deps[0].Task)
+	assert.Equal(t, "cli:build", task.Deps[0].Task)
+	assert.Equal(t, "Install the docker-ai CLI", task.Desc)
 
-	// Task with aliases
-	task, ok = tf.Tasks["github"]
+	task, ok = tf.Tasks["cli:github"]
 	require.True(t, ok)
-	assert.Equal(t, []string{"gh"}, task.Aliases)
+	assert.Equal(t, StringList{"gh"}, task.Aliases)
+	assert.Equal(t, "GitHub helper", task.Desc)
 }
 
 func TestExpandTemplates(t *testing.T) {
