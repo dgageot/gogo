@@ -67,17 +67,16 @@ func findTaskfile(dir string) string {
 	return ""
 }
 
-// FindRootDir walks up from dir to find the topmost directory containing a Taskfile.
+// FindRootDir walks up from dir to find the nearest directory containing a Taskfile.
 func FindRootDir(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
 
-	var found string
 	for {
 		if findTaskfile(dir) != "" {
-			found = dir
+			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -86,11 +85,7 @@ func FindRootDir(dir string) (string, error) {
 		dir = parent
 	}
 
-	if found == "" {
-		return "", errors.New("no Taskfile found")
-	}
-
-	return found, nil
+	return "", errors.New("no Taskfile found")
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
