@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -24,20 +23,11 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 	}
 
 	slices.Sort(files)
+	files = slices.Compact(files)
 
-	// Hash each file in parallel
-	digests := make([][sha256.Size]byte, len(files))
-	var wg sync.WaitGroup
-	for i, f := range files {
-		wg.Go(func() {
-			digests[i] = fileDigest(f)
-		})
-	}
-	wg.Wait()
-
-	// Combine per-file digests
 	h := sha256.New()
-	for _, d := range digests {
+	for _, f := range files {
+		d := fileDigest(f)
 		h.Write(d[:])
 	}
 
@@ -100,12 +90,10 @@ func discoverFiles(dir string, patterns []string) ([]string, error) {
 	return files, nil
 }
 
-// walkRecursive walks dir in parallel and returns files matching any pattern.
+// walkRecursive walks dir recursively and returns files matching any pattern.
 // Hidden directories are skipped.
 func walkRecursive(dir string, patterns []string) []string {
-	var mu sync.Mutex
 	var files []string
-	var wg sync.WaitGroup
 
 	var walk func(string)
 	walk = func(dirPath string) {
@@ -116,25 +104,21 @@ func walkRecursive(dir string, patterns []string) []string {
 		for _, e := range entries {
 			name := e.Name()
 			if e.IsDir() {
-				if strings.HasPrefix(name, ".") {
-					continue
+				if !strings.HasPrefix(name, ".") {
+					walk(filepath.Join(dirPath, name))
 				}
-				wg.Go(func() { walk(filepath.Join(dirPath, name)) })
 				continue
 			}
 			if slices.ContainsFunc(patterns, func(p string) bool {
 				matched, _ := filepath.Match(p, name)
 				return matched
 			}) {
-				mu.Lock()
 				files = append(files, filepath.Join(dirPath, name))
-				mu.Unlock()
 			}
 		}
 	}
 
 	walk(dir)
-	wg.Wait()
 	return files
 }
 
