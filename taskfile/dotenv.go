@@ -58,11 +58,32 @@ func parseDotenv(path string) (map[string]string, error) {
 		}
 
 		if key, value, ok := strings.Cut(line, "="); ok {
-			vars[strings.TrimSpace(key)] = unquote(strings.TrimSpace(value))
+			key = strings.TrimSpace(key)
+			if !isValidEnvKey(key) {
+				return nil, fmt.Errorf("invalid dotenv key %q", key)
+			}
+			vars[key] = unquote(strings.TrimSpace(value))
 		}
 	}
 
 	return vars, nil
+}
+
+func isValidEnvKey(key string) bool {
+	if key == "" {
+		return false
+	}
+
+	for i, r := range key {
+		switch {
+		case r == '_' || ('A' <= r && r <= 'Z') || ('a' <= r && r <= 'z'):
+		case i > 0 && '0' <= r && r <= '9':
+		default:
+			return false
+		}
+	}
+
+	return true
 }
 
 // unquote removes matching surrounding quotes from a value.

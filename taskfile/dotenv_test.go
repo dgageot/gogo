@@ -33,6 +33,15 @@ SPACED_KEY = spaced_value
 	assert.Equal(t, "spaced_value", env["SPACED_KEY"])
 }
 
+func TestParseDotenvRejectsInvalidKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	require.NoError(t, os.WriteFile(path, []byte("BAD-KEY=value\n"), 0o644))
+
+	_, err := parseDotenv(path)
+	require.EqualError(t, err, `invalid dotenv key "BAD-KEY"`)
+}
+
 func TestParseDotenvMissingFile(t *testing.T) {
 	_, err := parseDotenv("/nonexistent/.env")
 	assert.ErrorIs(t, err, os.ErrNotExist)
