@@ -107,7 +107,7 @@ func matchesPlatform(platforms []string) bool {
 // checkRequires validates that all required vars and env are set.
 func checkRequires(taskName string, task *Task, vars map[string]string) error {
 	for _, name := range task.Requires.Vars {
-		if vars[name] == "" {
+		if _, ok := vars[name]; !ok {
 			return fmt.Errorf("task %q requires variable %q to be set", taskName, name)
 		}
 	}
