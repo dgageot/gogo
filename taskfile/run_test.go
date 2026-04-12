@@ -262,6 +262,24 @@ func TestPlatformSkipsTask(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "task should have been skipped")
 }
 
+func TestWatchRejectsTooSmallInterval(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: []string{"*.go"},
+				Cmds:    []Cmd{{Cmd: "true"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := NewRunner(tf, dir)
+	err := runner.Watch("build", "", 0)
+	require.EqualError(t, err, "watch interval must be at least 10ms")
+}
+
 func TestPlatformRunsTask(t *testing.T) {
 	dir := t.TempDir()
 	output := filepath.Join(dir, "output.txt")

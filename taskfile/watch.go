@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const minWatchInterval = 10 * time.Millisecond
+
 // collectSources gathers all source patterns from the task and its dependencies (recursively).
 func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []string {
 	if _, ok := visited[taskName]; ok {
@@ -33,6 +35,10 @@ func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
 func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
+	if interval < minWatchInterval {
+		return fmt.Errorf("watch interval must be at least %s", minWatchInterval)
+	}
+
 	resolved, task, err := r.resolveTask(name)
 	if err != nil {
 		return err
