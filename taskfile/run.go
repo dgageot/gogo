@@ -416,22 +416,16 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 		return "${" + key + "}"
 	}
 
-	// Replace {{.VAR}} templates with their resolved values.
-	// Use os.Expand on the result to handle ${VAR} references,
-	// but protect already-expanded values from re-expansion by
-	// converting {{.VAR}} first in isolation.
-	s = templatePattern.ReplaceAllStringFunc(s, func(match string) string {
-		name := templatePattern.FindStringSubmatch(match)[1]
-		val := lookup(name)
-		// If the value is the fallback ${key}, return it as-is for os.Expand.
-		if val == "${"+name+"}" {
-			return val
-		}
-		// Escape $ in the value so os.Expand won't re-expand it.
-		return strings.ReplaceAll(val, "$", "$$")
-	})
+	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
+	// don't start with $. Unknown variables are left as ${KEY} for the shell.
+	s = os.Expand(s, lookup)
 
-	return os.Expand(s, lookup)
+	// Then replace {{.VAR}} templates. Since os.Expand already ran,
+	// the expanded values won't be re-processed, preventing double expansion.
+	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
+		name := templatePattern.FindStringSubmatch(match)[1]
+		return lookup(name)
+	})
 }
 
 // execCmd executes a shell command, wiring stdio.
