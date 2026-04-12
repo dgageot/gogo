@@ -64,6 +64,54 @@ tasks:
 	assert.Equal(t, "GitHub helper", task.Desc)
 }
 
+func TestLoadWithIncludesNested(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli", "nested"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+includes:
+  - cli
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+includes:
+  - nested
+tasks:
+  build:
+    cmd: go build .
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "nested", "gogo.yaml"), []byte(`version: "1"
+tasks:
+  test:
+    cmd: go test ./...
+`), 0o644))
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Contains(t, tf.Tasks, "cli:build")
+	assert.Contains(t, tf.Tasks, "nested:test")
+}
+
+func TestLoadWithIncludesRejectsCycles(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli", "root"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+includes:
+  - cli
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+includes:
+  - root
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "root", "gogo.yaml"), []byte(`version: "1"
+includes:
+  - ../..
+`), 0o644))
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cyclic include detected")
+}
+
 func TestExpandTemplates(t *testing.T) {
 	t.Setenv("MY_VAR", "hello")
 

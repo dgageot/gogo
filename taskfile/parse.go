@@ -105,7 +105,7 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	}
 
 	for _, namespace := range tf.Includes {
-		if err := loadInclude(tf, dir, namespace, seen, dotenvVars); err != nil {
+		if err := loadInclude(tf, dir, namespace, seen, dotenvVars, map[string]struct{}{dir: {}}); err != nil {
 			return nil, err
 		}
 	}
@@ -116,24 +116,41 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 }
 
 // loadInclude parses a child Taskfile and merges it into the parent.
-func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]struct{}, dotenvVars map[string]string) error {
+func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]struct{}, dotenvVars map[string]string, includeStack map[string]struct{}) error {
 	incDir := filepath.Join(parentDir, namespace)
 
-	child, err := Parse(incDir)
+	absIncDir, err := filepath.Abs(incDir)
+	if err != nil {
+		return fmt.Errorf("resolving include %q: %w", namespace, err)
+	}
+	if _, exists := includeStack[absIncDir]; exists {
+		return fmt.Errorf("cyclic include detected for %q", absIncDir)
+	}
+
+	child, err := Parse(absIncDir)
 	if err != nil {
 		return fmt.Errorf("loading include %q: %w", namespace, err)
 	}
 
-	tf.Namespaces[incDir] = namespace
+	tf.Namespaces[absIncDir] = namespace
 
 	// Load child dotenv files, deduplicating with parent
-	childDotenv, err := loadDotenvFiles(incDir, child.Dotenv, seen)
+	childDotenv, err := loadDotenvFiles(absIncDir, child.Dotenv, seen)
 	if err != nil {
 		return fmt.Errorf("loading dotenv for include %q: %w", namespace, err)
 	}
 	for k, v := range childDotenv {
 		if _, exists := dotenvVars[k]; !exists {
 			dotenvVars[k] = v
+		}
+	}
+
+	nextStack := make(map[string]struct{}, len(includeStack)+1)
+	maps.Copy(nextStack, includeStack)
+	nextStack[absIncDir] = struct{}{}
+	for _, childNamespace := range child.Includes {
+		if err := loadInclude(tf, absIncDir, childNamespace, seen, dotenvVars, nextStack); err != nil {
+			return err
 		}
 	}
 
