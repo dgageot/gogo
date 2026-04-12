@@ -17,7 +17,9 @@ func fileDigest(path string) [sha256.Size]byte {
 	h := sha256.New()
 	h.Write([]byte(path))
 	h.Write([]byte{'\n'})
-	io.Copy(h, f) //nolint:errcheck // best-effort read; unreadable files produce a zero digest
+	if _, err := io.Copy(h, f); err != nil {
+		return [sha256.Size]byte{}
+	}
 
 	var digest [sha256.Size]byte
 	h.Sum(digest[:0])
