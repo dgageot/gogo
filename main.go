@@ -16,12 +16,14 @@ import (
 )
 
 type args struct {
-	List    bool     `arg:"-l,--list" help:"list available tasks"`
-	Watch   bool     `arg:"-w,--watch" help:"watch sources and re-run on changes"`
-	Force   bool     `arg:"-f,--force" help:"ignore sources and generates (always run)"`
-	DryRun  bool     `arg:"-n,--dry" help:"print commands without executing them"`
-	Task    string   `arg:"positional" default:"default" help:"task to run"`
-	CLIArgs []string `arg:"positional" help:"arguments passed to the task (after --)"`
+	List       bool     `arg:"-l,--list" help:"list available tasks"`
+	Watch      bool     `arg:"-w,--watch" help:"watch sources and re-run on changes"`
+	Force      bool     `arg:"-f,--force" help:"ignore sources and generates (always run)"`
+	DryRun     bool     `arg:"-n,--dry" help:"print commands without executing them"`
+	Completion string   `arg:"--completion" help:"print shell completion script (bash|zsh|fish)"`
+	Complete   bool     `arg:"--complete,hidden"`
+	Task       string   `arg:"positional" default:"default" help:"task to run"`
+	CLIArgs    []string `arg:"positional" help:"arguments passed to the task (after --)"`
 }
 
 func (args) Description() string {
@@ -42,6 +44,14 @@ func run() error {
 	}
 	if a == nil {
 		return nil // help or version was printed
+	}
+
+	if a.Completion != "" {
+		return printCompletionScript(a.Completion)
+	}
+
+	if a.Complete {
+		return printTaskNames()
 	}
 
 	if a.List {
@@ -116,6 +126,53 @@ func isInternalTask(name string) bool {
 	}
 	return strings.HasPrefix(name, "_")
 }
+
+func printCompletionScript(shell string) error {
+	switch shell {
+	case "bash":
+		fmt.Print(bashCompletion)
+	case "zsh":
+		fmt.Print(zshCompletion)
+	case "fish":
+		fmt.Print(fishCompletion)
+	default:
+		return fmt.Errorf("unsupported shell: %s (valid: bash, zsh, fish)", shell)
+	}
+	return nil
+}
+
+func printTaskNames() error {
+	_, tf, err := loadTaskfile()
+	if err != nil {
+		return nil // silently fail during completion
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
+		if !isInternalTask(name) {
+			fmt.Println(name)
+		}
+	}
+	return nil
+}
+
+const bashCompletion = `_gogo_completions() {
+	local cur="${COMP_WORDS[COMP_CWORD]}"
+	COMPREPLY=($(compgen -W "$(gogo --complete 2>/dev/null)" -- "$cur"))
+}
+complete -F _gogo_completions gogo
+`
+
+const zshCompletion = `#compdef gogo
+_gogo() {
+	local -a tasks
+	tasks=("${(@f)$(gogo --complete 2>/dev/null)}")
+	_describe 'task' tasks
+}
+compdef _gogo gogo
+`
+
+const fishCompletion = `complete -c gogo -f -a '(gogo --complete 2>/dev/null)'
+`
 
 func listTasks() error {
 	_, tf, err := loadTaskfile()
