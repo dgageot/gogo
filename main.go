@@ -118,6 +118,17 @@ func loadTaskfile() (string, *taskfile.Taskfile, error) {
 	return cwd, tf, nil
 }
 
+// visibleTaskNames returns sorted task names, excluding internal tasks.
+func visibleTaskNames(tf *taskfile.Taskfile) []string {
+	var names []string
+	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
+		if !isInternalTask(name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // isInternalTask reports whether a task name is internal (starts with _).
 // For namespaced tasks like "ns:_helper", the task part after the last colon is checked.
 func isInternalTask(name string) bool {
@@ -147,10 +158,8 @@ func printTaskNames() error {
 		return nil // silently fail during completion
 	}
 
-	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
-		if !isInternalTask(name) {
-			fmt.Println(name)
-		}
+	for _, name := range visibleTaskNames(tf) {
+		fmt.Println(name)
 	}
 	return nil
 }
@@ -180,27 +189,28 @@ func listTasks() error {
 		return err
 	}
 
-	sortedNames := slices.Sorted(maps.Keys(tf.Tasks))
-
-	// First pass: compute max name length for alignment
-	maxLen := 0
-	for _, name := range sortedNames {
-		if tf.Tasks[name].Desc != "" && !isInternalTask(name) {
-			maxLen = max(maxLen, len(name))
-		}
+	type entry struct {
+		name string
+		desc string
 	}
 
-	// Second pass: print tasks with descriptions
-	for _, name := range sortedNames {
+	var entries []entry
+	maxLen := 0
+	for _, name := range visibleTaskNames(tf) {
 		task := tf.Tasks[name]
-		if task.Desc == "" || isInternalTask(name) {
+		if task.Desc == "" {
 			continue
 		}
 		desc := task.Desc
 		if len(task.Aliases) > 0 {
 			desc += " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
-		fmt.Printf("%-*s  %s\n", maxLen, name, desc)
+		entries = append(entries, entry{name, desc})
+		maxLen = max(maxLen, len(name))
+	}
+
+	for _, e := range entries {
+		fmt.Printf("%-*s  %s\n", maxLen, e.name, e.desc)
 	}
 
 	return nil
