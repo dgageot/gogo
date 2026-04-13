@@ -31,15 +31,38 @@ func expandTemplates(data []byte) []byte {
 	})
 }
 
+// ExecFunc is the signature for command execution. It receives the task name,
+// the expanded command string, working directory, environment, and whether
+// to use "op run". Replacing this on a Runner allows tests to capture
+// exactly which processes would be spawned, with which arguments and env,
+// without forking any real process.
+type ExecFunc func(taskName, command, dir string, env []string, useOpRun bool) error
+
+// ResolveVarFunc resolves a variable value, optionally running a shell command.
+// Replacing this on a Runner allows tests to avoid forking processes for
+// variables that use "sh".
+type ResolveVarFunc func(v Var, dir string) string
+
+// Execution records a single command that was (or would be) executed.
+type Execution struct {
+	Task     string
+	Command  string
+	Dir      string
+	Env      []string
+	UseOpRun bool
+}
+
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf      *Taskfile
-	cwd     string
-	env     []string
-	aliases map[string]string // alias -> task name
-	DryRun  bool              // if true, print commands without executing them
-	Force   bool              // if true, ignore sources and generates (always run)
-	ran     sync.Map          // task name -> *runOnce
+	tf             *Taskfile
+	cwd            string
+	BaseEnv        []string          // base process environment (defaults to os.Environ() + dotenv)
+	aliases        map[string]string // alias -> task name
+	DryRun         bool              // if true, print commands without executing them
+	Force          bool              // if true, ignore sources and generates (always run)
+	ExecFunc       ExecFunc          // replaceable command executor (defaults to real exec)
+	ResolveVarFunc ResolveVarFunc    // replaceable variable resolver (defaults to shell exec)
+	ran            sync.Map          // task name -> *runOnce
 }
 
 // runOnce tracks a single task execution for deduplication.
@@ -60,12 +83,15 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 		}
 	}
 
-	return &Runner{
+	r := &Runner{
 		tf:      tf,
 		cwd:     cwd,
-		env:     env,
+		BaseEnv: env,
 		aliases: aliases,
 	}
+	r.ExecFunc = r.defaultExecFunc
+	r.ResolveVarFunc = defaultResolveVar
+	return r
 }
 
 // envPair formats a key-value pair as an environment variable string.
@@ -207,7 +233,7 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 	// Apply extra vars from call site
 	for _, ev := range extraVars {
 		for k, v := range ev {
-			vars[k] = resolveVar(v, dir)
+			vars[k] = r.ResolveVarFunc(v, dir)
 		}
 	}
 
@@ -241,11 +267,6 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 
 	// Execute commands
 	useOpRun := hasOpSecrets(task.Env)
-	if useOpRun {
-		if _, err := exec.LookPath("op"); err != nil {
-			return fmt.Errorf("task %q uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", resolved, err)
-		}
-	}
 
 	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, useOpRun)
 }
@@ -268,7 +289,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		}
 
 		expanded := expandVars(cmd.Cmd, vars, cliArgs)
-		if err := r.execCmd(taskName, expanded, dir, env, useOpRun); err != nil {
+		if err := r.ExecFunc(taskName, expanded, dir, env, useOpRun); err != nil {
 			return err
 		}
 	}
@@ -310,19 +331,19 @@ func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
 
 	// Global vars (sorted for deterministic resolution)
 	for _, k := range slices.Sorted(maps.Keys(r.tf.Vars)) {
-		resolved[k] = resolveVar(r.tf.Vars[k], r.tf.Dir)
+		resolved[k] = r.ResolveVarFunc(r.tf.Vars[k], r.tf.Dir)
 	}
 
 	// Task vars override (sorted for deterministic resolution)
 	for _, k := range slices.Sorted(maps.Keys(task.Vars)) {
-		resolved[k] = resolveVar(task.Vars[k], taskDir)
+		resolved[k] = r.ResolveVarFunc(task.Vars[k], taskDir)
 	}
 
 	return resolved
 }
 
-// resolveVar evaluates a single variable, running a shell command if needed.
-func resolveVar(v Var, dir string) string {
+// defaultResolveVar evaluates a single variable, running a shell command if needed.
+func defaultResolveVar(v Var, dir string) string {
 	if v.Sh == "" {
 		return v.Value
 	}
@@ -371,7 +392,7 @@ func hasOpSecrets(env map[string]string) bool {
 
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
-	env := slices.Clone(r.env)
+	env := slices.Clone(r.BaseEnv)
 
 	// Inject task-level dotenv vars (don't override existing env vars)
 	if len(task.Dotenv) > 0 {
@@ -431,11 +452,14 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 	})
 }
 
-// execCmd executes a shell command, wiring stdio.
+// defaultExecFunc executes a shell command, wiring stdio.
 // If useOpRun is true, the command is wrapped with "op run" to resolve op:// secrets.
-func (r *Runner) execCmd(taskName, command, dir string, env []string, useOpRun bool) error {
+func (r *Runner) defaultExecFunc(taskName, command, dir string, env []string, useOpRun bool) error {
 	var cmd *exec.Cmd
 	if useOpRun {
+		if _, err := exec.LookPath("op"); err != nil {
+			return fmt.Errorf("task %q uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", taskName, err)
+		}
 		cmd = exec.Command("op", "run", "--", "/bin/sh", "-c", command)
 	} else {
 		cmd = exec.Command("/bin/sh", "-c", command)
