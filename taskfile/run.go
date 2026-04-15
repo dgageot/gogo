@@ -181,18 +181,18 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	return name, false
 }
 
-// resolveTask finds a task by name and returns its resolved name and definition.
-func (r *Runner) resolveTask(name string) (string, Task, error) {
+// resolveTask finds a task by name and returns its resolved name.
+func (r *Runner) resolveTask(name string) (string, error) {
 	resolved, ok := r.resolveTaskName(name)
 	if !ok {
-		return "", Task{}, fmt.Errorf("task %q not found", name)
+		return "", fmt.Errorf("task %q not found", name)
 	}
-	return resolved, r.tf.Tasks[resolved], nil
+	return resolved, nil
 }
 
 // Run executes the named task. Extra vars (from task call sites) override task-level vars.
 func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err error) {
-	resolved, _, err := r.resolveTask(name)
+	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}

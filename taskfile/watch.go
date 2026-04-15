@@ -1,6 +1,8 @@
 package taskfile
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"slices"
@@ -9,8 +11,15 @@ import (
 
 const minWatchInterval = 10 * time.Millisecond
 
-// collectSources gathers all source patterns from the task and its dependencies (recursively).
-func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []string {
+// dirPatterns pairs a directory with its source glob patterns.
+type dirPatterns struct {
+	Dir      string
+	Patterns []string
+}
+
+// collectSources gathers all source patterns from the task and its dependencies (recursively),
+// preserving each task's working directory.
+func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []dirPatterns {
 	if _, ok := visited[taskName]; ok {
 		return nil
 	}
@@ -21,16 +30,35 @@ func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []
 		return nil
 	}
 
-	sources := slices.Clone(task.Sources)
+	var result []dirPatterns
+	if len(task.Sources) > 0 {
+		result = append(result, dirPatterns{
+			Dir:      r.taskDir(&task),
+			Patterns: slices.Clone([]string(task.Sources)),
+		})
+	}
 	for _, dep := range task.Deps {
 		resolved, ok := r.resolveTaskName(dep.Task)
 		if !ok {
 			continue
 		}
-		sources = append(sources, r.collectSources(resolved, visited)...)
+		result = append(result, r.collectSources(resolved, visited)...)
 	}
 
-	return sources
+	return result
+}
+
+// multiSourcesChecksum computes a combined checksum across multiple dir/pattern groups.
+func multiSourcesChecksum(groups []dirPatterns) (string, error) {
+	h := sha256.New()
+	for _, g := range groups {
+		checksum, err := sourcesChecksum(g.Dir, g.Patterns)
+		if err != nil {
+			return "", err
+		}
+		h.Write([]byte(checksum))
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
@@ -39,7 +67,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		return fmt.Errorf("watch interval must be at least %s", minWatchInterval)
 	}
 
-	resolved, task, err := r.resolveTask(name)
+	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}
@@ -49,15 +77,13 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 		return fmt.Errorf("task %q has no sources, cannot watch", name)
 	}
 
-	dir := r.taskDir(&task)
-
 	// Run once immediately
 	if err := r.Run(resolved, cliArgs); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
 	// Track checksum after initial run to avoid immediate re-run
-	lastChecksum, err := sourcesChecksum(dir, sources)
+	lastChecksum, err := multiSourcesChecksum(sources)
 	if err != nil {
 		return fmt.Errorf("computing sources checksum: %w", err)
 	}
@@ -66,7 +92,7 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		newChecksum, err := sourcesChecksum(dir, sources)
+		newChecksum, err := multiSourcesChecksum(sources)
 		if err != nil {
 			return fmt.Errorf("computing sources checksum: %w", err)
 		}
