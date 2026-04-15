@@ -230,9 +230,9 @@ tasks:
 
 	tf := &Taskfile{
 		Tasks: map[string]Task{
-			"build":  {Cmd: Cmd{Cmd: "go build"}},
-			"test":   {Cmd: Cmd{Cmd: "go test"}},
-			"deploy": {Cmd: Cmd{Cmd: "deploy.sh"}},
+			"build":  {Cmds: []Cmd{{Cmd: "go build"}}},
+			"test":   {Cmds: []Cmd{{Cmd: "go test"}}},
+			"deploy": {Cmds: []Cmd{{Cmd: "deploy.sh"}}},
 		},
 	}
 
