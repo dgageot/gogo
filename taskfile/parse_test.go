@@ -88,7 +88,7 @@ tasks:
 	require.NoError(t, err)
 
 	assert.Contains(t, tf.Tasks, "cli:build")
-	assert.Contains(t, tf.Tasks, "nested:test")
+	assert.Contains(t, tf.Tasks, "cli:nested:test")
 }
 
 func TestLoadWithIncludesRejectsCycles(t *testing.T) {
@@ -137,6 +137,49 @@ tasks:
 
 	assert.Contains(t, tf.Vars, "VERSION")
 	assert.Equal(t, "1.2.3", tf.Vars["VERSION"].Value)
+}
+
+func TestLoadWithIncludesNestedNamespaceCollision(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - cli
+  - server
+`,
+		"cli/gogo.yaml": `version: "1"
+includes:
+  - utils
+tasks:
+  build:
+    cmd: go build ./cli
+`,
+		"cli/utils/gogo.yaml": `version: "1"
+tasks:
+  fmt:
+    cmd: gofmt ./cli/utils
+`,
+		"server/gogo.yaml": `version: "1"
+includes:
+  - utils
+tasks:
+  build:
+    cmd: go build ./server
+`,
+		"server/utils/gogo.yaml": `version: "1"
+tasks:
+  fmt:
+    cmd: gofmt ./server/utils
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Contains(t, tf.Tasks, "cli:build")
+	assert.Contains(t, tf.Tasks, "server:build")
+	assert.Contains(t, tf.Tasks, "cli:utils:fmt", "nested include under cli should be namespaced as cli:utils:fmt")
+	assert.Contains(t, tf.Tasks, "server:utils:fmt", "nested include under server should be namespaced as server:utils:fmt")
 }
 
 func TestExpandTemplates(t *testing.T) {
