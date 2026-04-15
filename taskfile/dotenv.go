@@ -66,6 +66,8 @@ func parseDotenv(path string) (map[string]string, error) {
 				return nil, fmt.Errorf("invalid dotenv key %q", key)
 			}
 			vars[key] = unquote(strings.TrimSpace(value))
+		} else {
+			return nil, fmt.Errorf("invalid dotenv line (missing '='): %q", line)
 		}
 	}
 

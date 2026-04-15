@@ -54,6 +54,14 @@ func TestParseDotenvRejectsInvalidKey(t *testing.T) {
 	require.EqualError(t, err, `invalid dotenv key "BAD-KEY"`)
 }
 
+func TestParseDotenvRejectsLineWithoutEquals(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{".env": "VALID=ok\nTYPO_LINE\n"})
+
+	_, err := parseDotenv(filepath.Join(dir, ".env"))
+	require.EqualError(t, err, `invalid dotenv line (missing '='): "TYPO_LINE"`)
+}
+
 func TestParseDotenvMissingFile(t *testing.T) {
 	_, err := parseDotenv("/nonexistent/.env")
 	assert.ErrorIs(t, err, os.ErrNotExist)
