@@ -133,3 +133,14 @@ func TestUnquote(t *testing.T) {
 	assert.Equal(t, `"hello'`, unquote(`"hello'`))
 	assert.Equal(t, `'hello"`, unquote(`'hello"`))
 }
+
+func TestUnquoteEscapedQuotes(t *testing.T) {
+	assert.Equal(t, `hello "world"`, unquote(`"hello \"world\""`))
+	assert.Equal(t, `back\slash`, unquote(`"back\\slash"`))
+	assert.Equal(t, "new\nline", unquote(`"new\nline"`))
+	assert.Equal(t, "tab\there", unquote(`"tab\there"`))
+}
+
+func TestUnquoteSingleQuotesAreLiteral(t *testing.T) {
+	assert.Equal(t, `hello \"world\"`, unquote(`'hello \"world\"'`))
+}
