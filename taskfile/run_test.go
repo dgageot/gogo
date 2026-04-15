@@ -1475,7 +1475,7 @@ func TestPreconditionPasses(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -1498,7 +1498,7 @@ func TestPreconditionFails(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -1521,7 +1521,7 @@ func TestPreconditionFailsWithDefaultMessage(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -1545,7 +1545,7 @@ func TestPreconditionStringShorthand(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("deploy", "")
