@@ -186,13 +186,20 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 		return taskName, true
 	}
 
-	// Try prefixing with namespace for cwd
-	for _, dir := range slices.Sorted(maps.Keys(r.tf.Namespaces)) {
-		ns := r.tf.Namespaces[dir]
+	// Try prefixing with namespace for cwd — pick the most specific (longest) match
+	var bestDir string
+	var bestNS string
+	for dir, ns := range r.tf.Namespaces {
 		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
 			continue
 		}
-		qualified := ns + ":" + name
+		if len(dir) > len(bestDir) {
+			bestDir = dir
+			bestNS = ns
+		}
+	}
+	if bestNS != "" {
+		qualified := bestNS + ":" + name
 		if _, ok := r.tf.Tasks[qualified]; ok {
 			return qualified, true
 		}

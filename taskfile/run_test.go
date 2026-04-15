@@ -1165,6 +1165,32 @@ func TestTaskLevelDotenvThroughRunner(t *testing.T) {
 	assert.Equal(t, "abc", envValue((*execs)[0].Env, "TASK_SECRET"))
 }
 
+func TestNamespaceResolutionPicksMostSpecific(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"cli/.keep": "", "cli/utils/.keep": ""})
+	cliDir := filepath.Join(dir, "cli")
+	cliUtilsDir := filepath.Join(dir, "cli", "utils")
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"cli:build":       {Dir: cliDir, Cmds: []Cmd{{Cmd: "go build cli"}}},
+			"cli:utils:build": {Dir: cliUtilsDir, Cmds: []Cmd{{Cmd: "go build utils"}}},
+		},
+		Namespaces: map[string]string{cliDir: "cli", cliUtilsDir: "cli:utils"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, cliUtilsDir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("build", "")
+	require.NoError(t, err)
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "cli:utils:build", (*execs)[0].Task, "should resolve to deepest namespace")
+}
+
 func TestNamespaceResolutionMiss(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"cli/.keep": "", "other/.keep": ""})
