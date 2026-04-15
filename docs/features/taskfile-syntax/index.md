@@ -39,6 +39,7 @@ Each task supports the following fields:
 | `aliases` | list | Alternative names for the task |
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |
+| `preconditions` | list | Shell commands that must succeed before the task runs |
 
 ## Commands
 

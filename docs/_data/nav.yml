@@ -21,6 +21,8 @@
       url: /features/dotenv/
     - title: Secrets
       url: /features/secrets/
+    - title: Preconditions
+      url: /features/preconditions/
     - title: Includes
       url: /features/includes/
     - title: CLI Reference
