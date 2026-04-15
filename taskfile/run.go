@@ -377,6 +377,11 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool,
 		return false, "", fmt.Errorf("computing sources checksum: %w", err)
 	}
 
+	// No files matched the patterns: always run.
+	if checksum == "" {
+		return false, "", nil
+	}
+
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
 

@@ -25,6 +25,11 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 	slices.Sort(files)
 	files = slices.Compact(files)
 
+	// No files matched: return empty to signal "not up to date".
+	if len(files) == 0 {
+		return "", nil
+	}
+
 	h := sha256.New()
 	for _, f := range files {
 		d := fileDigest(f)

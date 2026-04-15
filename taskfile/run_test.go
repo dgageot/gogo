@@ -1424,3 +1424,30 @@ func TestSourcesChecksumErrorPropagates(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "computing sources checksum")
 }
+
+func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
+	dir := t.TempDir()
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: StringList{"*.go"},
+				Cmds:    []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(tf, dir)
+	execs := captureExecs(runner)
+
+	// First run with no matching files still executes
+	require.NoError(t, runner.Run("build", ""))
+	require.Len(t, *execs, 1)
+
+	// Second run with still no matching files must also execute (not be skipped)
+	runner.ResetRan()
+	require.NoError(t, runner.Run("build", ""))
+	assert.Len(t, *execs, 2)
+}

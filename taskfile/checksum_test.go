@@ -40,7 +40,7 @@ func TestSourcesChecksumNoMatches(t *testing.T) {
 
 	sum, err := sourcesChecksum(dir, []string{"*.go"})
 	require.NoError(t, err)
-	assert.NotEmpty(t, sum, "empty file set should still produce a checksum")
+	assert.Empty(t, sum, "no matches should return empty checksum")
 }
 
 func TestSourcesChecksumRecursive(t *testing.T) {
