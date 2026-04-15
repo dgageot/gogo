@@ -41,7 +41,7 @@ type ExecFunc func(taskName, command, dir string, env []string, useOpRun bool) e
 // ResolveVarFunc resolves a variable value, optionally running a shell command.
 // Replacing this on a Runner allows tests to avoid forking processes for
 // variables that use "sh".
-type ResolveVarFunc func(v Var, dir string) string
+type ResolveVarFunc func(v Var, dir string) (string, error)
 
 // Execution records a single command that was (or would be) executed.
 type Execution struct {
@@ -255,12 +255,19 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 
 	// Resolve variables
 	dir := r.taskDir(&task)
-	vars := r.resolveVars(&task, dir)
+	vars, err := r.resolveVars(&task, dir)
+	if err != nil {
+		return err
+	}
 
 	// Apply extra vars from call site
 	for _, ev := range extraVars {
 		for k, v := range ev {
-			vars[k] = r.ResolveVarFunc(v, dir)
+			val, err := r.ResolveVarFunc(v, dir)
+			if err != nil {
+				return err
+			}
+			vars[k] = val
 		}
 	}
 
@@ -356,37 +363,45 @@ func (r *Runner) taskDir(task *Task) string {
 }
 
 // resolveVars computes the effective variables for a task.
-func (r *Runner) resolveVars(task *Task, taskDir string) map[string]string {
+func (r *Runner) resolveVars(task *Task, taskDir string) (map[string]string, error) {
 	resolved := map[string]string{
 		"TASKFILE_DIR": taskDir,
 	}
 
 	// Global vars (sorted for deterministic resolution)
 	for _, k := range slices.Sorted(maps.Keys(r.tf.Vars)) {
-		resolved[k] = r.ResolveVarFunc(r.tf.Vars[k], r.tf.Dir)
+		v, err := r.ResolveVarFunc(r.tf.Vars[k], r.tf.Dir)
+		if err != nil {
+			return nil, err
+		}
+		resolved[k] = v
 	}
 
 	// Task vars override (sorted for deterministic resolution)
 	for _, k := range slices.Sorted(maps.Keys(task.Vars)) {
-		resolved[k] = r.ResolveVarFunc(task.Vars[k], taskDir)
+		v, err := r.ResolveVarFunc(task.Vars[k], taskDir)
+		if err != nil {
+			return nil, err
+		}
+		resolved[k] = v
 	}
 
-	return resolved
+	return resolved, nil
 }
 
 // defaultResolveVar evaluates a single variable, running a shell command if needed.
-func defaultResolveVar(v Var, dir string) string {
+func defaultResolveVar(v Var, dir string) (string, error) {
 	if v.Sh == "" {
-		return v.Value
+		return v.Value, nil
 	}
 
 	cmd := exec.Command("/bin/sh", "-c", v.Sh)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("resolving variable (sh: %s): %w", v.Sh, err)
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }
 
 // isUpToDate checks if the task sources are unchanged since the last run.

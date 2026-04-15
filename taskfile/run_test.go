@@ -43,11 +43,11 @@ func newTestRunner(t *testing.T, tf *Taskfile, dir string) *Runner {
 	require.NoError(t, err)
 
 	r.BaseEnv = nil
-	r.ResolveVarFunc = func(v Var, _ string) string {
+	r.ResolveVarFunc = func(v Var, _ string) (string, error) {
 		if v.Sh != "" {
-			return "sh:" + v.Sh
+			return "sh:" + v.Sh, nil
 		}
-		return v.Value
+		return v.Value, nil
 	}
 	return r
 }
@@ -1644,6 +1644,29 @@ func TestSourcesChecksumErrorPropagates(t *testing.T) {
 	err := runner.Run("build", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "computing sources checksum")
+}
+
+func TestResolveVarShellError(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Vars: map[string]Var{"VER": {Sh: "exit 1"}},
+				Cmds: []Cmd{{Cmd: "echo ${VER}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner, err := NewRunner(tf, dir)
+	require.NoError(t, err)
+	runner.BaseEnv = nil
+	captureExecs(runner)
+
+	err = runner.Run("build", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolving variable")
 }
 
 func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
