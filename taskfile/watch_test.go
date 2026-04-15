@@ -34,7 +34,7 @@ func TestCollectSourcesPreservesPerTaskDir(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	sources := runner.collectSources("build", make(map[string]struct{}))
 
 	require.Len(t, sources, 2)
@@ -58,7 +58,7 @@ func TestCollectSourcesNoDeps(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	sources := runner.collectSources("build", make(map[string]struct{}))
 
 	require.Len(t, sources, 1)
@@ -74,7 +74,7 @@ func TestCollectSourcesUnknownTask(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	sources := runner.collectSources("missing", make(map[string]struct{}))
 	assert.Empty(t, sources)
 }
@@ -119,7 +119,7 @@ func TestWatchNoSourcesInDeps(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	err := runner.Watch("build", "", time.Second)
 	require.EqualError(t, err, `task "build" has no sources, cannot watch`)
 }

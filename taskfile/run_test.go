@@ -36,8 +36,12 @@ func captureExecs(r *Runner) *[]Execution {
 // newTestRunner creates a Runner with a clean base environment and a
 // ResolveVarFunc that returns Var.Value or "sh:<command>" (without forking).
 // Use captureExecs on the returned runner to also capture command executions.
-func newTestRunner(tf *Taskfile, dir string) *Runner {
-	r := NewRunner(tf, dir)
+func newTestRunner(t *testing.T, tf *Taskfile, dir string) *Runner {
+	t.Helper()
+
+	r, err := NewRunner(tf, dir)
+	require.NoError(t, err)
+
 	r.BaseEnv = nil
 	r.ResolveVarFunc = func(v Var, _ string) string {
 		if v.Sh != "" {
@@ -80,7 +84,7 @@ func TestRunWithExtraVars(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("caller", "")
@@ -116,7 +120,7 @@ func TestRunWithExtraVarsOverridesTaskVars(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("caller", "")
@@ -148,7 +152,7 @@ func TestRunWithExtraVarsShell(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("caller", "")
@@ -171,7 +175,7 @@ func TestRequiresVarsMissing(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -192,7 +196,7 @@ func TestRequiresVarsProvided(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -212,7 +216,7 @@ func TestRequiresEnvMissing(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -233,7 +237,7 @@ func TestRequiresEnvProvided(t *testing.T) {
 	}
 
 	t.Setenv("DEPLOY_TOKEN", "secret")
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -264,7 +268,7 @@ func TestRunDeduplicatesDeps(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("all", "")
@@ -315,7 +319,7 @@ func TestPlatformSkipsTask(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -336,7 +340,7 @@ func TestWatchRejectsTooSmallInterval(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	err := runner.Watch("build", "", 0)
 	require.EqualError(t, err, "watch interval must be at least 10ms")
 }
@@ -355,7 +359,7 @@ func TestPlatformRunsTask(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -386,7 +390,7 @@ func TestExecutionOrder(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("all", "")
@@ -413,7 +417,7 @@ func TestTaskEnvPassedToExecution(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -440,7 +444,7 @@ func TestTaskDir(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -464,7 +468,7 @@ func TestOpSecretsDetection(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("deploy", "")
@@ -488,7 +492,7 @@ func TestGlobalVarsInEnv(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -507,11 +511,26 @@ func TestTaskNotFound(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("nonexistent", "")
 	assert.EqualError(t, err, `task "nonexistent" not found`)
+}
+
+func TestAliasCollisionDetected(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"cli:github":    {Aliases: StringList{"gh"}, Cmds: []Cmd{{Cmd: "gh cli"}}},
+			"server:github": {Aliases: StringList{"gh"}, Cmds: []Cmd{{Cmd: "gh server"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	_, err := NewRunner(tf, dir)
+	require.EqualError(t, err, `alias "gh" is defined by both "cli:github" and "server:github"`)
 }
 
 func TestAliasResolution(t *testing.T) {
@@ -527,7 +546,7 @@ func TestAliasResolution(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("gh", "")
@@ -555,7 +574,7 @@ func TestNamespaceResolution(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, cliDir)
+	runner := newTestRunner(t, tf, cliDir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -577,7 +596,7 @@ func TestDryRunSkipsExecution(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.DryRun = true
 	execs := captureExecs(runner)
 
@@ -598,7 +617,7 @@ func TestCLIArgsExpansion(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("test", "-v -run TestFoo")
@@ -620,7 +639,7 @@ func TestTaskfileDirVar(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("show", "")
@@ -645,7 +664,7 @@ func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -669,7 +688,7 @@ func TestEnvExpansionReferencesVars(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -691,7 +710,7 @@ func TestResetRanAllowsRerun(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -723,7 +742,7 @@ func TestCommandFailureStopsExecution(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	boom := errors.New("boom")
 	var execs []string
 	runner.ExecFunc = func(_, command, _ string, _ []string, _ bool) error {
@@ -755,7 +774,7 @@ func TestDepFailurePreventsTask(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	boom := errors.New("dep failed")
 	var execs []string
 	runner.ExecFunc = func(taskName, command, _ string, _ []string, _ bool) error {
@@ -785,7 +804,7 @@ func TestTaskWithOnlyDeps(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("all", "")
@@ -822,7 +841,7 @@ func TestNoOpSecretsUseOpRunFalse(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -840,7 +859,7 @@ func TestDotenvVarsInBaseEnv(t *testing.T) {
 		DotenvVars: map[string]string{"DB_HOST": "localhost", "DB_PORT": "5432"},
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	// Set BaseEnv to only dotenv vars for a clean test
 	runner.BaseEnv = []string{"DB_HOST=localhost", "DB_PORT=5432"}
 	execs := captureExecs(runner)
@@ -871,7 +890,7 @@ func TestDedupDoesNotApplyWithExtraVars(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	err := runner.Run("caller", "")
@@ -892,7 +911,7 @@ func TestDefaultDirIsTaskfileDir(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -916,7 +935,7 @@ func TestSourcesChecksumSkipsUpToDate(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	// First run executes
@@ -944,7 +963,7 @@ func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -972,7 +991,7 @@ func TestForceIgnoresSources(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.Force = true
 	execs := captureExecs(runner)
 
@@ -1001,7 +1020,7 @@ func TestGeneratesSkipsUpToDate(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -1025,7 +1044,7 @@ func TestMultipleDepFailures(t *testing.T) {
 	err1 := errors.New("fail1 error")
 	err2 := errors.New("fail2 error")
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.ExecFunc = func(taskName, _, _ string, _ []string, _ bool) error {
 		switch taskName {
 		case "fail1":
@@ -1060,7 +1079,7 @@ func TestAbsoluteTaskDir(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -1083,7 +1102,7 @@ func TestEnvPrecedenceOrder(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.BaseEnv = []string{"FOO=from-base"}
 	execs := captureExecs(runner)
 
@@ -1107,7 +1126,7 @@ func TestTemplateVarsThroughRunner(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("greet", ""))
@@ -1137,7 +1156,7 @@ func TestTaskLevelDotenvThroughRunner(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("deploy", ""))
@@ -1165,7 +1184,7 @@ func TestNamespaceResolutionMiss(t *testing.T) {
 	}
 
 	// cwd is "other" which doesn't match the "cli" namespace
-	runner := newTestRunner(tf, otherDir)
+	runner := newTestRunner(t, tf, otherDir)
 	captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -1221,7 +1240,7 @@ func TestInlineTaskCallFailure(t *testing.T) {
 	}
 
 	boom := errors.New("child failed")
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	var execs []string
 	runner.ExecFunc = func(taskName, command, _ string, _ []string, _ bool) error {
 		execs = append(execs, taskName+":"+command)
@@ -1252,7 +1271,7 @@ func TestBuildEnvDotenvError(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -1284,7 +1303,7 @@ func TestDedupPropagatesErrorToWaitingGoroutine(t *testing.T) {
 	}
 
 	boom := errors.New("shared failed")
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.ExecFunc = func(taskName, _, _ string, _ []string, _ bool) error {
 		if taskName == "shared" {
 			return boom
@@ -1316,7 +1335,7 @@ func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 	// Set OS env var — dotenv should NOT override it
 	t.Setenv("MY_VAR", "from-os")
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -1345,7 +1364,7 @@ func TestDryRunWithTaskReference(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	runner.DryRun = true
 	execs := captureExecs(runner)
 
@@ -1372,7 +1391,7 @@ func TestRequiresBothVarsAndEnv(t *testing.T) {
 	}
 
 	t.Setenv("TOKEN", "secret")
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("deploy", ""))
@@ -1394,7 +1413,7 @@ func TestEnvExpandsFromOSEnv(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
@@ -1417,7 +1436,7 @@ func TestSourcesChecksumErrorPropagates(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	captureExecs(runner)
 
 	err := runner.Run("build", "")
@@ -1439,7 +1458,7 @@ func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
 		DotenvVars: make(map[string]string),
 	}
 
-	runner := newTestRunner(tf, dir)
+	runner := newTestRunner(t, tf, dir)
 	execs := captureExecs(runner)
 
 	// First run with no matching files still executes

@@ -64,7 +64,10 @@ func run() error {
 	}
 
 	cliArgs := strings.Join(a.CLIArgs, " ")
-	runner := taskfile.NewRunner(tf, dir)
+	runner, err := taskfile.NewRunner(tf, dir)
+	if err != nil {
+		return err
+	}
 	runner.DryRun = a.DryRun
 	runner.Force = a.Force
 

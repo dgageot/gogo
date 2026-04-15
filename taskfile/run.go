@@ -72,13 +72,16 @@ type runOnce struct {
 }
 
 // NewRunner creates a task runner for the given taskfile.
-func NewRunner(tf *Taskfile, cwd string) *Runner {
+func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
 	env := injectEnvVars(tf)
 
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
 		for _, alias := range tf.Tasks[name].Aliases {
+			if existing, ok := aliases[alias]; ok {
+				return nil, fmt.Errorf("alias %q is defined by both %q and %q", alias, existing, name)
+			}
 			aliases[alias] = name
 		}
 	}
@@ -91,7 +94,7 @@ func NewRunner(tf *Taskfile, cwd string) *Runner {
 	}
 	r.ExecFunc = r.defaultExecFunc
 	r.ResolveVarFunc = defaultResolveVar
-	return r
+	return r, nil
 }
 
 // envPair formats a key-value pair as an environment variable string.
