@@ -46,53 +46,44 @@ func discoverFiles(dir string, patterns []string) ([]string, error) {
 		return nil, nil
 	}
 
-	type recurPattern struct {
-		baseDir  string
-		filePart string
-	}
-
-	var recurPatterns []recurPattern
-	var simplePatterns []string
-
+	var files []string
 	for _, pattern := range patterns {
 		if before, after, ok := strings.Cut(pattern, "**"); ok {
-			baseDir := strings.TrimRight(before, string(filepath.Separator))
-			filePart := strings.TrimLeft(after, string(filepath.Separator))
-			if filePart == "" {
-				filePart = "*"
-			}
-			recurPatterns = append(recurPatterns, recurPattern{
-				baseDir:  baseDir,
-				filePart: filePart,
-			})
+			files = append(files, matchRecursivePattern(dir, before, after)...)
 		} else {
-			simplePatterns = append(simplePatterns, pattern)
+			matched, err := matchSimplePattern(dir, pattern)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, matched...)
 		}
-	}
-
-	var files []string
-
-	// Group recursive patterns by base directory
-	for _, rp := range recurPatterns {
-		baseDir := dir
-		if rp.baseDir != "" {
-			baseDir = filepath.Join(dir, rp.baseDir)
-		}
-		files = append(files, walkRecursive(baseDir, []string{rp.filePart})...)
-	}
-
-	for _, pattern := range simplePatterns {
-		if !filepath.IsAbs(pattern) {
-			pattern = filepath.Join(dir, pattern)
-		}
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, matches...)
 	}
 
 	return files, nil
+}
+
+// matchRecursivePattern handles a single "**" glob pattern.
+// before is the path prefix before "**", after is the suffix.
+func matchRecursivePattern(dir, before, after string) []string {
+	baseDir := dir
+	if prefix := strings.TrimRight(before, string(filepath.Separator)); prefix != "" {
+		baseDir = filepath.Join(dir, prefix)
+	}
+
+	filePart := strings.TrimLeft(after, string(filepath.Separator))
+	if filePart == "" {
+		filePart = "*"
+	}
+
+	return walkRecursive(baseDir, []string{filePart})
+}
+
+// matchSimplePattern handles a single non-recursive glob pattern.
+func matchSimplePattern(dir, pattern string) ([]string, error) {
+	if !filepath.IsAbs(pattern) {
+		pattern = filepath.Join(dir, pattern)
+	}
+	return filepath.Glob(pattern)
 }
 
 // walkRecursive walks dir recursively and returns files matching any pattern.
