@@ -224,64 +224,37 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		return err
 	}
 
-	// Deduplicate tasks called without extra vars (deps, plain references).
-	// Tasks called with extra vars may produce different results, so skip dedup.
-	hasExtraVars := len(extraVars) > 0 && len(extraVars[0]) > 0
-	if !hasExtraVars {
-		once := &runOnce{done: make(chan struct{})}
-		if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
-			prev := prev.(*runOnce)
-			<-prev.done
-			return prev.err
-		}
-		defer func() {
-			once.err = err
-			close(once.done)
-		}()
+	if done, wait := r.dedup(resolved, extraVars); done {
+		return wait()
 	}
+	defer func() { r.dedupDone(resolved, err) }()
 
 	task := r.tf.Tasks[resolved]
 
-	// Skip task if current platform doesn't match
 	if !matchesPlatform(task.Platforms) {
 		logTask(colorYellow, resolved, "skipped (platform mismatch)")
 		return nil
 	}
 
-	// Run dependencies concurrently
 	if err := r.runDeps(task.Deps); err != nil {
 		return err
 	}
 
-	// Resolve variables
 	dir := r.taskDir(&task)
-	vars, err := r.resolveVars(&task, dir)
+
+	vars, err := r.resolveAllVars(&task, dir, extraVars)
 	if err != nil {
 		return err
 	}
 
-	// Apply extra vars from call site
-	for _, ev := range extraVars {
-		for k, v := range ev {
-			val, err := r.ResolveVarFunc(v, dir)
-			if err != nil {
-				return err
-			}
-			vars[k] = val
-		}
-	}
-
-	// Validate required variables and environment
 	if err := checkRequires(resolved, &task, vars); err != nil {
 		return err
 	}
 
-	// Check preconditions
 	if err := r.checkPreconditions(resolved, &task, dir); err != nil {
 		return err
 	}
 
-	// Check sources for up-to-date
 	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved, r.Force)
 	if err != nil {
 		return err
@@ -298,16 +271,61 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		}()
 	}
 
-	// Build environment
 	env, err := r.buildEnv(&task, dir, vars)
 	if err != nil {
 		return err
 	}
 
-	// Execute commands
-	useOpRun := hasOpSecrets(task.Env)
+	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(task.Env))
+}
 
-	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, useOpRun)
+// dedup returns (true, waitFunc) if a previous execution is in progress for this task.
+// If no dedup applies (extra vars present), returns (false, nil).
+func (r *Runner) dedup(resolved string, extraVars []map[string]Var) (bool, func() error) {
+	hasExtraVars := len(extraVars) > 0 && len(extraVars[0]) > 0
+	if hasExtraVars {
+		return false, nil
+	}
+
+	once := &runOnce{done: make(chan struct{})}
+	if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
+		prev := prev.(*runOnce)
+		return true, func() error {
+			<-prev.done
+			return prev.err
+		}
+	}
+
+	return false, nil
+}
+
+// dedupDone signals that the task execution is complete.
+func (r *Runner) dedupDone(resolved string, err error) {
+	if v, ok := r.ran.Load(resolved); ok {
+		once := v.(*runOnce)
+		once.err = err
+		close(once.done)
+	}
+}
+
+// resolveAllVars computes the effective variables for a task, including extra vars from call sites.
+func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]Var) (map[string]string, error) {
+	vars, err := r.resolveVars(task, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ev := range extraVars {
+		for k, v := range ev {
+			val, err := r.ResolveVarFunc(v, dir)
+			if err != nil {
+				return nil, err
+			}
+			vars[k] = val
+		}
+	}
+
+	return vars, nil
 }
 
 // runCmds executes a list of commands in sequence.
