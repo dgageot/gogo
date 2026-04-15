@@ -450,6 +450,19 @@ func envHasKey(env []string, key string) bool {
 	})
 }
 
+// setEnv sets or replaces an environment variable in the env slice.
+func setEnv(env []string, key, value string) []string {
+	pair := envPair(key, value)
+	prefix := key + "="
+	for i, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			env[i] = pair
+			return env
+		}
+	}
+	return append(env, pair)
+}
+
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
@@ -468,7 +481,7 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 	}
 
 	for _, k := range slices.Sorted(maps.Keys(vars)) {
-		env = append(env, envPair(k, vars[k]))
+		env = setEnv(env, k, vars[k])
 	}
 
 	resolvedEnv := make(map[string]string)
@@ -493,7 +506,7 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 		return os.Getenv(key)
 	}
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		env = append(env, envPair(k, resolve(k)))
+		env = setEnv(env, k, resolve(k))
 	}
 
 	return env, nil

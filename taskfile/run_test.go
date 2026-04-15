@@ -1088,6 +1088,37 @@ func TestAbsoluteTaskDir(t *testing.T) {
 	assert.Equal(t, absDir, (*execs)[0].Dir)
 }
 
+func TestBuildEnvNoDuplicateKeys(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir:  dir,
+		Vars: map[string]Var{"FOO": {Value: "from-var"}},
+		Tasks: map[string]Task{
+			"build": {
+				Env:  map[string]string{"FOO": "from-env"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	runner.BaseEnv = []string{"FOO=from-base"}
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	require.Len(t, *execs, 1)
+	count := 0
+	for _, e := range (*execs)[0].Env {
+		if strings.HasPrefix(e, "FOO=") {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "FOO should appear exactly once in env")
+	assert.Equal(t, "from-env", envValue((*execs)[0].Env, "FOO"))
+}
+
 func TestEnvPrecedenceOrder(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Taskfile{
