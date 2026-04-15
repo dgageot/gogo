@@ -32,6 +32,20 @@ SPACED_KEY = spaced_value
 	assert.Equal(t, "spaced_value", env["SPACED_KEY"])
 }
 
+func TestParseDotenvExportPrefix(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		".env": "export KEY1=value1\nexport KEY2=\"quoted\"\nKEY3=plain\n",
+	})
+
+	env, err := parseDotenv(filepath.Join(dir, ".env"))
+	require.NoError(t, err)
+
+	assert.Equal(t, "value1", env["KEY1"])
+	assert.Equal(t, "quoted", env["KEY2"])
+	assert.Equal(t, "plain", env["KEY3"])
+}
+
 func TestParseDotenvRejectsInvalidKey(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env": "BAD-KEY=value\n"})

@@ -57,6 +57,9 @@ func parseDotenv(path string) (map[string]string, error) {
 			continue
 		}
 
+		// Strip optional "export " prefix
+		line = strings.TrimPrefix(line, "export ")
+
 		if key, value, ok := strings.Cut(line, "="); ok {
 			key = strings.TrimSpace(key)
 			if !isValidEnvKey(key) {
