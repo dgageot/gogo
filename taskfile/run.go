@@ -449,14 +449,19 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 		env = append(env, envPair(k, vars[k]))
 	}
 
-	lookup := func(key string) string {
-		if val, ok := vars[key]; ok {
-			return val
-		}
-		return os.Getenv(key)
-	}
+	resolvedEnv := make(map[string]string)
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		env = append(env, envPair(k, os.Expand(task.Env[k], lookup)))
+		lookup := func(key string) string {
+			if val, ok := resolvedEnv[key]; ok {
+				return val
+			}
+			if val, ok := vars[key]; ok {
+				return val
+			}
+			return os.Getenv(key)
+		}
+		resolvedEnv[k] = os.Expand(task.Env[k], lookup)
+		env = append(env, envPair(k, resolvedEnv[k]))
 	}
 
 	return env, nil

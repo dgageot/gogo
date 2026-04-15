@@ -1436,6 +1436,28 @@ func TestRequiresBothVarsAndEnv(t *testing.T) {
 	assert.Len(t, *execs, 1)
 }
 
+func TestEnvEntriesReferenceEachOther(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Env:  map[string]string{"BASE": "/opt", "BIN": "${BASE}/bin"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "BIN"))
+}
+
 func TestEnvExpandsFromOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOGO_BASE", "/opt")
