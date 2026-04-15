@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -62,7 +63,8 @@ func multiSourcesChecksum(groups []dirPatterns) (string, error) {
 }
 
 // Watch runs the named task, then polls its sources and re-runs when they change.
-func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
+// It stops gracefully when the context is cancelled.
+func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.Duration) error {
 	if interval < minWatchInterval {
 		return fmt.Errorf("watch interval must be at least %s", minWatchInterval)
 	}
@@ -91,7 +93,13 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+
 		newChecksum, err := multiSourcesChecksum(sources)
 		if err != nil {
 			return fmt.Errorf("computing sources checksum: %w", err)
@@ -110,6 +118,4 @@ func (r *Runner) Watch(name, cliArgs string, interval time.Duration) error {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}
-
-	return nil
 }

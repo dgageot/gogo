@@ -341,7 +341,7 @@ func TestWatchRejectsTooSmallInterval(t *testing.T) {
 	}
 
 	runner := newTestRunner(t, tf, dir)
-	err := runner.Watch("build", "", 0)
+	err := runner.Watch(t.Context(), "build", "", 0)
 	require.EqualError(t, err, "watch interval must be at least 10ms")
 }
 

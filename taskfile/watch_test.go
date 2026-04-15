@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -103,6 +104,31 @@ func TestMultiSourcesChecksumDetectsDepDirChanges(t *testing.T) {
 	assert.NotEqual(t, sum1, sum2, "checksum should change when dep subdirectory file changes")
 }
 
+func TestWatchStopsOnContextCancel(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: StringList{"*.go"},
+				Cmds:    []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	captureExecs(runner)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // cancel immediately
+
+	err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestWatchNoSourcesInDeps(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Taskfile{
@@ -120,6 +146,6 @@ func TestWatchNoSourcesInDeps(t *testing.T) {
 	}
 
 	runner := newTestRunner(t, tf, dir)
-	err := runner.Watch("build", "", time.Second)
+	err := runner.Watch(t.Context(), "build", "", time.Second)
 	require.EqualError(t, err, `task "build" has no sources, cannot watch`)
 }

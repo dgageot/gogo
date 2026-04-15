@@ -2,10 +2,12 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
+	"os/signal"
 	"slices"
 	"strings"
 	"time"
@@ -51,7 +53,8 @@ func run() error {
 	}
 
 	if a.Complete {
-		return printTaskNames()
+		printTaskNames()
+		return nil
 	}
 
 	if a.List {
@@ -72,8 +75,15 @@ func run() error {
 	runner.Force = a.Force
 
 	if a.Watch {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+
 		parsed, _ := time.ParseDuration(tf.Interval)
-		return runner.Watch(a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
+		err := runner.Watch(ctx, a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
+		if err != nil && ctx.Err() != nil {
+			return nil // graceful shutdown
+		}
+		return err
 	}
 
 	return runner.Run(a.Task, cliArgs)
@@ -155,16 +165,15 @@ func printCompletionScript(shell string) error {
 	return nil
 }
 
-func printTaskNames() error {
+func printTaskNames() {
 	_, tf, err := loadTaskfile()
 	if err != nil {
-		return nil // silently fail during completion
+		return // silently fail during completion
 	}
 
 	for _, name := range visibleTaskNames(tf) {
 		fmt.Println(name)
 	}
-	return nil
 }
 
 const bashCompletion = `_gogo_completions() {
