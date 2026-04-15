@@ -467,37 +467,61 @@ func setEnv(env []string, key, value string) []string {
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
-	// Inject task-level dotenv vars (don't override OS env or global dotenv vars)
-	if len(task.Dotenv) > 0 {
-		taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))
-		if err != nil {
-			return nil, fmt.Errorf("loading task dotenv: %w", err)
-		}
-		for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
-			if !envHasKey(env, k) {
-				env = append(env, envPair(k, taskDotenv[k]))
-			}
+	env, err := r.injectTaskDotenv(env, task, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	env = injectVarsIntoEnv(env, vars)
+	env = resolveTaskEnv(env, task.Env, vars)
+
+	return env, nil
+}
+
+// injectTaskDotenv loads task-level dotenv files and adds vars that don't already exist.
+func (r *Runner) injectTaskDotenv(env []string, task *Task, dir string) ([]string, error) {
+	if len(task.Dotenv) == 0 {
+		return env, nil
+	}
+
+	taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))
+	if err != nil {
+		return nil, fmt.Errorf("loading task dotenv: %w", err)
+	}
+	for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
+		if !envHasKey(env, k) {
+			env = append(env, envPair(k, taskDotenv[k]))
 		}
 	}
 
+	return env, nil
+}
+
+// injectVarsIntoEnv sets or replaces task variables in the environment.
+func injectVarsIntoEnv(env []string, vars map[string]string) []string {
 	for _, k := range slices.Sorted(maps.Keys(vars)) {
 		env = setEnv(env, k, vars[k])
 	}
+	return env
+}
 
-	resolvedEnv := make(map[string]string)
+// resolveTaskEnv resolves task env entries (which may cross-reference each other)
+// and sets them in the environment.
+func resolveTaskEnv(env []string, taskEnv, vars map[string]string) []string {
+	resolved := make(map[string]string)
 	var resolve func(string) string
 	resolve = func(key string) string {
-		if val, ok := resolvedEnv[key]; ok {
+		if val, ok := resolved[key]; ok {
 			return val
 		}
-		if raw, ok := task.Env[key]; ok {
+		if raw, ok := taskEnv[key]; ok {
 			val := os.Expand(raw, func(k string) string {
 				if k == key {
 					return "" // prevent infinite recursion
 				}
 				return resolve(k)
 			})
-			resolvedEnv[key] = val
+			resolved[key] = val
 			return val
 		}
 		if val, ok := vars[key]; ok {
@@ -505,11 +529,10 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 		}
 		return os.Getenv(key)
 	}
-	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
+	for _, k := range slices.Sorted(maps.Keys(taskEnv)) {
 		env = setEnv(env, k, resolve(k))
 	}
-
-	return env, nil
+	return env
 }
 
 // expandVars substitutes template and shell variables in a command string.
