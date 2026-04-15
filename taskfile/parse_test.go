@@ -1,8 +1,6 @@
 package taskfile
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,15 +9,15 @@ import (
 
 func TestParse(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
 includes:
   - cli
 tasks:
   todo:
     cmd: open TODO.md
-`), 0o644))
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+`,
+		"cli/gogo.yaml": `version: "1"
 tasks:
   # Build the docker-ai CLI
   build:
@@ -36,7 +34,8 @@ tasks:
     aliases:
       - gh
     cmd: gh auth status
-`), 0o644))
+`,
+	})
 
 	tf, err := LoadWithIncludes(dir)
 	require.NoError(t, err)
@@ -66,23 +65,24 @@ tasks:
 
 func TestLoadWithIncludesNested(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli", "nested"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
 includes:
   - cli
-`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+`,
+		"cli/gogo.yaml": `version: "1"
 includes:
   - nested
 tasks:
   build:
     cmd: go build .
-`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "nested", "gogo.yaml"), []byte(`version: "1"
+`,
+		"cli/nested/gogo.yaml": `version: "1"
 tasks:
   test:
     cmd: go test ./...
-`), 0o644))
+`,
+	})
 
 	tf, err := LoadWithIncludes(dir)
 	require.NoError(t, err)
@@ -93,23 +93,50 @@ tasks:
 
 func TestLoadWithIncludesRejectsCycles(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cli", "root"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
 includes:
   - cli
-`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "gogo.yaml"), []byte(`version: "1"
+`,
+		"cli/gogo.yaml": `version: "1"
 includes:
   - root
-`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "cli", "root", "gogo.yaml"), []byte(`version: "1"
+`,
+		"cli/root/gogo.yaml": `version: "1"
 includes:
   - ../..
-`), 0o644))
+`,
+	})
 
 	_, err := LoadWithIncludes(dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cyclic include detected")
+}
+
+func TestLoadWithIncludesPreservesChildVars(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - child
+tasks:
+  hello:
+    cmd: echo hello
+`,
+		"child/gogo.yaml": `version: "1"
+vars:
+  VERSION: "1.2.3"
+tasks:
+  build:
+    cmd: echo {{.VERSION}}
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Contains(t, tf.Vars, "VERSION")
+	assert.Equal(t, "1.2.3", tf.Vars["VERSION"].Value)
 }
 
 func TestExpandTemplates(t *testing.T) {

@@ -154,6 +154,18 @@ func loadInclude(tf *Taskfile, parentDir, namespace string, seen map[string]stru
 		}
 	}
 
+	// Merge child global vars into parent (parent wins on conflicts)
+	if len(child.Vars) > 0 {
+		if tf.Vars == nil {
+			tf.Vars = make(map[string]Var)
+		}
+		for k, v := range child.Vars {
+			if _, exists := tf.Vars[k]; !exists {
+				tf.Vars[k] = v
+			}
+		}
+	}
+
 	for _, name := range slices.Sorted(maps.Keys(child.Tasks)) {
 		task := child.Tasks[name]
 		if !filepath.IsAbs(task.Dir) {

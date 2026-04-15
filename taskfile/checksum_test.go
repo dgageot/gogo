@@ -13,9 +13,10 @@ import (
 
 func TestSourcesChecksum(t *testing.T) {
 	dir := t.TempDir()
-
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("world"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"a.txt": "hello",
+		"b.txt": "world",
+	})
 
 	sum1, err := sourcesChecksum(dir, []string{"*.txt"})
 	require.NoError(t, err)
@@ -27,7 +28,7 @@ func TestSourcesChecksum(t *testing.T) {
 	assert.Equal(t, sum1, sum2)
 
 	// Changing content changes checksum
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed"), 0o644))
+	writeFiles(t, dir, map[string]string{"a.txt": "changed"})
 
 	sum3, err := sourcesChecksum(dir, []string{"*.txt"})
 	require.NoError(t, err)
@@ -44,13 +45,12 @@ func TestSourcesChecksumNoMatches(t *testing.T) {
 
 func TestSourcesChecksumRecursive(t *testing.T) {
 	dir := t.TempDir()
-
-	// Create nested structure
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub", "deep"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("package main"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "lib.go"), []byte("package lib"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "deep", "deep.go"), []byte("package deep"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "skip.txt"), []byte("not go"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"root.go":          "package main",
+		"sub/lib.go":       "package lib",
+		"sub/deep/deep.go": "package deep",
+		"sub/skip.txt":     "not go",
+	})
 
 	sum, err := sourcesChecksum(dir, []string{"**/*.go"})
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestSourcesChecksumRecursive(t *testing.T) {
 
 	// Changing a deeply nested file changes the checksum
 	oldSum := sum
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "deep", "deep.go"), []byte("package deep2"), 0o644))
+	writeFiles(t, dir, map[string]string{"sub/deep/deep.go": "package deep2"})
 
 	sum, err = sourcesChecksum(dir, []string{"**/*.go"})
 	require.NoError(t, err)
@@ -67,16 +67,16 @@ func TestSourcesChecksumRecursive(t *testing.T) {
 
 func TestSourcesChecksumSkipsGitDir(t *testing.T) {
 	dir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".git", "objects"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "objects", "abc.go"), []byte("git object"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"main.go":             "package main",
+		".git/objects/abc.go": "git object",
+	})
 
 	sum1, err := sourcesChecksum(dir, []string{"**/*.go"})
 	require.NoError(t, err)
 
 	// Adding a file inside .git should not change the checksum
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "objects", "def.go"), []byte("another"), 0o644))
+	writeFiles(t, dir, map[string]string{".git/objects/def.go": "another"})
 
 	sum2, err := sourcesChecksum(dir, []string{"**/*.go"})
 	require.NoError(t, err)
@@ -85,11 +85,11 @@ func TestSourcesChecksumSkipsGitDir(t *testing.T) {
 
 func TestSourcesChecksumMixedPatterns(t *testing.T) {
 	dir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "lib.go"), []byte("package lib"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"go.mod":     "module test",
+		"main.go":    "package main",
+		"sub/lib.go": "package lib",
+	})
 
 	sum, err := sourcesChecksum(dir, []string{"**/*.go", "go.mod"})
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestSourcesChecksumMixedPatterns(t *testing.T) {
 
 	// Changing go.mod changes the checksum
 	oldSum := sum
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test2"), 0o644))
+	writeFiles(t, dir, map[string]string{"go.mod": "module test2"})
 
 	sum, err = sourcesChecksum(dir, []string{"**/*.go", "go.mod"})
 	require.NoError(t, err)
@@ -123,18 +123,16 @@ func TestChecksumStorage(t *testing.T) {
 
 func TestOutputsNewerThanSources(t *testing.T) {
 	dir := t.TempDir()
-
 	src := filepath.Join(dir, "main.go")
-	out := filepath.Join(dir, "main")
 
 	// No outputs yet -> not up-to-date
-	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
 	require.NoError(t, err)
 	assert.False(t, upToDate)
 
 	// Create output newer than source -> up-to-date
-	require.NoError(t, os.WriteFile(out, []byte("binary"), 0o644))
+	writeFiles(t, dir, map[string]string{"main": "binary"})
 	upToDate, err = outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
 	require.NoError(t, err)
 	assert.True(t, upToDate)
@@ -149,12 +147,11 @@ func TestOutputsNewerThanSources(t *testing.T) {
 
 func TestOutputsNewerThanSourcesWithSourcesAlsoListedAsOutputs(t *testing.T) {
 	dir := t.TempDir()
-
 	src := filepath.Join(dir, "main.go")
-	out := filepath.Join(dir, "main")
-
-	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
-	require.NoError(t, os.WriteFile(out, []byte("binary"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"main.go": "package main",
+		"main":    "binary",
+	})
 
 	now := time.Now().Add(time.Second)
 	require.NoError(t, os.Chtimes(src, now, now))
@@ -166,14 +163,12 @@ func TestOutputsNewerThanSourcesWithSourcesAlsoListedAsOutputs(t *testing.T) {
 
 func TestRecursivePatternWithSubdir(t *testing.T) {
 	dir := t.TempDir()
-
-	// Create files in sub/ and other/
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub", "nested"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "other"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("root"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "a.go"), []byte("a"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "nested", "b.go"), []byte("b"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "other", "c.go"), []byte("c"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"root.go":         "root",
+		"sub/a.go":        "a",
+		"sub/nested/b.go": "b",
+		"other/c.go":      "c",
+	})
 
 	// sub/**/*.go should only match files under sub/
 	files, err := discoverFiles(dir, []string{"sub/**/*.go"})
@@ -189,9 +184,9 @@ func TestRecursivePatternWithSubdir(t *testing.T) {
 
 func TestOutputsNewerThanSourcesNoSources(t *testing.T) {
 	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"output": "data"})
 
 	// Output exists but no sources match -> should not be considered up-to-date
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "output"), []byte("data"), 0o644))
 	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"output"})
 	require.NoError(t, err)
 	assert.False(t, upToDate, "should not be up-to-date when no sources match")

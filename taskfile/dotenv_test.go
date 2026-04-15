@@ -11,19 +11,18 @@ import (
 
 func TestParseDotenv(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-
-	content := `# comment
+	writeFiles(t, dir, map[string]string{
+		".env": `# comment
 KEY1=value1
 KEY2="quoted value"
 KEY3='single quoted'
 KEY4=
 
 SPACED_KEY = spaced_value
-`
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+`,
+	})
 
-	env, err := parseDotenv(path)
+	env, err := parseDotenv(filepath.Join(dir, ".env"))
 	require.NoError(t, err)
 
 	assert.Equal(t, "value1", env["KEY1"])
@@ -35,10 +34,9 @@ SPACED_KEY = spaced_value
 
 func TestParseDotenvRejectsInvalidKey(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-	require.NoError(t, os.WriteFile(path, []byte("BAD-KEY=value\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env": "BAD-KEY=value\n"})
 
-	_, err := parseDotenv(path)
+	_, err := parseDotenv(filepath.Join(dir, ".env"))
 	require.EqualError(t, err, `invalid dotenv key "BAD-KEY"`)
 }
 
@@ -49,8 +47,7 @@ func TestParseDotenvMissingFile(t *testing.T) {
 
 func TestLoadDotenvFilesDeduplication(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-	require.NoError(t, os.WriteFile(path, []byte("KEY=value\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env": "KEY=value\n"})
 
 	seen := make(map[string]struct{})
 
@@ -89,7 +86,7 @@ func TestLoadDotenvFilesSkipsMissing(t *testing.T) {
 
 func TestBuildEnvWithTaskDotenv(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.task"), []byte("TASK_VAR=task_value\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env.task": "TASK_VAR=task_value\n"})
 
 	tf := &Taskfile{Dir: dir, Tasks: make(map[string]Task), DotenvVars: make(map[string]string)}
 	r := NewRunner(tf, dir)

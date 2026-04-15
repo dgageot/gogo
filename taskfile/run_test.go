@@ -2,7 +2,6 @@ package taskfile
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -428,7 +427,7 @@ func TestTaskEnvPassedToExecution(t *testing.T) {
 func TestTaskDir(t *testing.T) {
 	dir := t.TempDir()
 	subdir := filepath.Join(dir, "sub")
-	require.NoError(t, os.MkdirAll(subdir, 0o755))
+	writeFiles(t, dir, map[string]string{"sub/.keep": ""})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -541,8 +540,8 @@ func TestAliasResolution(t *testing.T) {
 
 func TestNamespaceResolution(t *testing.T) {
 	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"cli/.keep": ""})
 	cliDir := filepath.Join(dir, "cli")
-	require.NoError(t, os.MkdirAll(cliDir, 0o755))
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -904,7 +903,7 @@ func TestDefaultDirIsTaskfileDir(t *testing.T) {
 
 func TestSourcesChecksumSkipsUpToDate(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -932,8 +931,7 @@ func TestSourcesChecksumSkipsUpToDate(t *testing.T) {
 
 func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 	dir := t.TempDir()
-	src := filepath.Join(dir, "main.go")
-	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -953,7 +951,7 @@ func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 	require.Len(t, *execs, 1)
 
 	// Change source and re-run
-	require.NoError(t, os.WriteFile(src, []byte("package main // changed"), 0o644))
+	writeFiles(t, dir, map[string]string{"main.go": "package main // changed"})
 	runner.ResetRan()
 	require.NoError(t, runner.Run("build", ""))
 	assert.Len(t, *execs, 2)
@@ -961,7 +959,7 @@ func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 
 func TestForceIgnoresSources(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644))
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -986,11 +984,10 @@ func TestForceIgnoresSources(t *testing.T) {
 
 func TestGeneratesSkipsUpToDate(t *testing.T) {
 	dir := t.TempDir()
-	src := filepath.Join(dir, "main.go")
-	out := filepath.Join(dir, "main")
-	require.NoError(t, os.WriteFile(src, []byte("package main"), 0o644))
-	// Create output newer than source
-	require.NoError(t, os.WriteFile(out, []byte("binary"), 0o644))
+	writeFiles(t, dir, map[string]string{
+		"main.go": "package main",
+		"main":    "binary",
+	})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -1049,8 +1046,8 @@ func TestMultipleDepFailures(t *testing.T) {
 
 func TestAbsoluteTaskDir(t *testing.T) {
 	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"absolute/.keep": ""})
 	absDir := filepath.Join(dir, "absolute")
-	require.NoError(t, os.MkdirAll(absDir, 0o755))
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -1127,7 +1124,7 @@ func TestMixedTemplateAndShellExpansion(t *testing.T) {
 
 func TestTaskLevelDotenvThroughRunner(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.task"), []byte("TASK_SECRET=abc\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env.task": "TASK_SECRET=abc\n"})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -1151,10 +1148,9 @@ func TestTaskLevelDotenvThroughRunner(t *testing.T) {
 
 func TestNamespaceResolutionMiss(t *testing.T) {
 	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"cli/.keep": "", "other/.keep": ""})
 	cliDir := filepath.Join(dir, "cli")
 	otherDir := filepath.Join(dir, "other")
-	require.NoError(t, os.MkdirAll(cliDir, 0o755))
-	require.NoError(t, os.MkdirAll(otherDir, 0o755))
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -1243,7 +1239,7 @@ func TestInlineTaskCallFailure(t *testing.T) {
 func TestBuildEnvDotenvError(t *testing.T) {
 	dir := t.TempDir()
 	// Create an invalid dotenv file
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env.bad"), []byte("BAD-KEY=value\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env.bad": "BAD-KEY=value\n"})
 
 	tf := &Taskfile{
 		Dir: dir,
@@ -1304,7 +1300,7 @@ func TestDedupPropagatesErrorToWaitingGoroutine(t *testing.T) {
 
 func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env"), []byte("MY_VAR=from-dotenv\n"), 0o644))
+	writeFiles(t, dir, map[string]string{".env": "MY_VAR=from-dotenv\n"})
 
 	tf := &Taskfile{
 		Dir: dir,
