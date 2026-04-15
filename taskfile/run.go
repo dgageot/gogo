@@ -398,18 +398,26 @@ func hasOpSecrets(env map[string]string) bool {
 	return false
 }
 
+// envHasKey reports whether the env slice contains an entry for the given key.
+func envHasKey(env []string, key string) bool {
+	prefix := key + "="
+	return slices.ContainsFunc(env, func(e string) bool {
+		return strings.HasPrefix(e, prefix)
+	})
+}
+
 // buildEnv constructs the environment for a command execution.
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
-	// Inject task-level dotenv vars (don't override existing env vars)
+	// Inject task-level dotenv vars (don't override OS env or global dotenv vars)
 	if len(task.Dotenv) > 0 {
 		taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))
 		if err != nil {
 			return nil, fmt.Errorf("loading task dotenv: %w", err)
 		}
 		for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
-			if _, exists := os.LookupEnv(k); !exists {
+			if !envHasKey(env, k) {
 				env = append(env, envPair(k, taskDotenv[k]))
 			}
 		}

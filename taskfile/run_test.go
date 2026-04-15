@@ -1317,6 +1317,43 @@ func TestDedupPropagatesErrorToWaitingGoroutine(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 }
 
+func TestTaskDotenvDoesNotOverrideGlobalDotenv(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		".env":      "SHARED_KEY=from-global\n",
+		".env.task": "SHARED_KEY=from-task\nTASK_ONLY=task-value\n",
+	})
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Dotenv: []string{".env.task"},
+				Cmds:   []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: map[string]string{"SHARED_KEY": "from-global"},
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	runner.BaseEnv = []string{"SHARED_KEY=from-global"}
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	require.Len(t, *execs, 1)
+
+	// SHARED_KEY should appear exactly once (from global dotenv)
+	count := 0
+	for _, e := range (*execs)[0].Env {
+		if strings.HasPrefix(e, "SHARED_KEY=") {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "SHARED_KEY should not be duplicated")
+	assert.Equal(t, "from-global", envValue((*execs)[0].Env, "SHARED_KEY"))
+	assert.Equal(t, "task-value", envValue((*execs)[0].Env, "TASK_ONLY"))
+}
+
 func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env": "MY_VAR=from-dotenv\n"})
@@ -1336,6 +1373,7 @@ func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 	t.Setenv("MY_VAR", "from-os")
 
 	runner := newTestRunner(t, tf, dir)
+	runner.BaseEnv = []string{"MY_VAR=from-os"}
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("build", ""))
