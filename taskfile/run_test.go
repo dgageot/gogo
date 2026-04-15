@@ -1484,6 +1484,29 @@ func TestEnvEntriesReferenceEachOther(t *testing.T) {
 	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "BIN"))
 }
 
+func TestEnvReverseAlphabeticalReference(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Env:  map[string]string{"Z_ROOT": "/opt", "A_PATH": "${Z_ROOT}/bin"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "A_PATH"))
+	assert.Equal(t, "/opt", envValue((*execs)[0].Env, "Z_ROOT"))
+}
+
 func TestEnvExpandsFromOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOGO_BASE", "/opt")

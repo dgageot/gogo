@@ -457,18 +457,28 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 	}
 
 	resolvedEnv := make(map[string]string)
-	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		lookup := func(key string) string {
-			if val, ok := resolvedEnv[key]; ok {
-				return val
-			}
-			if val, ok := vars[key]; ok {
-				return val
-			}
-			return os.Getenv(key)
+	var resolve func(string) string
+	resolve = func(key string) string {
+		if val, ok := resolvedEnv[key]; ok {
+			return val
 		}
-		resolvedEnv[k] = os.Expand(task.Env[k], lookup)
-		env = append(env, envPair(k, resolvedEnv[k]))
+		if raw, ok := task.Env[key]; ok {
+			val := os.Expand(raw, func(k string) string {
+				if k == key {
+					return "" // prevent infinite recursion
+				}
+				return resolve(k)
+			})
+			resolvedEnv[key] = val
+			return val
+		}
+		if val, ok := vars[key]; ok {
+			return val
+		}
+		return os.Getenv(key)
+	}
+	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
+		env = append(env, envPair(k, resolve(k)))
 	}
 
 	return env, nil
