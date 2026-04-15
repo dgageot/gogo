@@ -151,6 +151,23 @@ func checkRequires(taskName string, task *Task, vars map[string]string) error {
 	return nil
 }
 
+// checkPreconditions runs all precondition shell commands for a task.
+// If any command fails, it returns an error with the precondition's message
+// or a default message.
+func (r *Runner) checkPreconditions(taskName string, task *Task, dir string) error {
+	for _, pre := range task.Preconditions {
+		cmd := exec.Command("/bin/sh", "-c", pre.Sh)
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			if pre.Msg != "" {
+				return fmt.Errorf("task %q: %s", taskName, pre.Msg)
+			}
+			return fmt.Errorf("task %q: precondition failed: %s", taskName, pre.Sh)
+		}
+	}
+	return nil
+}
+
 // ResetRan clears the deduplication state, allowing tasks to run again.
 // This is used by watch mode between iterations.
 func (r *Runner) ResetRan() {
@@ -242,6 +259,11 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 
 	// Validate required variables and environment
 	if err := checkRequires(resolved, &task, vars); err != nil {
+		return err
+	}
+
+	// Check preconditions
+	if err := r.checkPreconditions(resolved, &task, dir); err != nil {
 		return err
 	}
 

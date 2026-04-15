@@ -190,6 +190,29 @@ func TestExpandTemplates(t *testing.T) {
 	assert.Equal(t, []byte("value: {{.UNSET_VAR}}"), expandTemplates([]byte("value: {{.UNSET_VAR}}")))
 }
 
+func TestParsePreconditions(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  deploy:
+    preconditions:
+      - sh: test -n "$DOCKER_HUB_USER"
+        msg: DOCKER_HUB_USER is not set
+      - test -n "$DOCKER_HUB_PASSWORD"
+    cmd: echo deploying
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	task := tf.Tasks["deploy"]
+	require.Len(t, task.Preconditions, 2)
+	assert.Equal(t, `test -n "$DOCKER_HUB_USER"`, task.Preconditions[0].Sh)
+	assert.Equal(t, "DOCKER_HUB_USER is not set", task.Preconditions[0].Msg)
+	assert.Equal(t, `test -n "$DOCKER_HUB_PASSWORD"`, task.Preconditions[1].Sh)
+	assert.Empty(t, task.Preconditions[1].Msg)
+}
+
 func TestApplyTaskComments(t *testing.T) {
 	yamlData := []byte(`version: "3"
 tasks:

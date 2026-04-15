@@ -15,19 +15,37 @@ type Taskfile struct {
 
 // Task represents a single task definition.
 type Task struct {
-	Cmds      []Cmd             `yaml:"cmds"`
-	Deps      []Dep             `yaml:"deps"`
-	Dir       string            `yaml:"dir"`
-	Dotenv    []string          `yaml:"dotenv"`
-	Env       map[string]string `yaml:"env"`
-	Vars      map[string]Var    `yaml:"vars"`
-	Cmd       Cmd               `yaml:"cmd"`
-	Sources   StringList        `yaml:"sources"`
-	Generates StringList        `yaml:"generates"`
-	Aliases   StringList        `yaml:"aliases"`
-	Platforms StringList        `yaml:"platforms"`
-	Requires  Requires          `yaml:"requires"`
-	Desc      string            `yaml:"-"` // set from YAML comments, not from a field
+	Cmds          []Cmd             `yaml:"cmds"`
+	Deps          []Dep             `yaml:"deps"`
+	Dir           string            `yaml:"dir"`
+	Dotenv        []string          `yaml:"dotenv"`
+	Env           map[string]string `yaml:"env"`
+	Vars          map[string]Var    `yaml:"vars"`
+	Cmd           Cmd               `yaml:"cmd"`
+	Sources       StringList        `yaml:"sources"`
+	Generates     StringList        `yaml:"generates"`
+	Aliases       StringList        `yaml:"aliases"`
+	Platforms     StringList        `yaml:"platforms"`
+	Requires      Requires          `yaml:"requires"`
+	Preconditions []Precondition    `yaml:"preconditions"`
+	Desc          string            `yaml:"-"` // set from YAML comments, not from a field
+}
+
+// Precondition defines a shell command that must succeed before a task runs.
+type Precondition struct {
+	Sh  string `yaml:"sh"`
+	Msg string `yaml:"msg"`
+}
+
+// UnmarshalYAML allows Precondition to be either a string (shell command) or a map.
+func (p *Precondition) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err == nil {
+		p.Sh = s
+		return nil
+	}
+	type plain Precondition
+	return unmarshal((*plain)(p))
 }
 
 // Requires defines variables and environment variables that must be set for a task to run.

@@ -1460,6 +1460,99 @@ func TestEnvExpandsFromOSEnv(t *testing.T) {
 	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "FULL_PATH"))
 }
 
+func TestPreconditionPasses(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Preconditions: []Precondition{
+					{Sh: "true"},
+				},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("deploy", "")
+	require.NoError(t, err)
+	assert.Len(t, *execs, 1)
+}
+
+func TestPreconditionFails(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Preconditions: []Precondition{
+					{Sh: "false", Msg: "this should fail"},
+				},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("deploy", "")
+	require.EqualError(t, err, `task "deploy": this should fail`)
+	assert.Empty(t, *execs)
+}
+
+func TestPreconditionFailsWithDefaultMessage(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Preconditions: []Precondition{
+					{Sh: "false"},
+				},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("deploy", "")
+	require.EqualError(t, err, `task "deploy": precondition failed: false`)
+	assert.Empty(t, *execs)
+}
+
+func TestPreconditionStringShorthand(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Preconditions: []Precondition{
+					{Sh: "true"},
+					{Sh: "false"},
+				},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("deploy", "")
+	require.Error(t, err)
+	assert.Empty(t, *execs)
+}
+
 func TestSourcesChecksumErrorPropagates(t *testing.T) {
 	dir := t.TempDir()
 
