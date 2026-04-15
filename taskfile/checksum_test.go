@@ -182,6 +182,23 @@ func TestRecursivePatternWithSubdir(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
+func TestOutputsNewerThanSourcesEqualTimestamps(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"main.go": "package main",
+		"main":    "binary",
+	})
+
+	// Set both files to the exact same timestamp
+	ts := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "main.go"), ts, ts))
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "main"), ts, ts))
+
+	upToDate, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"main"})
+	require.NoError(t, err)
+	assert.False(t, upToDate, "equal timestamps should not be considered up-to-date")
+}
+
 func TestOutputsNewerThanSourcesNoSources(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"output": "data"})

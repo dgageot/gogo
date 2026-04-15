@@ -191,7 +191,7 @@ func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []stri
 		if err != nil {
 			return false, nil //nolint:nilerr // missing output means not up-to-date
 		}
-		if info.ModTime().Before(newestSource) {
+		if !info.ModTime().After(newestSource) {
 			return false, nil
 		}
 	}
