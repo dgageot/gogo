@@ -177,8 +177,26 @@ func printTaskNames() {
 }
 
 const bashCompletion = `_gogo_completions() {
+	# Reconstruct the current word treating ':' as part of it.
+	# Bash includes ':' in COMP_WORDBREAKS, which would otherwise break
+	# completion of namespaced tasks like 'assistant:evals'.
 	local cur="${COMP_WORDS[COMP_CWORD]}"
+	if [[ "$cur" == ":" && $COMP_CWORD -ge 1 ]]; then
+		cur="${COMP_WORDS[COMP_CWORD-1]}:"
+	elif [[ $COMP_CWORD -ge 2 && "${COMP_WORDS[COMP_CWORD-1]}" == ":" ]]; then
+		cur="${COMP_WORDS[COMP_CWORD-2]}:${cur}"
+	fi
+
 	COMPREPLY=($(compgen -W "$(gogo --complete 2>/dev/null)" -- "$cur"))
+
+	# Strip the prefix up to and including the last ':' from each completion,
+	# since bash will only insert the suffix after the last word break.
+	if [[ "$cur" == *:* ]]; then
+		local i prefix="${cur%:*}:"
+		for i in "${!COMPREPLY[@]}"; do
+			COMPREPLY[i]="${COMPREPLY[i]#$prefix}"
+		done
+	fi
 }
 complete -F _gogo_completions gogo
 `
@@ -187,7 +205,9 @@ const zshCompletion = `#compdef gogo
 _gogo() {
 	local -a tasks
 	tasks=("${(@f)$(gogo --complete 2>/dev/null)}")
-	_describe 'task' tasks
+	# Use compadd directly because _describe treats ':' as a value/description
+	# separator, which would break namespaced tasks like 'assistant:evals'.
+	compadd -a tasks
 }
 compdef _gogo gogo
 `
