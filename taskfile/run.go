@@ -205,6 +205,15 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 		}
 	}
 
+	// Try stripping a self-prefix that matches the taskfile root's basename.
+	// This lets "proxy:deploy-prod" work when running from a sub-Taskfile at
+	// proxy/ — the same name also works when the parent Taskfile is the root.
+	if prefix, suffix, ok := strings.Cut(name, ":"); ok && prefix == filepath.Base(r.tf.Dir) {
+		if resolved, ok := r.resolveTaskName(suffix); ok {
+			return resolved, true
+		}
+	}
+
 	return name, false
 }
 

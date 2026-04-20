@@ -1222,6 +1222,34 @@ func TestNamespaceResolutionPicksMostSpecific(t *testing.T) {
 	assert.Equal(t, "cli:utils:build", (*execs)[0].Task, "should resolve to deepest namespace")
 }
 
+func TestNamespaceResolutionSelfPrefix(t *testing.T) {
+	// When running a sub-Taskfile as its own root, a task name qualified with
+	// the directory's basename (e.g. "proxy:deploy-prod" from inside proxy/)
+	// should resolve to the bare task ("deploy-prod"). This matches the name
+	// the task has when the parent Taskfile is the root.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"proxy/.keep": ""})
+	proxyDir := filepath.Join(dir, "proxy")
+
+	tf := &Taskfile{
+		Dir: proxyDir,
+		Tasks: map[string]Task{
+			"deploy-prod": {Cmds: []Cmd{{Cmd: "deploy"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, proxyDir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("proxy:deploy-prod", "")
+	require.NoError(t, err)
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "deploy-prod", (*execs)[0].Task)
+	assert.Equal(t, "deploy", (*execs)[0].Command)
+}
+
 func TestNamespaceResolutionMiss(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"cli/.keep": "", "other/.keep": ""})
