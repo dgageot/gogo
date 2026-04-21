@@ -32,46 +32,19 @@ type Task struct {
 
 // UnmarshalYAML normalizes the singular "cmd" field into the "cmds" list.
 func (t *Task) UnmarshalYAML(unmarshal func(any) error) error {
-	type taskWithCmd struct {
-		Cmds          []Cmd             `yaml:"cmds"`
-		Deps          []Dep             `yaml:"deps"`
-		Dir           string            `yaml:"dir"`
-		Dotenv        []string          `yaml:"dotenv"`
-		Env           map[string]string `yaml:"env"`
-		Vars          map[string]Var    `yaml:"vars"`
-		Cmd           Cmd               `yaml:"cmd"`
-		Sources       StringList        `yaml:"sources"`
-		Generates     StringList        `yaml:"generates"`
-		Aliases       StringList        `yaml:"aliases"`
-		Platforms     StringList        `yaml:"platforms"`
-		Requires      Requires          `yaml:"requires"`
-		Preconditions []Precondition    `yaml:"preconditions"`
-	}
-
-	var raw taskWithCmd
+	type plain Task
+	raw := struct {
+		Plain plain `yaml:",inline"`
+		Cmd   Cmd   `yaml:"cmd"`
+	}{}
 	if err := unmarshal(&raw); err != nil {
 		return err
 	}
 
-	*t = Task{
-		Cmds:          raw.Cmds,
-		Deps:          raw.Deps,
-		Dir:           raw.Dir,
-		Dotenv:        raw.Dotenv,
-		Env:           raw.Env,
-		Vars:          raw.Vars,
-		Sources:       raw.Sources,
-		Generates:     raw.Generates,
-		Aliases:       raw.Aliases,
-		Platforms:     raw.Platforms,
-		Requires:      raw.Requires,
-		Preconditions: raw.Preconditions,
-	}
-
+	*t = Task(raw.Plain)
 	if raw.Cmd.isSet() {
 		t.Cmds = []Cmd{raw.Cmd}
 	}
-
 	return nil
 }
 
