@@ -15,15 +15,12 @@ import (
 	"sync"
 )
 
-var templatePattern = sync.OnceValue(func() *regexp.Regexp {
-	return regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
-})
+var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
 // expandTemplates replaces {{.VAR}} patterns with environment variable values.
 func expandTemplates(data []byte) []byte {
-	re := templatePattern()
-	return re.ReplaceAllFunc(data, func(match []byte) []byte {
-		name := string(re.FindSubmatch(match)[1])
+	return templatePattern.ReplaceAllFunc(data, func(match []byte) []byte {
+		name := string(templatePattern.FindSubmatch(match)[1])
 		if val, ok := os.LookupEnv(name); ok {
 			return []byte(val)
 		}
@@ -584,9 +581,8 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 
 	// Then replace {{.VAR}} templates. Since os.Expand already ran,
 	// the expanded values won't be re-processed, preventing double expansion.
-	re := templatePattern()
-	return re.ReplaceAllStringFunc(s, func(match string) string {
-		return lookup(re.FindStringSubmatch(match)[1])
+	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
+		return lookup(templatePattern.FindStringSubmatch(match)[1])
 	})
 }
 
