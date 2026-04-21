@@ -83,7 +83,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 
-	cliArgs := strings.Join(parsed.CLIArgs, " ")
+	cliArgs := shellJoin(parsed.CLIArgs)
 	runner, err := taskfile.NewRunner(tf, dir)
 	if err != nil {
 		return err
@@ -108,6 +108,24 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	return runner.Run(parsed.Task, cliArgs)
+}
+
+// shellJoin quotes each CLI argument so it survives splicing into a
+// /bin/sh command line as a single word. This preserves argument
+// boundaries that strings.Join would otherwise lose.
+func shellJoin(args []string) string {
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = shellQuote(a)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// shellQuote wraps a single argument in single quotes. An embedded single
+// quote is written as the standard sh idiom: a closing quote, an escaped
+// quote, and a re-opening quote.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // watchInterval parses the taskfile's `interval` setting, falling back to a
