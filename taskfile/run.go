@@ -162,27 +162,13 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 		return name, true
 	}
 
-	// Try aliases
 	if taskName, ok := r.aliases[name]; ok {
 		return taskName, true
 	}
 
-	// Try prefixing with namespace for cwd — pick the most specific (longest) match
-	var bestDir string
-	var bestNS string
-	for dir, ns := range r.tf.Namespaces {
-		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
-			continue
-		}
-		if len(dir) > len(bestDir) {
-			bestDir = dir
-			bestNS = ns
-		}
-	}
-	if bestNS != "" {
-		qualified := bestNS + ":" + name
-		if _, ok := r.tf.Tasks[qualified]; ok {
-			return qualified, true
+	if ns, ok := r.cwdNamespace(); ok {
+		if _, ok := r.tf.Tasks[ns+":"+name]; ok {
+			return ns + ":" + name, true
 		}
 	}
 
@@ -196,6 +182,23 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	}
 
 	return name, false
+}
+
+// cwdNamespace returns the most specific namespace whose directory contains
+// the runner's current working directory. Used to let users invoke tasks by
+// their short name when cwd sits under an included Taskfile.
+func (r *Runner) cwdNamespace() (string, bool) {
+	var bestDir, bestNS string
+	for dir, ns := range r.tf.Namespaces {
+		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
+			continue
+		}
+		if len(dir) > len(bestDir) {
+			bestDir = dir
+			bestNS = ns
+		}
+	}
+	return bestNS, bestNS != ""
 }
 
 // resolveTask finds a task by name and returns its resolved name.
