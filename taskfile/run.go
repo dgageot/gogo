@@ -322,12 +322,8 @@ func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]V
 	}
 
 	for _, ev := range extraVars {
-		for k, v := range ev {
-			val, err := r.ResolveVarFunc(v, dir)
-			if err != nil {
-				return nil, err
-			}
-			vars[k] = val
+		if err := r.addVars(vars, ev, dir); err != nil {
+			return nil, err
 		}
 	}
 
@@ -391,26 +387,25 @@ func (r *Runner) resolveVars(task *Task, taskDir string) (map[string]string, err
 	resolved := map[string]string{
 		"TASKFILE_DIR": taskDir,
 	}
-
-	// Global vars (sorted for deterministic resolution)
-	for _, k := range slices.Sorted(maps.Keys(r.tf.Vars)) {
-		v, err := r.ResolveVarFunc(r.tf.Vars[k], r.tf.Dir)
-		if err != nil {
-			return nil, err
-		}
-		resolved[k] = v
+	if err := r.addVars(resolved, r.tf.Vars, r.tf.Dir); err != nil {
+		return nil, err
 	}
-
-	// Task vars override (sorted for deterministic resolution)
-	for _, k := range slices.Sorted(maps.Keys(task.Vars)) {
-		v, err := r.ResolveVarFunc(task.Vars[k], taskDir)
-		if err != nil {
-			return nil, err
-		}
-		resolved[k] = v
+	if err := r.addVars(resolved, task.Vars, taskDir); err != nil {
+		return nil, err
 	}
-
 	return resolved, nil
+}
+
+// addVars resolves each Var in src (sorted for determinism) and writes it into dst.
+func (r *Runner) addVars(dst map[string]string, src map[string]Var, dir string) error {
+	for _, k := range slices.Sorted(maps.Keys(src)) {
+		v, err := r.ResolveVarFunc(src[k], dir)
+		if err != nil {
+			return err
+		}
+		dst[k] = v
+	}
+	return nil
 }
 
 // defaultResolveVar evaluates a single variable, running a shell command if needed.
