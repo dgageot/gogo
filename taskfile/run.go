@@ -230,7 +230,7 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		return err
 	}
 
-	if done, wait := r.dedup(resolved, extraVars); done {
+	if wait := r.dedup(resolved, extraVars); wait != nil {
 		return wait()
 	}
 	defer func() { r.dedupDone(resolved, err) }()
@@ -285,24 +285,28 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(task.Env))
 }
 
-// dedup returns (true, waitFunc) if a previous execution is in progress for this task.
-// If no dedup applies (extra vars present), returns (false, nil).
-func (r *Runner) dedup(resolved string, extraVars []map[string]Var) (bool, func() error) {
+// dedup returns a non-nil wait function if another goroutine already owns
+// this task's execution. Otherwise it claims ownership for the caller
+// (which must later signal completion via dedupDone) and returns nil.
+// Tasks invoked with extra vars skip deduplication because each call site
+// may pass different values.
+func (r *Runner) dedup(resolved string, extraVars []map[string]Var) func() error {
 	hasExtraVars := len(extraVars) > 0 && len(extraVars[0]) > 0
 	if hasExtraVars {
-		return false, nil
+		return nil
 	}
 
 	once := &runOnce{done: make(chan struct{})}
-	if prev, loaded := r.ran.LoadOrStore(resolved, once); loaded {
-		prev := prev.(*runOnce)
-		return true, func() error {
-			<-prev.done
-			return prev.err
-		}
+	prev, loaded := r.ran.LoadOrStore(resolved, once)
+	if !loaded {
+		return nil // caller owns the execution
 	}
 
-	return false, nil
+	owner := prev.(*runOnce)
+	return func() error {
+		<-owner.done
+		return owner.err
+	}
 }
 
 // dedupDone signals that the task execution is complete.
