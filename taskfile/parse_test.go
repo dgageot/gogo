@@ -112,7 +112,28 @@ includes:
 
 	_, err := LoadWithIncludes(dir)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cyclic include detected")
+	assert.Contains(t, err.Error(), "cyclic include")
+	assert.Contains(t, err.Error(), filepath.Join(dir, "cli", "root", "gogo.yaml"))
+}
+
+func TestLoadWithIncludesMissingMentionsParentFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - backend
+`,
+		"backend/gogo.yaml": `version: "1"
+includes:
+  - data
+`,
+	})
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `loading include "backend:data"`)
+	assert.Contains(t, err.Error(), "from "+filepath.Join(dir, "backend", "gogo.yaml"))
+	assert.Contains(t, err.Error(), "no Taskfile found")
 }
 
 func TestLoadWithIncludesPreservesChildVars(t *testing.T) {

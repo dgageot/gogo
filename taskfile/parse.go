@@ -120,21 +120,22 @@ type includeLoader struct {
 // dirName is the relative directory path for filesystem resolution.
 // qualifiedNS is the fully qualified namespace prefix for task names (e.g. "cli:utils").
 func (l *includeLoader) load(parentDir, dirName, qualifiedNS string) error {
+	parentFile := findTaskfile(parentDir)
 	incDir := filepath.Join(parentDir, dirName)
 
 	absIncDir, err := filepath.Abs(incDir)
 	if err != nil {
-		return fmt.Errorf("resolving include %q: %w", qualifiedNS, err)
+		return fmt.Errorf("resolving include %q from %s: %w", qualifiedNS, parentFile, err)
 	}
 	if _, onPath := l.includeStack[absIncDir]; onPath {
-		return fmt.Errorf("cyclic include detected for %q", absIncDir)
+		return fmt.Errorf("cyclic include %q detected in %s", qualifiedNS, parentFile)
 	}
 	l.includeStack[absIncDir] = struct{}{}
 	defer delete(l.includeStack, absIncDir)
 
 	child, err := Parse(absIncDir)
 	if err != nil {
-		return fmt.Errorf("loading include %q: %w", qualifiedNS, err)
+		return fmt.Errorf("loading include %q from %s: %w", qualifiedNS, parentFile, err)
 	}
 
 	l.tf.Namespaces[absIncDir] = qualifiedNS
@@ -142,7 +143,7 @@ func (l *includeLoader) load(parentDir, dirName, qualifiedNS string) error {
 	// Load child dotenv files, deduplicating with parent
 	childDotenv, err := loadDotenvFiles(absIncDir, child.Dotenv, l.seenDotenv)
 	if err != nil {
-		return fmt.Errorf("loading dotenv for include %q: %w", qualifiedNS, err)
+		return fmt.Errorf("loading dotenv for include %q from %s: %w", qualifiedNS, parentFile, err)
 	}
 	for k, v := range childDotenv {
 		if _, exists := l.dotenvVars[k]; !exists {
