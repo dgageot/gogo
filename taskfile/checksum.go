@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -75,7 +76,7 @@ func matchRecursivePattern(dir, before, after string) []string {
 		filePart = "*"
 	}
 
-	return walkRecursive(baseDir, []string{filePart})
+	return walkRecursive(baseDir, filePart)
 }
 
 // matchSimplePattern handles a single non-recursive glob pattern.
@@ -86,35 +87,25 @@ func matchSimplePattern(dir, pattern string) ([]string, error) {
 	return filepath.Glob(pattern)
 }
 
-// walkRecursive walks dir recursively and returns files matching any pattern.
-// Hidden directories are skipped.
-func walkRecursive(dir string, patterns []string) []string {
+// walkRecursive walks dir and returns all files whose base name matches pattern.
+// Hidden directories (starting with '.') are skipped.
+func walkRecursive(dir, pattern string) []string {
 	var files []string
-
-	var walk func(string)
-	walk = func(dirPath string) {
-		entries, err := os.ReadDir(dirPath)
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return
+			return nil
 		}
-		for _, e := range entries {
-			name := e.Name()
-			if e.IsDir() {
-				if !strings.HasPrefix(name, ".") {
-					walk(filepath.Join(dirPath, name))
-				}
-				continue
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return fs.SkipDir
 			}
-			if slices.ContainsFunc(patterns, func(p string) bool {
-				matched, _ := filepath.Match(p, name)
-				return matched
-			}) {
-				files = append(files, filepath.Join(dirPath, name))
-			}
+			return nil
 		}
-	}
-
-	walk(dir)
+		if matched, _ := filepath.Match(pattern, d.Name()); matched {
+			files = append(files, path)
+		}
+		return nil
+	})
 	return files
 }
 
