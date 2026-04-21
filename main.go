@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -96,8 +95,12 @@ func (a *App) Run(ctx context.Context) error {
 		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
 		defer stop()
 
-		interval, _ := time.ParseDuration(tf.Interval)
-		err := runner.Watch(sigCtx, parsed.Task, cliArgs, cmp.Or(interval, 500*time.Millisecond))
+		interval, err := watchInterval(tf.Interval)
+		if err != nil {
+			return err
+		}
+
+		err = runner.Watch(sigCtx, parsed.Task, cliArgs, interval)
 		if err != nil && sigCtx.Err() != nil {
 			return nil // graceful shutdown
 		}
@@ -105,6 +108,21 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	return runner.Run(parsed.Task, cliArgs)
+}
+
+// watchInterval parses the taskfile's `interval` setting, falling back to a
+// sensible default when unset. Invalid values are surfaced as errors rather
+// than silently ignored.
+func watchInterval(raw string) (time.Duration, error) {
+	const defaultInterval = 500 * time.Millisecond
+	if raw == "" {
+		return defaultInterval, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid interval %q: %w", raw, err)
+	}
+	return d, nil
 }
 
 // parseArgs parses command-line arguments. Returns nil if help/version was shown.
