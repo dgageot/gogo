@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	arg "github.com/alexflint/go-arg"
@@ -92,7 +93,7 @@ func (a *App) Run(ctx context.Context) error {
 	runner.Force = parsed.Force
 
 	if parsed.Watch {
-		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
+		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
 		interval, err := watchInterval(tf.Interval)
