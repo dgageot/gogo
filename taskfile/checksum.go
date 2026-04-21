@@ -33,7 +33,10 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 
 	h := sha256.New()
 	for _, f := range files {
-		d := fileDigest(f)
+		d, err := fileDigest(f)
+		if err != nil {
+			return "", err
+		}
 		h.Write(d[:])
 	}
 

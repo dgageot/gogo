@@ -104,6 +104,21 @@ func TestSourcesChecksumMixedPatterns(t *testing.T) {
 	assert.NotEqual(t, oldSum, sum)
 }
 
+func TestSourcesChecksumUnreadableFile(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root can read anything")
+	}
+
+	dir := t.TempDir()
+	unreadable := filepath.Join(dir, "secret.txt")
+	require.NoError(t, os.WriteFile(unreadable, []byte("hello"), 0o000))
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+
+	_, err := sourcesChecksum(dir, []string{"*.txt"})
+	require.Error(t, err, "unreadable source files must surface as an error")
+	assert.Contains(t, err.Error(), "secret.txt")
+}
+
 func TestChecksumStorage(t *testing.T) {
 	dir := t.TempDir()
 
