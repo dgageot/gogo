@@ -1566,6 +1566,29 @@ func TestEnvReverseAlphabeticalReference(t *testing.T) {
 	assert.Equal(t, "/opt", envValue((*execs)[0].Env, "Z_ROOT"))
 }
 
+func TestEnvMutualRecursionDoesNotOverflow(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Env:  map[string]string{"A": "${B}", "B": "${A}"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Empty(t, envValue((*execs)[0].Env, "A"))
+	assert.Empty(t, envValue((*execs)[0].Env, "B"))
+}
+
 func TestEnvExpandsFromOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOGO_BASE", "/opt")

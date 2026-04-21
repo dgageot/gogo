@@ -532,18 +532,19 @@ func injectVarsIntoEnv(env []string, vars map[string]string) []string {
 // and sets them in the environment.
 func resolveTaskEnv(env []string, taskEnv, vars map[string]string) []string {
 	resolved := make(map[string]string)
+	visiting := make(map[string]struct{})
 	var resolve func(string) string
 	resolve = func(key string) string {
 		if val, ok := resolved[key]; ok {
 			return val
 		}
+		if _, ok := visiting[key]; ok {
+			return "" // break self- or mutual-recursion cycles
+		}
 		if raw, ok := taskEnv[key]; ok {
-			val := os.Expand(raw, func(k string) string {
-				if k == key {
-					return "" // prevent infinite recursion
-				}
-				return resolve(k)
-			})
+			visiting[key] = struct{}{}
+			val := os.Expand(raw, resolve)
+			delete(visiting, key)
 			resolved[key] = val
 			return val
 		}
