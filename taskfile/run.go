@@ -284,7 +284,7 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		}()
 	}
 
-	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(task.Env))
+	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env))
 }
 
 // dedup returns a non-nil wait function if another goroutine already owns
@@ -457,10 +457,12 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool,
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
 
-// hasOpSecrets reports whether any task env values contain op:// references.
-func hasOpSecrets(env map[string]string) bool {
-	for _, v := range env {
-		if strings.HasPrefix(v, "op://") {
+// hasOpSecrets reports whether any env entry's value is an op:// reference.
+// This runs over the fully-built env (base + dotenv + vars + task env), so
+// any source of an op:// reference triggers op-run wrapping.
+func hasOpSecrets(env []string) bool {
+	for _, e := range env {
+		if _, v, ok := strings.Cut(e, "="); ok && strings.HasPrefix(v, "op://") {
 			return true
 		}
 	}

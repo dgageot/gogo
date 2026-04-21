@@ -1284,9 +1284,33 @@ func TestCLIArgsTemplateExpansion(t *testing.T) {
 
 func TestHasOpSecrets(t *testing.T) {
 	assert.False(t, hasOpSecrets(nil))
-	assert.False(t, hasOpSecrets(map[string]string{"FOO": "bar"}))
-	assert.True(t, hasOpSecrets(map[string]string{"TOKEN": "op://vault/item/field"}))
-	assert.True(t, hasOpSecrets(map[string]string{"FOO": "bar", "TOKEN": "op://vault/item/field"}))
+	assert.False(t, hasOpSecrets([]string{"FOO=bar"}))
+	assert.True(t, hasOpSecrets([]string{"TOKEN=op://vault/item/field"}))
+	assert.True(t, hasOpSecrets([]string{"FOO=bar", "TOKEN=op://vault/item/field"}))
+}
+
+func TestOpSecretsInDotenvTriggerOpRun(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{".env.task": "TOKEN=op://vault/item/field\n"})
+
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Dotenv: []string{".env.task"},
+				Cmds:   []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+
+	require.Len(t, *execs, 1)
+	assert.True(t, (*execs)[0].UseOpRun, "op:// references in dotenv must wrap execution in op run")
 }
 
 func TestMatchesPlatformArchOnly(t *testing.T) {
