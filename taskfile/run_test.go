@@ -822,6 +822,7 @@ func TestExpandVarsTemplateAndShell(t *testing.T) {
 	assert.Equal(t, "hello world", expandVars("hello ${NAME}", vars, ""))
 	assert.Equal(t, "hello world", expandVars("hello {{.NAME}}", vars, ""))
 	assert.Equal(t, "hello ${UNKNOWN}", expandVars("hello ${UNKNOWN}", vars, ""))
+	assert.Equal(t, "hello {{.UNKNOWN}}", expandVars("hello {{.UNKNOWN}}", vars, ""))
 }
 
 func TestExpandVarsCLIArgs(t *testing.T) {

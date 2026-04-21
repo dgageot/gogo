@@ -563,28 +563,36 @@ func resolveTaskEnv(env []string, taskEnv, vars map[string]string) []string {
 
 // expandVars substitutes template and shell variables in a command string.
 // {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, and environment.
+// Unknown ${VAR} references are left for the shell to expand. Unknown
+// {{.VAR}} templates are left verbatim (matching expandTemplates at parse time).
 func expandVars(s string, vars map[string]string, cliArgs string) string {
-	lookup := func(key string) string {
+	lookup := func(key string) (string, bool) {
 		if key == "CLI_ARGS" {
-			return cliArgs
+			return cliArgs, true
 		}
 		if val, ok := vars[key]; ok {
-			return val
+			return val, true
 		}
-		if val, ok := os.LookupEnv(key); ok {
-			return val
-		}
-		return "${" + key + "}"
+		return os.LookupEnv(key)
 	}
 
 	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
 	// don't start with $. Unknown variables are left as ${KEY} for the shell.
-	s = os.Expand(s, lookup)
+	s = os.Expand(s, func(key string) string {
+		if val, ok := lookup(key); ok {
+			return val
+		}
+		return "${" + key + "}"
+	})
 
-	// Then replace {{.VAR}} templates. Since os.Expand already ran,
-	// the expanded values won't be re-processed, preventing double expansion.
+	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
+	// run-time behavior matches expandTemplates at parse time.
 	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
-		return lookup(templatePattern.FindStringSubmatch(match)[1])
+		key := templatePattern.FindStringSubmatch(match)[1]
+		if val, ok := lookup(key); ok {
+			return val
+		}
+		return match
 	})
 }
 
