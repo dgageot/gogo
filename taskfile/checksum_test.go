@@ -131,9 +131,19 @@ func TestChecksumStorage(t *testing.T) {
 	require.NoError(t, writeChecksum(dir, "cli:build", "def456"))
 	assert.Equal(t, "def456", readStoredChecksum(dir, "cli:build"))
 
-	// Verify file is named with underscore
-	_, err := os.Stat(filepath.Join(dir, ".gogo", "checksum", "cli_build"))
+	// Verify the on-disk filename is the escaped form
+	_, err := os.Stat(filepath.Join(dir, ".gogo", "checksum", "cli_.build"))
 	assert.NoError(t, err)
+}
+
+func TestChecksumPathNoCollision(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, writeChecksum(dir, "a:b", "colon"))
+	require.NoError(t, writeChecksum(dir, "a_b", "underscore"))
+
+	assert.Equal(t, "colon", readStoredChecksum(dir, "a:b"))
+	assert.Equal(t, "underscore", readStoredChecksum(dir, "a_b"))
 }
 
 func TestOutputsNewerThanSources(t *testing.T) {

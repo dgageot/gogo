@@ -114,7 +114,15 @@ func walkRecursive(dir, pattern string) []string {
 
 // checksumPath returns the file path for a task's stored checksum.
 func checksumPath(taskfileDir, taskName string) string {
-	return filepath.Join(taskfileDir, ".gogo", "checksum", strings.ReplaceAll(taskName, ":", "_"))
+	return filepath.Join(taskfileDir, ".gogo", "checksum", sanitizeTaskName(taskName))
+}
+
+// sanitizeTaskName encodes a task name as a filesystem-safe filename using
+// a reversible escape: '_' -> '__' and ':' -> '_.'. Any two distinct task
+// names produce distinct encodings, so separate tasks cannot share a file.
+func sanitizeTaskName(name string) string {
+	escaped := strings.ReplaceAll(name, "_", "__")
+	return strings.ReplaceAll(escaped, ":", "_.")
 }
 
 // readStoredChecksum returns the previously stored checksum for a task, or empty if none.
