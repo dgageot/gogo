@@ -92,27 +92,23 @@ func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
 	return r, nil
 }
 
-// matchesPlatform checks if the current OS/arch matches the platforms list.
-// Each entry can be "os", "os/arch", or just "arch" (without a slash, matched against GOARCH if not a known OS).
-// An empty list matches all platforms.
+// matchesPlatform reports whether the current OS/arch matches any entry in
+// platforms. Each entry is either "os/arch", a bare OS name, or a bare arch.
+// An empty list matches every platform.
 func matchesPlatform(platforms []string) bool {
-	if len(platforms) == 0 {
-		return true
-	}
 	for _, p := range platforms {
 		goos, goarch, hasSlash := strings.Cut(p, "/")
-		switch {
-		case hasSlash:
+		if hasSlash {
 			if goos == runtime.GOOS && goarch == runtime.GOARCH {
 				return true
 			}
-		case goos == runtime.GOOS:
-			return true
-		case goos == runtime.GOARCH:
+			continue
+		}
+		if goos == runtime.GOOS || goos == runtime.GOARCH {
 			return true
 		}
 	}
-	return false
+	return len(platforms) == 0
 }
 
 // checkRequires validates that all required vars and env are set.
