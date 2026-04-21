@@ -149,12 +149,14 @@ func checkRequires(taskName string, task *Task, vars map[string]string) error {
 }
 
 // checkPreconditions runs all precondition shell commands for a task.
+// Preconditions see the same environment as the task's commands.
 // If any command fails, it returns an error with the precondition's message
 // or a default message.
-func (r *Runner) checkPreconditions(taskName string, task *Task, dir string) error {
+func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env []string) error {
 	for _, pre := range task.Preconditions {
 		cmd := exec.Command("/bin/sh", "-c", pre.Sh)
 		cmd.Dir = dir
+		cmd.Env = env
 		if err := cmd.Run(); err != nil {
 			if pre.Msg != "" {
 				return fmt.Errorf("task %q: %s", taskName, pre.Msg)
@@ -257,7 +259,12 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		return err
 	}
 
-	if err := r.checkPreconditions(resolved, &task, dir); err != nil {
+	env, err := r.buildEnv(&task, dir, vars)
+	if err != nil {
+		return err
+	}
+
+	if err := r.checkPreconditions(resolved, &task, dir, env); err != nil {
 		return err
 	}
 
@@ -275,11 +282,6 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 				_ = writeChecksum(r.tf.Dir, resolved, checksum)
 			}
 		}()
-	}
-
-	env, err := r.buildEnv(&task, dir, vars)
-	if err != nil {
-		return err
 	}
 
 	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(task.Env))

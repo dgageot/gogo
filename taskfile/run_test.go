@@ -1613,6 +1613,29 @@ func TestEnvExpandsFromOSEnv(t *testing.T) {
 	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "FULL_PATH"))
 }
 
+func TestPreconditionSeesTaskEnv(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Env: map[string]string{"DEPLOY_READY": "1"},
+				Preconditions: []Precondition{
+					{Sh: `test -n "$DEPLOY_READY"`, Msg: "DEPLOY_READY not set"},
+				},
+				Cmds: []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+	assert.Len(t, *execs, 1)
+}
+
 func TestPreconditionPasses(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Taskfile{
