@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/signal"
@@ -32,75 +33,92 @@ func (args) Description() string {
 	return "gogo - a simple task runner"
 }
 
+// App is the gogo command-line application. External dependencies (args, I/O,
+// and working-directory lookup) are injected so Run can be driven from tests
+// without touching os.Args, process stdio, or the real cwd.
+type App struct {
+	Args   []string               // command-line args, without program name
+	Stdout io.Writer              // user-visible output (help, --list, completion scripts)
+	Stderr io.Writer              // error messages
+	Getwd  func() (string, error) // working directory lookup
+}
+
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	app := &App{
+		Args:   os.Args[1:],
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Getwd:  os.Getwd,
+	}
+	if err := app.Run(context.Background()); err != nil {
+		fmt.Fprintln(app.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	a, err := parseArgs()
+// Run executes the gogo CLI with the configured args and I/O.
+func (a *App) Run(ctx context.Context) error {
+	parsed, err := a.parseArgs()
 	if err != nil {
 		return err
 	}
-	if a == nil {
+	if parsed == nil {
 		return nil // help or version was printed
 	}
 
-	if a.Completion != "" {
-		return printCompletionScript(a.Completion)
+	if parsed.Completion != "" {
+		return a.printCompletionScript(parsed.Completion)
 	}
 
-	if a.Complete {
-		printTaskNames()
+	if parsed.Complete {
+		a.printTaskNames()
 		return nil
 	}
 
-	if a.List {
-		return listTasks()
+	if parsed.List {
+		return a.listTasks()
 	}
 
-	dir, tf, err := loadTaskfile()
+	dir, tf, err := a.loadTaskfile()
 	if err != nil {
 		return err
 	}
 
-	cliArgs := strings.Join(a.CLIArgs, " ")
+	cliArgs := strings.Join(parsed.CLIArgs, " ")
 	runner, err := taskfile.NewRunner(tf, dir)
 	if err != nil {
 		return err
 	}
-	runner.DryRun = a.DryRun
-	runner.Force = a.Force
+	runner.DryRun = parsed.DryRun
+	runner.Force = parsed.Force
 
-	if a.Watch {
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	if parsed.Watch {
+		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
 		defer stop()
 
-		parsed, _ := time.ParseDuration(tf.Interval)
-		err := runner.Watch(ctx, a.Task, cliArgs, cmp.Or(parsed, 500*time.Millisecond))
-		if err != nil && ctx.Err() != nil {
+		interval, _ := time.ParseDuration(tf.Interval)
+		err := runner.Watch(sigCtx, parsed.Task, cliArgs, cmp.Or(interval, 500*time.Millisecond))
+		if err != nil && sigCtx.Err() != nil {
 			return nil // graceful shutdown
 		}
 		return err
 	}
 
-	return runner.Run(a.Task, cliArgs)
+	return runner.Run(parsed.Task, cliArgs)
 }
 
 // parseArgs parses command-line arguments. Returns nil if help/version was shown.
-func parseArgs() (*args, error) {
-	var a args
-	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &a)
+func (a *App) parseArgs() (*args, error) {
+	var parsed args
+	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &parsed)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := p.Parse(os.Args[1:]); err != nil {
+	if err := p.Parse(a.Args); err != nil {
 		switch {
 		case errors.Is(err, arg.ErrHelp):
-			p.WriteHelp(os.Stdout)
+			p.WriteHelp(a.Stdout)
 			return nil, nil
 		case errors.Is(err, arg.ErrVersion):
 			return nil, nil
@@ -109,11 +127,11 @@ func parseArgs() (*args, error) {
 		}
 	}
 
-	return &a, nil
+	return &parsed, nil
 }
 
-func loadTaskfile() (string, *taskfile.Taskfile, error) {
-	cwd, err := os.Getwd()
+func (a *App) loadTaskfile() (string, *taskfile.Taskfile, error) {
+	cwd, err := a.Getwd()
 	if err != nil {
 		return "", nil, err
 	}
@@ -151,28 +169,28 @@ func isInternalTask(name string) bool {
 	return strings.HasPrefix(name, "_")
 }
 
-func printCompletionScript(shell string) error {
+func (a *App) printCompletionScript(shell string) error {
 	switch shell {
 	case "bash":
-		fmt.Print(bashCompletion)
+		fmt.Fprint(a.Stdout, bashCompletion)
 	case "zsh":
-		fmt.Print(zshCompletion)
+		fmt.Fprint(a.Stdout, zshCompletion)
 	case "fish":
-		fmt.Print(fishCompletion)
+		fmt.Fprint(a.Stdout, fishCompletion)
 	default:
 		return fmt.Errorf("unsupported shell: %s (valid: bash, zsh, fish)", shell)
 	}
 	return nil
 }
 
-func printTaskNames() {
-	_, tf, err := loadTaskfile()
+func (a *App) printTaskNames() {
+	_, tf, err := a.loadTaskfile()
 	if err != nil {
 		return // silently fail during completion
 	}
 
 	for _, name := range visibleTaskNames(tf) {
-		fmt.Println(name)
+		fmt.Fprintln(a.Stdout, name)
 	}
 }
 
@@ -215,8 +233,8 @@ compdef _gogo gogo
 const fishCompletion = `complete -c gogo -f -a '(gogo --complete 2>/dev/null)'
 `
 
-func listTasks() error {
-	_, tf, err := loadTaskfile()
+func (a *App) listTasks() error {
+	_, tf, err := a.loadTaskfile()
 	if err != nil {
 		return err
 	}
@@ -242,7 +260,7 @@ func listTasks() error {
 	}
 
 	for _, e := range entries {
-		fmt.Printf("%-*s  %s\n", maxLen, e.name, e.desc)
+		fmt.Fprintf(a.Stdout, "%-*s  %s\n", maxLen, e.name, e.desc)
 	}
 
 	return nil
