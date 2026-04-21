@@ -113,7 +113,7 @@ type includeLoader struct {
 	tf           *Taskfile
 	seenDotenv   map[string]struct{} // deduplicates dotenv files across includes
 	dotenvVars   map[string]string   // accumulated dotenv variables
-	includeStack map[string]struct{} // tracks visited dirs to detect cycles
+	includeStack map[string]struct{} // dirs on the current recursion path (cycle detection)
 }
 
 // load parses a child Taskfile and merges it into the parent.
@@ -126,9 +126,11 @@ func (l *includeLoader) load(parentDir, dirName, qualifiedNS string) error {
 	if err != nil {
 		return fmt.Errorf("resolving include %q: %w", qualifiedNS, err)
 	}
-	if _, exists := l.includeStack[absIncDir]; exists {
+	if _, onPath := l.includeStack[absIncDir]; onPath {
 		return fmt.Errorf("cyclic include detected for %q", absIncDir)
 	}
+	l.includeStack[absIncDir] = struct{}{}
+	defer delete(l.includeStack, absIncDir)
 
 	child, err := Parse(absIncDir)
 	if err != nil {
@@ -148,18 +150,8 @@ func (l *includeLoader) load(parentDir, dirName, qualifiedNS string) error {
 		}
 	}
 
-	nextStack := make(map[string]struct{}, len(l.includeStack)+1)
-	maps.Copy(nextStack, l.includeStack)
-	nextStack[absIncDir] = struct{}{}
-	childLoader := &includeLoader{
-		tf:           l.tf,
-		seenDotenv:   l.seenDotenv,
-		dotenvVars:   l.dotenvVars,
-		includeStack: nextStack,
-	}
 	for _, childDir := range child.Includes {
-		childQualifiedNS := qualifiedNS + ":" + childDir
-		if err := childLoader.load(absIncDir, childDir, childQualifiedNS); err != nil {
+		if err := l.load(absIncDir, childDir, qualifiedNS+":"+childDir); err != nil {
 			return err
 		}
 	}
