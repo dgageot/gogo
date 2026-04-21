@@ -70,8 +70,6 @@ type runOnce struct {
 
 // NewRunner creates a task runner for the given taskfile.
 func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
-	env := injectEnvVars(tf)
-
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
@@ -86,28 +84,12 @@ func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
 	r := &Runner{
 		tf:      tf,
 		cwd:     cwd,
-		BaseEnv: env,
+		BaseEnv: baseEnvWithDotenv(tf.DotenvVars),
 		aliases: aliases,
 	}
 	r.ExecFunc = r.defaultExecFunc
 	r.ResolveVarFunc = defaultResolveVar
 	return r, nil
-}
-
-// envPair formats a key-value pair as an environment variable string.
-func envPair(k, v string) string {
-	return k + "=" + v
-}
-
-// injectEnvVars builds the process environment with dotenv vars injected.
-func injectEnvVars(tf *Taskfile) []string {
-	env := os.Environ()
-	for _, k := range slices.Sorted(maps.Keys(tf.DotenvVars)) {
-		if _, exists := os.LookupEnv(k); !exists {
-			env = append(env, envPair(k, tf.DotenvVars[k]))
-		}
-	}
-	return env
 }
 
 // matchesPlatform checks if the current OS/arch matches the platforms list.
@@ -455,112 +437,6 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool,
 	}
 
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
-}
-
-// hasOpSecrets reports whether any env entry's value is an op:// reference.
-// This runs over the fully-built env (base + dotenv + vars + task env), so
-// any source of an op:// reference triggers op-run wrapping.
-func hasOpSecrets(env []string) bool {
-	for _, e := range env {
-		if _, v, ok := strings.Cut(e, "="); ok && strings.HasPrefix(v, "op://") {
-			return true
-		}
-	}
-	return false
-}
-
-// envHasKey reports whether the env slice contains an entry for the given key.
-func envHasKey(env []string, key string) bool {
-	prefix := key + "="
-	return slices.ContainsFunc(env, func(e string) bool {
-		return strings.HasPrefix(e, prefix)
-	})
-}
-
-// setEnv sets or replaces an environment variable in the env slice.
-func setEnv(env []string, key, value string) []string {
-	pair := envPair(key, value)
-	prefix := key + "="
-	for i, e := range env {
-		if strings.HasPrefix(e, prefix) {
-			env[i] = pair
-			return env
-		}
-	}
-	return append(env, pair)
-}
-
-// buildEnv constructs the environment for a command execution.
-func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
-	env := slices.Clone(r.BaseEnv)
-
-	env, err := r.injectTaskDotenv(env, task, dir)
-	if err != nil {
-		return nil, err
-	}
-
-	env = injectVarsIntoEnv(env, vars)
-	env = resolveTaskEnv(env, task.Env, vars)
-
-	return env, nil
-}
-
-// injectTaskDotenv loads task-level dotenv files and adds vars that don't already exist.
-func (r *Runner) injectTaskDotenv(env []string, task *Task, dir string) ([]string, error) {
-	if len(task.Dotenv) == 0 {
-		return env, nil
-	}
-
-	taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))
-	if err != nil {
-		return nil, fmt.Errorf("loading task dotenv: %w", err)
-	}
-	for _, k := range slices.Sorted(maps.Keys(taskDotenv)) {
-		if !envHasKey(env, k) {
-			env = append(env, envPair(k, taskDotenv[k]))
-		}
-	}
-
-	return env, nil
-}
-
-// injectVarsIntoEnv sets or replaces task variables in the environment.
-func injectVarsIntoEnv(env []string, vars map[string]string) []string {
-	for _, k := range slices.Sorted(maps.Keys(vars)) {
-		env = setEnv(env, k, vars[k])
-	}
-	return env
-}
-
-// resolveTaskEnv resolves task env entries (which may cross-reference each other)
-// and sets them in the environment.
-func resolveTaskEnv(env []string, taskEnv, vars map[string]string) []string {
-	resolved := make(map[string]string)
-	visiting := make(map[string]struct{})
-	var resolve func(string) string
-	resolve = func(key string) string {
-		if val, ok := resolved[key]; ok {
-			return val
-		}
-		if _, ok := visiting[key]; ok {
-			return "" // break self- or mutual-recursion cycles
-		}
-		if raw, ok := taskEnv[key]; ok {
-			visiting[key] = struct{}{}
-			val := os.Expand(raw, resolve)
-			delete(visiting, key)
-			resolved[key] = val
-			return val
-		}
-		if val, ok := vars[key]; ok {
-			return val
-		}
-		return os.Getenv(key)
-	}
-	for _, k := range slices.Sorted(maps.Keys(taskEnv)) {
-		env = setEnv(env, k, resolve(k))
-	}
-	return env
 }
 
 // expandVars substitutes template and shell variables in a command string.
