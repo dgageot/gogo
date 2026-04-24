@@ -59,13 +59,20 @@ type Runner struct {
 	Force          bool              // if true, ignore sources and generates (always run)
 	ExecFunc       ExecFunc          // replaceable command executor (defaults to real exec)
 	ResolveVarFunc ResolveVarFunc    // replaceable variable resolver (defaults to shell exec)
-	ran            sync.Map          // task name -> *runOnce
+	runs           sync.Map          // resolved task name -> *taskRun
 }
 
-// runOnce tracks a single task execution for deduplication.
-type runOnce struct {
-	done chan struct{}
+// taskRun memoizes a single task execution. The first caller runs the body;
+// concurrent and later callers observe the same result.
+type taskRun struct {
+	once sync.Once
 	err  error
+}
+
+// do runs fn exactly once, returning its memoized result to every caller.
+func (t *taskRun) do(fn func() error) error {
+	t.once.Do(func() { t.err = fn() })
+	return t.err
 }
 
 // NewRunner creates a task runner for the given taskfile.
@@ -145,10 +152,10 @@ func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env
 	return nil
 }
 
-// ResetRan clears the deduplication state, allowing tasks to run again.
+// ResetRan clears the memoized task results, allowing tasks to run again.
 // This is used by watch mode between iterations.
 func (r *Runner) ResetRan() {
-	r.ran = sync.Map{}
+	r.runs = sync.Map{}
 }
 
 // resolveTaskName finds the actual task name, trying the exact name first,
@@ -207,17 +214,31 @@ func (r *Runner) resolveTask(name string) (string, error) {
 }
 
 // Run executes the named task. Extra vars (from task call sites) override task-level vars.
-func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err error) {
+func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}
 
-	if wait := r.dedup(resolved, extraVars); wait != nil {
-		return wait()
+	// Each call site with extra vars is a distinct execution — bypass memoization.
+	if hasExtraVars(extraVars) {
+		return r.run(resolved, cliArgs, extraVars)
 	}
-	defer func() { r.dedupDone(resolved, err) }()
 
+	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{})
+	return entry.(*taskRun).do(func() error {
+		return r.run(resolved, cliArgs, nil)
+	})
+}
+
+// hasExtraVars reports whether the variadic extraVars carries any overrides.
+func hasExtraVars(extraVars []map[string]Var) bool {
+	return len(extraVars) > 0 && len(extraVars[0]) > 0
+}
+
+// run executes a task's body. Deduplication is handled by Run; this method
+// always runs the task, so recursive calls from runCmds must go through Run.
+func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
@@ -257,48 +278,15 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) (err err
 		logTask(colorYellow, resolved, "up to date")
 		return nil
 	}
+
+	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env)); err != nil {
+		return err
+	}
+
 	if checksum != "" {
-		defer func() {
-			if err == nil {
-				_ = writeChecksum(r.tf.Dir, resolved, checksum)
-			}
-		}()
+		_ = writeChecksum(r.tf.Dir, resolved, checksum) // best-effort
 	}
-
-	return r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env))
-}
-
-// dedup returns a non-nil wait function if another goroutine already owns
-// this task's execution. Otherwise it claims ownership for the caller
-// (which must later signal completion via dedupDone) and returns nil.
-// Tasks invoked with extra vars skip deduplication because each call site
-// may pass different values.
-func (r *Runner) dedup(resolved string, extraVars []map[string]Var) func() error {
-	hasExtraVars := len(extraVars) > 0 && len(extraVars[0]) > 0
-	if hasExtraVars {
-		return nil
-	}
-
-	once := &runOnce{done: make(chan struct{})}
-	prev, loaded := r.ran.LoadOrStore(resolved, once)
-	if !loaded {
-		return nil // caller owns the execution
-	}
-
-	owner := prev.(*runOnce)
-	return func() error {
-		<-owner.done
-		return owner.err
-	}
-}
-
-// dedupDone signals that the task execution is complete.
-func (r *Runner) dedupDone(resolved string, err error) {
-	if v, ok := r.ran.Load(resolved); ok {
-		once := v.(*runOnce)
-		once.err = err
-		close(once.done)
-	}
+	return nil
 }
 
 // resolveAllVars computes the effective variables for a task, including extra vars from call sites.
