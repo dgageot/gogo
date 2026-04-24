@@ -4,11 +4,7 @@ title: Taskfile Syntax
 
 # Taskfile Syntax
 
-gogo looks for a taskfile in the current directory, trying these names in order:
-
-1. `gogo.yaml`
-2. `Taskfile.yml`
-3. `Taskfile.yaml`
+gogo reads task definitions from a `gogo.yaml` file in the current directory.
 
 ## Top-Level Fields
 

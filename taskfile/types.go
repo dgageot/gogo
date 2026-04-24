@@ -1,6 +1,6 @@
 package taskfile
 
-// Taskfile represents a parsed gogo.yaml (or legacy Taskfile.yml).
+// Taskfile represents a parsed gogo.yaml.
 type Taskfile struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`

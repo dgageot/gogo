@@ -4,7 +4,7 @@ title: Includes
 
 # Includes
 
-Split your taskfile into multiple files across subdirectories. Each included directory must contain its own taskfile (`gogo.yaml`, `Taskfile.yml`, or `Taskfile.yaml`).
+Split your taskfile into multiple files across subdirectories. Each included directory must contain its own `gogo.yaml`.
 
 ## Basic Setup
 

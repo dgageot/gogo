@@ -15,7 +15,7 @@ import (
 func Parse(dir string) (*Taskfile, error) {
 	path := findTaskfile(dir)
 	if path == "" {
-		return nil, fmt.Errorf("no Taskfile found in %s", dir)
+		return nil, fmt.Errorf("no gogo.yaml found in %s", dir)
 	}
 
 	data, err := os.ReadFile(path)
@@ -41,20 +41,18 @@ func Parse(dir string) (*Taskfile, error) {
 	return &tf, nil
 }
 
-var taskfileNames = []string{"gogo.yaml", "Taskfile.yml", "Taskfile.yaml"}
+const taskfileName = "gogo.yaml"
 
-// findTaskfile returns the path to a taskfile in dir, or empty if none exists.
+// findTaskfile returns the path to the taskfile in dir, or empty if none exists.
 func findTaskfile(dir string) string {
-	for _, name := range taskfileNames {
-		path := filepath.Join(dir, name)
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
+	path := filepath.Join(dir, taskfileName)
+	if _, err := os.Stat(path); err == nil {
+		return path
 	}
 	return ""
 }
 
-// FindRootDir walks up from dir to find the nearest directory containing a Taskfile.
+// FindRootDir walks up from dir to find the nearest directory containing a gogo.yaml.
 func FindRootDir(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
@@ -72,7 +70,7 @@ func FindRootDir(dir string) (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("no Taskfile found")
+	return "", errors.New("no gogo.yaml found")
 }
 
 // LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.

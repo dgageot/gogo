@@ -133,7 +133,7 @@ includes:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `loading include "backend:data"`)
 	assert.Contains(t, err.Error(), "from "+filepath.Join(dir, "backend", "gogo.yaml"))
-	assert.Contains(t, err.Error(), "no Taskfile found")
+	assert.Contains(t, err.Error(), "no gogo.yaml found")
 }
 
 func TestLoadWithIncludesPreservesChildVars(t *testing.T) {

@@ -181,7 +181,7 @@ func TestAppListFailsWhenNoTaskfileFound(t *testing.T) {
 
 	err := app.Run(t.Context())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no Taskfile")
+	assert.Contains(t, err.Error(), "no gogo.yaml")
 }
 
 func TestAppPropagatesGetwdError(t *testing.T) {
