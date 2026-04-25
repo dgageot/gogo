@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -28,18 +27,6 @@ func expandTemplates(data []byte) []byte {
 	})
 }
 
-// ExecFunc is the signature for command execution. It receives the task name,
-// the expanded command string, working directory, environment, and whether
-// to use "op run". Replacing this on a Runner allows tests to capture
-// exactly which processes would be spawned, with which arguments and env,
-// without forking any real process.
-type ExecFunc func(taskName, command, dir string, env []string, useOpRun bool) error
-
-// ResolveVarFunc resolves a variable value, optionally running a shell command.
-// Replacing this on a Runner allows tests to avoid forking processes for
-// variables that use "sh".
-type ResolveVarFunc func(v Var, dir string) (string, error)
-
 // Execution records a single command that was (or would be) executed.
 type Execution struct {
 	Task     string
@@ -51,15 +38,14 @@ type Execution struct {
 
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
-	tf             *Taskfile
-	cwd            string
-	BaseEnv        []string          // base process environment (defaults to os.Environ() + dotenv)
-	aliases        map[string]string // alias -> task name
-	DryRun         bool              // if true, print commands without executing them
-	Force          bool              // if true, ignore sources and generates (always run)
-	ExecFunc       ExecFunc          // replaceable command executor (defaults to real exec)
-	ResolveVarFunc ResolveVarFunc    // replaceable variable resolver (defaults to shell exec)
-	runs           sync.Map          // resolved task name -> *taskRun
+	tf          *Taskfile
+	cwd         string
+	BaseEnv     []string          // base process environment (defaults to os.Environ() + dotenv)
+	aliases     map[string]string // alias -> task name
+	DryRun      bool              // if true, print commands without executing them
+	Force       bool              // if true, ignore sources and generates (always run)
+	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
+	runs        sync.Map          // resolved task name -> *taskRun
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;
@@ -89,13 +75,12 @@ func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
 	}
 
 	r := &Runner{
-		tf:      tf,
-		cwd:     cwd,
-		BaseEnv: baseEnvWithDotenv(tf.DotenvVars),
-		aliases: aliases,
+		tf:          tf,
+		cwd:         cwd,
+		BaseEnv:     baseEnvWithDotenv(tf.DotenvVars),
+		aliases:     aliases,
+		ShellRunner: defaultShellRunner{},
 	}
-	r.ExecFunc = r.defaultExecFunc
-	r.ResolveVarFunc = defaultResolveVar
 	return r, nil
 }
 
@@ -139,10 +124,13 @@ func checkRequires(taskName string, task *Task, vars map[string]string) error {
 // or a default message.
 func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env []string) error {
 	for _, pre := range task.Preconditions {
-		cmd := exec.Command("/bin/sh", "-c", pre.Sh)
-		cmd.Dir = dir
-		cmd.Env = env
-		if err := cmd.Run(); err != nil {
+		if err := r.ShellRunner.Run(ShellCommand{
+			Kind:     ShellCommandPrecondition,
+			TaskName: taskName,
+			Command:  pre.Sh,
+			Dir:      dir,
+			Env:      env,
+		}); err != nil {
 			if pre.Msg != "" {
 				return fmt.Errorf("task %q: %s", taskName, pre.Msg)
 			}
@@ -323,7 +311,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		}
 
 		expanded := expandVars(cmd.Cmd, vars, cliArgs)
-		if err := r.ExecFunc(taskName, expanded, dir, env, useOpRun); err != nil {
+		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
 			return err
 		}
 	}
@@ -374,7 +362,7 @@ func (r *Runner) resolveVars(task *Task, taskDir string) (map[string]string, err
 // addVars resolves each Var in src (sorted for determinism) and writes it into dst.
 func (r *Runner) addVars(dst map[string]string, src map[string]Var, dir string) error {
 	for _, k := range slices.Sorted(maps.Keys(src)) {
-		v, err := r.ResolveVarFunc(src[k], dir)
+		v, err := r.resolveVar(src[k], dir)
 		if err != nil {
 			return err
 		}
@@ -383,15 +371,17 @@ func (r *Runner) addVars(dst map[string]string, src map[string]Var, dir string) 
 	return nil
 }
 
-// defaultResolveVar evaluates a single variable, running a shell command if needed.
-func defaultResolveVar(v Var, dir string) (string, error) {
+// resolveVar evaluates a single variable, running a shell command if needed.
+func (r *Runner) resolveVar(v Var, dir string) (string, error) {
 	if v.Sh == "" {
 		return v.Value, nil
 	}
 
-	cmd := exec.Command("/bin/sh", "-c", v.Sh)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := r.ShellRunner.Output(ShellCommand{
+		Kind:    ShellCommandVar,
+		Command: v.Sh,
+		Dir:     dir,
+	})
 	if err != nil {
 		return "", fmt.Errorf("resolving variable (sh: %s): %w", v.Sh, err)
 	}
@@ -461,25 +451,20 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 	})
 }
 
-// defaultExecFunc executes a shell command, wiring stdio.
-// If useOpRun is true, the command is wrapped with "op run" to resolve op:// secrets.
-func (r *Runner) defaultExecFunc(taskName, command, dir string, env []string, useOpRun bool) error {
-	var cmd *exec.Cmd
-	if useOpRun {
-		if _, err := exec.LookPath("op"); err != nil {
-			return fmt.Errorf("task %q uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", taskName, err)
-		}
-		cmd = exec.Command("op", "run", "--", "/bin/sh", "-c", command)
-	} else {
-		cmd = exec.Command("/bin/sh", "-c", command)
-	}
-	cmd.Dir = dir
-	cmd.Env = env
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
+// runShellTaskCommand executes a task command through the configured shell runner.
+func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string, useOpRun bool) error {
+	err := r.ShellRunner.Run(ShellCommand{
+		Kind:     ShellCommandTask,
+		TaskName: taskName,
+		Command:  command,
+		Dir:      dir,
+		Env:      env,
+		UseOpRun: useOpRun,
+		Stdin:    os.Stdin,
+		Stdout:   os.Stdout,
+		Stderr:   os.Stderr,
+	})
+	if err != nil {
 		return fmt.Errorf("task %q: %w", taskName, err)
 	}
 	return nil

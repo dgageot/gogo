@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -12,30 +13,79 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// captureExecs replaces the runner's ExecFunc to record all executions without
-// spawning real processes. Returns a pointer to the captured slice.
-// The returned slice is safe for concurrent use from dependency goroutines.
-func captureExecs(r *Runner) *[]Execution {
-	var mu sync.Mutex
-	var execs []Execution
-	r.ExecFunc = func(taskName, command, dir string, env []string, useOpRun bool) error {
-		mu.Lock()
-		defer mu.Unlock()
-		execs = append(execs, Execution{
-			Task:     taskName,
-			Command:  command,
-			Dir:      dir,
-			Env:      env,
-			UseOpRun: useOpRun,
+type fakeShellRunner struct {
+	mu         sync.Mutex
+	runs       []ShellCommand
+	outputs    []ShellCommand
+	execs      *[]Execution
+	runFunc    func(ShellCommand) error
+	outputFunc func(ShellCommand) ([]byte, error)
+}
+
+func (f *fakeShellRunner) Run(req ShellCommand) error {
+	f.mu.Lock()
+	f.runs = append(f.runs, cloneShellCommand(req))
+	if f.execs != nil && req.Kind == ShellCommandTask {
+		*f.execs = append(*f.execs, Execution{
+			Task:     req.TaskName,
+			Command:  req.Command,
+			Dir:      req.Dir,
+			Env:      slices.Clone(req.Env),
+			UseOpRun: req.UseOpRun,
 		})
-		return nil
 	}
+	f.mu.Unlock()
+
+	if f.runFunc != nil {
+		return f.runFunc(req)
+	}
+	if req.Command == "false" {
+		return errors.New("exit status 1")
+	}
+	return nil
+}
+
+func (f *fakeShellRunner) Output(req ShellCommand) ([]byte, error) {
+	f.mu.Lock()
+	f.outputs = append(f.outputs, cloneShellCommand(req))
+	f.mu.Unlock()
+
+	if f.outputFunc != nil {
+		return f.outputFunc(req)
+	}
+	if req.Command == "exit 1" {
+		return nil, errors.New("exit status 1")
+	}
+	return []byte("sh:" + req.Command), nil
+}
+
+func cloneShellCommand(req ShellCommand) ShellCommand {
+	req.Env = slices.Clone(req.Env)
+	return req
+}
+
+func (f *fakeShellRunner) runsSnapshot() []ShellCommand {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.runs)
+}
+
+func (f *fakeShellRunner) outputsSnapshot() []ShellCommand {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.outputs)
+}
+
+func captureExecs(r *Runner) *[]Execution {
+	execs := []Execution{}
+	if shell, ok := r.ShellRunner.(*fakeShellRunner); ok {
+		shell.execs = &execs
+		return &execs
+	}
+	r.ShellRunner = &fakeShellRunner{execs: &execs}
 	return &execs
 }
 
-// newTestRunner creates a Runner with a clean base environment and a
-// ResolveVarFunc that returns Var.Value or "sh:<command>" (without forking).
-// Use captureExecs on the returned runner to also capture command executions.
 func newTestRunner(t *testing.T, tf *Taskfile, dir string) *Runner {
 	t.Helper()
 
@@ -43,12 +93,7 @@ func newTestRunner(t *testing.T, tf *Taskfile, dir string) *Runner {
 	require.NoError(t, err)
 
 	r.BaseEnv = nil
-	r.ResolveVarFunc = func(v Var, _ string) (string, error) {
-		if v.Sh != "" {
-			return "sh:" + v.Sh, nil
-		}
-		return v.Value, nil
-	}
+	r.ShellRunner = &fakeShellRunner{}
 	return r
 }
 
@@ -745,13 +790,16 @@ func TestCommandFailureStopsExecution(t *testing.T) {
 	runner := newTestRunner(t, tf, dir)
 	boom := errors.New("boom")
 	var execs []string
-	runner.ExecFunc = func(_, command, _ string, _ []string, _ bool) error {
-		execs = append(execs, command)
-		if command == "echo step2" {
-			return boom
-		}
-		return nil
+	shell := &fakeShellRunner{
+		runFunc: func(req ShellCommand) error {
+			execs = append(execs, req.Command)
+			if req.Command == "echo step2" {
+				return boom
+			}
+			return nil
+		},
 	}
+	runner.ShellRunner = shell
 
 	err := runner.Run("build", "")
 	require.ErrorIs(t, err, boom)
@@ -777,13 +825,16 @@ func TestDepFailurePreventsTask(t *testing.T) {
 	runner := newTestRunner(t, tf, dir)
 	boom := errors.New("dep failed")
 	var execs []string
-	runner.ExecFunc = func(taskName, command, _ string, _ []string, _ bool) error {
-		execs = append(execs, taskName+":"+command)
-		if taskName == "failing" {
-			return boom
-		}
-		return nil
+	shell := &fakeShellRunner{
+		runFunc: func(req ShellCommand) error {
+			execs = append(execs, req.TaskName+":"+req.Command)
+			if req.TaskName == "failing" {
+				return boom
+			}
+			return nil
+		},
 	}
+	runner.ShellRunner = shell
 
 	err := runner.Run("all", "")
 	require.ErrorIs(t, err, boom)
@@ -1046,16 +1097,19 @@ func TestMultipleDepFailures(t *testing.T) {
 	err2 := errors.New("fail2 error")
 
 	runner := newTestRunner(t, tf, dir)
-	runner.ExecFunc = func(taskName, _, _ string, _ []string, _ bool) error {
-		switch taskName {
-		case "fail1":
-			return err1
-		case "fail2":
-			return err2
-		default:
-			return nil
-		}
+	shell := &fakeShellRunner{
+		runFunc: func(req ShellCommand) error {
+			switch req.TaskName {
+			case "fail1":
+				return err1
+			case "fail2":
+				return err2
+			default:
+				return nil
+			}
+		},
 	}
+	runner.ShellRunner = shell
 
 	err := runner.Run("all", "")
 	require.Error(t, err)
@@ -1352,13 +1406,16 @@ func TestInlineTaskCallFailure(t *testing.T) {
 	boom := errors.New("child failed")
 	runner := newTestRunner(t, tf, dir)
 	var execs []string
-	runner.ExecFunc = func(taskName, command, _ string, _ []string, _ bool) error {
-		execs = append(execs, taskName+":"+command)
-		if taskName == "child" {
-			return boom
-		}
-		return nil
+	shell := &fakeShellRunner{
+		runFunc: func(req ShellCommand) error {
+			execs = append(execs, req.TaskName+":"+req.Command)
+			if req.TaskName == "child" {
+				return boom
+			}
+			return nil
+		},
 	}
+	runner.ShellRunner = shell
 
 	err := runner.Run("parent", "")
 	require.ErrorIs(t, err, boom)
@@ -1414,12 +1471,15 @@ func TestDedupPropagatesErrorToWaitingGoroutine(t *testing.T) {
 
 	boom := errors.New("shared failed")
 	runner := newTestRunner(t, tf, dir)
-	runner.ExecFunc = func(taskName, _, _ string, _ []string, _ bool) error {
-		if taskName == "shared" {
-			return boom
-		}
-		return nil
+	shell := &fakeShellRunner{
+		runFunc: func(req ShellCommand) error {
+			if req.TaskName == "shared" {
+				return boom
+			}
+			return nil
+		},
 	}
+	runner.ShellRunner = shell
 
 	err := runner.Run("all", "")
 	require.Error(t, err)
@@ -1824,4 +1884,93 @@ func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
 	runner.ResetRan()
 	require.NoError(t, runner.Run("build", ""))
 	assert.Len(t, *execs, 2)
+}
+
+func TestShellRunnerRunsPreconditionsWithoutRunningRealShell(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Env: map[string]string{"DEPLOY_READY": "1"},
+				Preconditions: []Precondition{
+					{Sh: `test -n "$DEPLOY_READY"`},
+				},
+				Cmds: []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 2)
+	assert.Equal(t, ShellCommandPrecondition, runs[0].Kind)
+	assert.Equal(t, `test -n "$DEPLOY_READY"`, runs[0].Command)
+	assert.Equal(t, "1", envValue(runs[0].Env, "DEPLOY_READY"))
+	assert.Equal(t, ShellCommandTask, runs[1].Kind)
+	assert.Len(t, *execs, 1)
+}
+
+func TestShellRunnerResolvesShellVariablesWithoutRunningRealShell(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Vars: map[string]Var{"VERSION": {Sh: "git describe --tags"}},
+				Cmds: []Cmd{{Cmd: "echo ${VERSION}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{
+		outputFunc: func(req ShellCommand) ([]byte, error) {
+			require.Equal(t, ShellCommandVar, req.Kind)
+			require.Equal(t, "git describe --tags", req.Command)
+			require.Equal(t, dir, req.Dir)
+			return []byte("v1.2.3\n"), nil
+		},
+	}
+	runner.ShellRunner = shell
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	outputs := shell.outputsSnapshot()
+	require.Len(t, outputs, 1)
+	assert.Equal(t, ShellCommandVar, outputs[0].Kind)
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "echo v1.2.3", (*execs)[0].Command)
+}
+
+func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Preconditions: []Precondition{{Sh: "false", Msg: "not ready"}},
+				Sources:       StringList{"*.go"},
+				Cmds:          []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.EqualError(t, runner.Run("build", ""), `task "build": not ready`)
+	assert.Empty(t, *execs)
+	assert.NoFileExists(t, checksumPath(dir, "build"))
 }
