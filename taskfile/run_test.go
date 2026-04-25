@@ -2,12 +2,14 @@ package taskfile
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1059,6 +1061,10 @@ func TestGeneratesSkipsUpToDate(t *testing.T) {
 		"main.go": "package main",
 		"main":    "binary",
 	})
+	sourceTime := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "main.go"), sourceTime, sourceTime))
+	outputTime := time.Now().Add(time.Hour)
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "main"), outputTime, outputTime))
 
 	tf := &Taskfile{
 		Dir: dir,
