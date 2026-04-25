@@ -263,3 +263,61 @@ tasks:
 	assert.Equal(t, "Run all the tests", tf.Tasks["test"].Desc)
 	assert.Empty(t, tf.Tasks["deploy"].Desc)
 }
+
+func TestLoadWithIncludesKeepsExternalTaskReferencesUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - cli
+tasks:
+  shared:
+    cmd: echo root
+`,
+		"cli/gogo.yaml": `version: "1"
+tasks:
+  build:
+    deps:
+      - shared
+    cmds:
+      - task: shared
+      - task: test
+  test:
+    cmd: go test ./...
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	build := tf.Tasks["cli:build"]
+	require.Len(t, build.Deps, 1)
+	assert.Equal(t, "shared", build.Deps[0].Task)
+	require.Len(t, build.Cmds, 2)
+	assert.Equal(t, "shared", build.Cmds[0].Task)
+	assert.Equal(t, "cli:test", build.Cmds[1].Task)
+}
+
+func TestLoadWithIncludesMakesTaskDirsAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - cli
+`,
+		"cli/gogo.yaml": `version: "1"
+tasks:
+  build:
+    dir: src
+    cmd: go build .
+  test:
+    cmd: go test ./...
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(dir, "cli", "src"), tf.Tasks["cli:build"].Dir)
+	assert.Equal(t, filepath.Join(dir, "cli"), tf.Tasks["cli:test"].Dir)
+}
