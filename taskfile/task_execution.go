@@ -96,7 +96,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
-		logTask(colorYellow, resolved, "skipped (platform mismatch)")
+		r.logTask(colorYellow, resolved, "skipped (platform mismatch)")
 		return nil
 	}
 
@@ -129,7 +129,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 		return err
 	}
 	if upToDate {
-		logTask(colorYellow, resolved, "up to date")
+		r.logTask(colorYellow, resolved, "up to date")
 		return nil
 	}
 
@@ -154,7 +154,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		}
 
 		// Log the original command template to avoid leaking expanded secrets.
-		logTask(colorGreen, taskName, cmd.Cmd)
+		r.logTask(colorGreen, taskName, cmd.Cmd)
 
 		if r.DryRun {
 			continue
@@ -195,6 +195,10 @@ func (r *Runner) taskDir(task *Task) string {
 	return filepath.Join(r.tf.Dir, dir)
 }
 
+func (r *Runner) logTask(color, name, msg string) {
+	logTask(r.IO.Stderr, color, name, msg)
+}
+
 // runShellTaskCommand executes a task command through the configured shell runner.
 func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string, useOpRun bool) error {
 	err := r.ShellRunner.Run(ShellCommand{
@@ -204,9 +208,9 @@ func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string
 		Dir:      dir,
 		Env:      env,
 		UseOpRun: useOpRun,
-		Stdin:    os.Stdin,
-		Stdout:   os.Stdout,
-		Stderr:   os.Stderr,
+		Stdin:    r.IO.Stdin,
+		Stdout:   r.IO.Stdout,
+		Stderr:   r.IO.Stderr,
 	})
 	if err != nil {
 		return fmt.Errorf("task %q: %w", taskName, err)

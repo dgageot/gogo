@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"slices"
 	"time"
 )
@@ -81,7 +80,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 
 	// Run once immediately
 	if err := r.Run(resolved, cliArgs); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(r.IO.Stderr, err)
 	}
 
 	// Track checksum after initial run to avoid immediate re-run
@@ -109,13 +108,13 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		}
 		lastChecksum = newChecksum
 
-		logTask(colorYellow, resolved, "sources changed, re-running...")
+		r.logTask(colorYellow, resolved, "sources changed, re-running...")
 
 		// Reset dedup state so tasks can re-run
 		r.ResetRan()
 
 		if err := r.Run(resolved, cliArgs); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(r.IO.Stderr, err)
 		}
 	}
 }

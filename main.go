@@ -89,6 +89,8 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	runner.IO.Stdout = a.Stdout
+	runner.IO.Stderr = a.Stderr
 	runner.DryRun = parsed.DryRun
 	runner.Force = parsed.Force
 

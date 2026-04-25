@@ -2,7 +2,9 @@ package taskfile
 
 import (
 	"fmt"
+	"io"
 	"maps"
+	"os"
 	"slices"
 	"sync"
 )
@@ -16,6 +18,21 @@ type Execution struct {
 	UseOpRun bool
 }
 
+// RunnerIO contains process streams used by a Runner.
+type RunnerIO struct {
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
+func defaultRunnerIO() RunnerIO {
+	return RunnerIO{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	}
+}
+
 // Runner executes tasks from a loaded Taskfile.
 type Runner struct {
 	tf          *Taskfile
@@ -25,6 +42,7 @@ type Runner struct {
 	DryRun      bool              // if true, print commands without executing them
 	Force       bool              // if true, ignore sources and generates (always run)
 	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
+	IO          RunnerIO          // process streams used for logs and command stdio
 	runs        sync.Map          // resolved task name -> *taskRun
 }
 
@@ -60,6 +78,7 @@ func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
 		BaseEnv:     baseEnvWithDotenv(tf.DotenvVars),
 		aliases:     aliases,
 		ShellRunner: defaultShellRunner{},
+		IO:          defaultRunnerIO(),
 	}
 	return r, nil
 }

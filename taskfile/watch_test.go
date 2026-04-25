@@ -3,6 +3,7 @@ package taskfile
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,4 +149,30 @@ func TestWatchNoSourcesInDeps(t *testing.T) {
 	runner := newTestRunner(t, tf, dir)
 	err := runner.Watch(t.Context(), "build", "", time.Second)
 	require.EqualError(t, err, `task "build" has no sources, cannot watch`)
+}
+
+func TestWatchWritesRunErrorsToInjectedStderr(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: StringList{"*.go"},
+				Cmds:    []Cmd{{Cmd: "false"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, stderr.String(), `task "build"`)
 }

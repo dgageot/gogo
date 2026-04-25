@@ -2,7 +2,7 @@ package taskfile
 
 import (
 	"fmt"
-	"os"
+	"io"
 )
 
 // ANSI color escape sequences.
@@ -12,7 +12,7 @@ const (
 	colorYellow = "\x1b[33m"
 )
 
-// logTask prints a colored task-prefixed message to stderr.
-func logTask(color, name, msg string) {
-	fmt.Fprintf(os.Stderr, "%s[%s]%s %s\n", color, name, colorReset, msg)
+// logTask prints a colored task-prefixed message.
+func logTask(w io.Writer, color, name, msg string) {
+	fmt.Fprintf(w, "%s[%s]%s %s\n", color, name, colorReset, msg)
 }

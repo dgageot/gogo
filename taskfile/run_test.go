@@ -1980,3 +1980,54 @@ func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
 	assert.Empty(t, *execs)
 	assert.NoFileExists(t, checksumPath(dir, "build"))
 }
+
+func TestRunnerLogsToInjectedStderr(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Cmds: []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	assert.Contains(t, stderr.String(), "[build]")
+	assert.Contains(t, stderr.String(), "go build")
+}
+
+func TestRunnerPassesInjectedIOToShellCommands(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Taskfile{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Cmds: []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	stdin := strings.NewReader("input")
+	var stdout strings.Builder
+	var stderr strings.Builder
+	runner.IO = RunnerIO{Stdin: stdin, Stdout: &stdout, Stderr: &stderr}
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+
+	require.NoError(t, runner.Run("build", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 1)
+	assert.Same(t, stdin, runs[0].Stdin)
+	assert.Same(t, &stdout, runs[0].Stdout)
+	assert.Same(t, &stderr, runs[0].Stderr)
+}
