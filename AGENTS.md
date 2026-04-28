@@ -86,7 +86,7 @@ The Go toolchain version comes from `go.mod` (`go 1.26.2`). Tests run with
     (mirrors how `/bin/sh` resolves duplicates).
   - `app_test.go::newTestApp(t, dir, args...)` — builds an `App` wired to
     byte buffers; pass `dir = ""` to use the real `os.Getwd`.
-- Tests construct `Taskfile` literals directly when a YAML round-trip
+- Tests construct `taskfile.Config` literals directly when a YAML round-trip
   isn't part of the contract under test — this is the preferred style
   for runner-level tests. Use `Parse` / `LoadWithIncludes` only when the
   YAML/AST behavior matters.
@@ -96,7 +96,7 @@ The Go toolchain version comes from `go.mod` (`go 1.26.2`). Tests run with
 
 ## Configuration
 
-- **`gogo.yaml`** — repo's own taskfile (the project eats its own dog food).
+- **`gogo.yaml`** — repo's own task file (the project eats its own dog food).
   Edit when changing dev workflows.
 - **`.golangci.yml`** — single source of truth for lint config; keep
   `gci.sections` in sync if the module path ever changes.
@@ -120,7 +120,7 @@ The Go toolchain version comes from `go.mod` (`go 1.26.2`). Tests run with
   decide whether `UnmarshalYAML` needs string-shorthand support, thread
   it through `Runner.run` in the right phase (deps → vars → requires →
   env → preconditions → up-to-date → cmds), and cover it with a literal
-  `Taskfile` test in `run_test.go` plus a `Parse`-based test in
+  `taskfile.Config` test in `run_test.go` plus a `Parse`-based test in
   `parse_test.go` if YAML shape matters.
 - **Touching env/var resolution**: respect the existing precedence
   (`BaseEnv` < task dotenv < task vars < task env) and the rule that

@@ -19,7 +19,7 @@ func TestCollectSourcesPreservesPerTaskDir(t *testing.T) {
 		"sub/lib.go": "package lib",
 	})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -49,7 +49,7 @@ func TestCollectSourcesPreservesPerTaskDir(t *testing.T) {
 func TestCollectSourcesNoDeps(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -70,7 +70,7 @@ func TestCollectSourcesNoDeps(t *testing.T) {
 
 func TestCollectSourcesUnknownTask(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:        dir,
 		Tasks:      map[string]Task{},
 		DotenvVars: make(map[string]string),
@@ -109,7 +109,7 @@ func TestWatchStopsOnContextCancel(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -132,7 +132,7 @@ func TestWatchStopsOnContextCancel(t *testing.T) {
 
 func TestWatchNoSourcesInDeps(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -154,7 +154,7 @@ func TestWatchNoSourcesInDeps(t *testing.T) {
 func TestWatchWritesRunErrorsToInjectedStderr(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {

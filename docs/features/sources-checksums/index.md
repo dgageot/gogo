@@ -60,7 +60,7 @@ Patterns containing `**` are matched recursively across all subdirectories (hidd
 
 ## Checksum Storage
 
-Checksums are stored in `.gogo/checksum/` relative to the taskfile directory. You should add `.gogo/` to your `.gitignore`:
+Checksums are stored in `.gogo/checksum/` relative to the task file directory. You should add `.gogo/` to your `.gitignore`:
 
 ```
 # .gitignore

@@ -8,7 +8,7 @@ gogo supports variables that can be used in commands via `{{ "{{" }}.VAR}}` temp
 
 ## Global Variables
 
-Define variables at the top level of your taskfile:
+Define variables at the top level of your task file:
 
 ```yaml
 vars:
@@ -55,7 +55,7 @@ tasks:
 
 | Variable | Description |
 |----------|-------------|
-| `TASKFILE_DIR` | The working directory for the task (defaults to the taskfile directory) |
+| `TASK_FILE_DIR` | The working directory for the task (defaults to the task file directory) |
 | `CLI_ARGS` | Extra arguments passed after `--` |
 
 ## CLI Arguments
@@ -74,7 +74,7 @@ gogo test -- -v -run TestFoo
 
 ## Environment Variable Expansion
 
-Variables in the taskfile are expanded from environment variables using `{{ "{{" }}.VAR}}` syntax at parse time:
+Variables in the task file are expanded from environment variables using `{{ "{{" }}.VAR}}` syntax at parse time:
 
 ```yaml
 tasks:
@@ -82,7 +82,7 @@ tasks:
     cmd: deploy --region {{ "{{" }}.AWS_REGION}}
 ```
 
-If `AWS_REGION` is set in the environment, it will be substituted before the taskfile is processed.
+If `AWS_REGION` is set in the environment, it will be substituted before the task file is processed.
 
 ## Task Environment
 

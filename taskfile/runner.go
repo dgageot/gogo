@@ -33,9 +33,9 @@ func defaultRunnerIO() RunnerIO {
 	}
 }
 
-// Runner executes tasks from a loaded Taskfile.
+// Runner executes tasks from a loaded task file.
 type Runner struct {
-	tf          *Taskfile
+	tf          *Config
 	cwd         string
 	BaseEnv     []string          // base process environment (defaults to os.Environ() + dotenv)
 	aliases     map[string]string // alias -> task name
@@ -59,8 +59,8 @@ func (t *taskRun) do(fn func() error) error {
 	return t.err
 }
 
-// NewRunner creates a task runner for the given taskfile.
-func NewRunner(tf *Taskfile, cwd string) (*Runner, error) {
+// NewRunner creates a task runner for the given task file.
+func NewRunner(tf *Config, cwd string) (*Runner, error) {
 	// Build alias map for O(1) lookup
 	aliases := make(map[string]string)
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {

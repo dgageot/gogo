@@ -79,7 +79,7 @@ func (a *App) Run(ctx context.Context) error {
 		return a.listTasks()
 	}
 
-	dir, tf, err := a.loadTaskfile()
+	dir, tf, err := a.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// watchInterval parses the taskfile's `interval` setting, falling back to a
+// watchInterval parses the task file's `interval` setting, falling back to a
 // sensible default when unset. Invalid values are surfaced as errors rather
 // than silently ignored.
 func watchInterval(raw string) (time.Duration, error) {
@@ -169,7 +169,7 @@ func (a *App) parseArgs() (*args, error) {
 	return &parsed, nil
 }
 
-func (a *App) loadTaskfile() (string, *taskfile.Taskfile, error) {
+func (a *App) loadConfig() (string, *taskfile.Config, error) {
 	cwd, err := a.Getwd()
 	if err != nil {
 		return "", nil, err
@@ -189,7 +189,7 @@ func (a *App) loadTaskfile() (string, *taskfile.Taskfile, error) {
 }
 
 // visibleTaskNames returns sorted task names, excluding internal tasks.
-func visibleTaskNames(tf *taskfile.Taskfile) []string {
+func visibleTaskNames(tf *taskfile.Config) []string {
 	var names []string
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
 		if !isInternalTask(name) {
@@ -223,7 +223,7 @@ func (a *App) printCompletionScript(shell string) error {
 }
 
 func (a *App) printTaskNames() {
-	_, tf, err := a.loadTaskfile()
+	_, tf, err := a.loadConfig()
 	if err != nil {
 		return // silently fail during completion
 	}
@@ -273,7 +273,7 @@ const fishCompletion = `complete -c gogo -f -a '(gogo --complete 2>/dev/null)'
 `
 
 func (a *App) listTasks() error {
-	_, tf, err := a.loadTaskfile()
+	_, tf, err := a.loadConfig()
 	if err != nil {
 		return err
 	}

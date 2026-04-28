@@ -63,7 +63,7 @@ gogo -n build
 - **Concurrent dependencies** with automatic deduplication
 - **Variables** with template expansion and shell commands
 - **Dotenv** support (global and per-task)
-- **Includes** for splitting taskfiles across subdirectories
+- **Includes** for splitting task files across subdirectories
 - **Platform filtering** to restrict tasks to specific OS/arch
 - **Required variables** validation before execution
 - **1Password secrets** integration via `op://` references

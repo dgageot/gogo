@@ -11,7 +11,7 @@ import (
 
 // loadDotenvFiles reads the given .env file paths, resolving them relative to dir.
 // It skips files that don't exist. Already-seen absolute paths (tracked via seen)
-// are skipped to avoid loading the same file twice across included Taskfiles.
+// are skipped to avoid loading the same file twice across included task files.
 func loadDotenvFiles(dir string, paths []string, seen map[string]struct{}) (map[string]string, error) {
 	result := make(map[string]string)
 

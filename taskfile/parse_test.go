@@ -249,7 +249,7 @@ tasks:
     cmd: deploy.sh
 `)
 
-	tf := &Taskfile{
+	tf := &Config{
 		Tasks: map[string]Task{
 			"build":  {Cmds: []Cmd{{Cmd: "go build"}}},
 			"test":   {Cmds: []Cmd{{Cmd: "go test"}}},

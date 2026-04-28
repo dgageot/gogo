@@ -7,8 +7,8 @@ import (
 	"slices"
 )
 
-// LoadWithIncludes parses a Taskfile and resolves all includes into a flat task map.
-func LoadWithIncludes(dir string) (*Taskfile, error) {
+// LoadWithIncludes parses a task file and resolves all includes into a flat task map.
+func LoadWithIncludes(dir string) (*Config, error) {
 	root, err := Parse(dir)
 	if err != nil {
 		return nil, err
@@ -21,16 +21,16 @@ func LoadWithIncludes(dir string) (*Taskfile, error) {
 	return loader.load()
 }
 
-// includeLoader holds shared state while recursively loading included Taskfiles.
+// includeLoader holds shared state while recursively loading included task files.
 type includeLoader struct {
-	root         *Taskfile
+	root         *Config
 	rootDir      string
 	seenDotenv   map[string]struct{} // deduplicates dotenv files across includes
 	dotenvVars   map[string]string   // accumulated dotenv variables
 	includeStack map[string]struct{} // dirs on the current recursion path (cycle detection)
 }
 
-func newIncludeLoader(root *Taskfile) (*includeLoader, error) {
+func newIncludeLoader(root *Config) (*includeLoader, error) {
 	seenDotenv := make(map[string]struct{})
 	dotenvVars, err := loadDotenvFiles(root.Dir, root.Dotenv, seenDotenv)
 	if err != nil {
@@ -46,7 +46,7 @@ func newIncludeLoader(root *Taskfile) (*includeLoader, error) {
 	}, nil
 }
 
-func (l *includeLoader) load() (*Taskfile, error) {
+func (l *includeLoader) load() (*Config, error) {
 	l.root.Namespaces = make(map[string]string)
 
 	for _, includeName := range l.root.Includes {
@@ -70,14 +70,14 @@ type includeRequest struct {
 }
 
 func (r includeRequest) parentFile() string {
-	return findTaskfile(r.parentDir)
+	return findFile(r.parentDir)
 }
 
 func (r includeRequest) childDir() (string, error) {
 	return filepath.Abs(filepath.Join(r.parentDir, r.name))
 }
 
-// loadInclude parses an included Taskfile, loads nested includes, then merges it into the root.
+// loadInclude parses an included task file, loads nested includes, then merges it into the root.
 func (l *includeLoader) loadInclude(req includeRequest) error {
 	included, err := l.parseInclude(req)
 	if err != nil {
@@ -100,7 +100,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 	return nil
 }
 
-func (l *includeLoader) parseInclude(req includeRequest) (*includedTaskfile, error) {
+func (l *includeLoader) parseInclude(req includeRequest) (*includedConfig, error) {
 	childDir, err := req.childDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolving include %q from %s: %w", req.namespace, req.parentFile(), err)
@@ -116,8 +116,8 @@ func (l *includeLoader) parseInclude(req includeRequest) (*includedTaskfile, err
 		return nil, fmt.Errorf("loading include %q from %s: %w", req.namespace, req.parentFile(), err)
 	}
 
-	included := &includedTaskfile{
-		Taskfile:  child,
+	included := &includedConfig{
+		Config:    child,
 		Namespace: req.namespace,
 		Parent:    req,
 	}
@@ -129,7 +129,7 @@ func (l *includeLoader) leaveInclude(dir string) {
 	delete(l.includeStack, dir)
 }
 
-func (l *includeLoader) loadIncludeDotenv(included *includedTaskfile) error {
+func (l *includeLoader) loadIncludeDotenv(included *includedConfig) error {
 	childDotenv, err := loadDotenvFiles(included.Dir, included.Dotenv, l.seenDotenv)
 	if err != nil {
 		return fmt.Errorf("loading dotenv for include %q from %s: %w", included.Namespace, included.Parent.parentFile(), err)
@@ -142,14 +142,14 @@ func (l *includeLoader) loadIncludeDotenv(included *includedTaskfile) error {
 	return nil
 }
 
-type includedTaskfile struct {
-	*Taskfile
+type includedConfig struct {
+	*Config
 
 	Namespace string
 	Parent    includeRequest
 }
 
-func nestedIncludes(parent *includedTaskfile) []includeRequest {
+func nestedIncludes(parent *includedConfig) []includeRequest {
 	var requests []includeRequest
 	for _, name := range parent.Includes {
 		requests = append(requests, includeRequest{
@@ -176,27 +176,27 @@ func (l *includeLoader) mergeVars(vars map[string]Var) {
 	}
 }
 
-func (l *includeLoader) mergeTasks(included *includedTaskfile) {
+func (l *includeLoader) mergeTasks(included *includedConfig) {
 	for _, name := range slices.Sorted(maps.Keys(included.Tasks)) {
 		task := normalizedIncludedTask(included, name)
 		l.root.Tasks[included.Namespace+":"+name] = task
 	}
 }
 
-func normalizedIncludedTask(included *includedTaskfile, name string) Task {
+func normalizedIncludedTask(included *includedConfig, name string) Task {
 	task := included.Tasks[name]
 	makeTaskDirAbsolute(&task, included.Dir)
 	namespaceLocalReferences(&task, included)
 	return task
 }
 
-func makeTaskDirAbsolute(task *Task, taskfileDir string) {
+func makeTaskDirAbsolute(task *Task, fileDir string) {
 	if !filepath.IsAbs(task.Dir) {
-		task.Dir = filepath.Join(taskfileDir, task.Dir)
+		task.Dir = filepath.Join(fileDir, task.Dir)
 	}
 }
 
-func namespaceLocalReferences(task *Task, included *includedTaskfile) {
+func namespaceLocalReferences(task *Task, included *includedConfig) {
 	for i, dep := range task.Deps {
 		if hasTask(included.Tasks, dep.Task) {
 			task.Deps[i].Task = included.Namespace + ":" + dep.Task

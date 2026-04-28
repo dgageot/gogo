@@ -7,8 +7,8 @@
 
 - section: Features
   items:
-    - title: Taskfile Syntax
-      url: /features/taskfile-syntax/
+    - title: Task File Syntax
+      url: /features/task-file-syntax/
     - title: Variables
       url: /features/variables/
     - title: Dependencies

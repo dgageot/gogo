@@ -7,7 +7,7 @@ title: gogo
   <p>A simple task runner. Define tasks in YAML, run them from anywhere.</p>
   <div class="hero-buttons">
     <a href="{{ '/getting-started/installation/' | relative_url }}" class="btn btn-primary">Get Started</a>
-    <a href="{{ '/features/taskfile-syntax/' | relative_url }}" class="btn btn-secondary">Taskfile Syntax</a>
+    <a href="{{ '/features/task-file-syntax/' | relative_url }}" class="btn btn-secondary">Task File Syntax</a>
   </div>
 </div>
 
@@ -40,7 +40,7 @@ title: gogo
   <div class="feature">
     <div class="feature-icon">📦</div>
     <h3>Includes</h3>
-    <p>Split large taskfiles into namespaced modules across subdirectories.</p>
+    <p>Split large task files into namespaced modules across subdirectories.</p>
   </div>
 </div>
 

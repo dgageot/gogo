@@ -20,7 +20,7 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 // newTestApp builds an App wired to byte buffers, with Getwd pinned to dir.
-// Pass an empty dir to fall back to os.Getwd (useful for tests that don't need a taskfile).
+// Pass an empty dir to fall back to os.Getwd (useful for tests that don't need a task file).
 func newTestApp(t *testing.T, dir string, cliArgs ...string) (*App, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
@@ -45,7 +45,7 @@ func TestIsInternalTask(t *testing.T) {
 }
 
 func TestVisibleTaskNames(t *testing.T) {
-	tf := &taskfile.Taskfile{
+	tf := &taskfile.Config{
 		Tasks: map[string]taskfile.Task{
 			"build":       {},
 			"_internal":   {},
@@ -168,7 +168,7 @@ tasks:
 	assert.Equal(t, "build\ntest\n", stdout.String())
 }
 
-func TestAppCompleteSilentOnMissingTaskfile(t *testing.T) {
+func TestAppCompleteSilentOnMissingFile(t *testing.T) {
 	app, stdout, stderr := newTestApp(t, t.TempDir(), "--complete")
 
 	require.NoError(t, app.Run(t.Context()))
@@ -176,7 +176,7 @@ func TestAppCompleteSilentOnMissingTaskfile(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func TestAppListFailsWhenNoTaskfileFound(t *testing.T) {
+func TestAppListFailsWhenNoFileFound(t *testing.T) {
 	app, _, _ := newTestApp(t, t.TempDir(), "--list")
 
 	err := app.Run(t.Context())

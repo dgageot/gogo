@@ -4,7 +4,7 @@ title: Includes
 
 # Includes
 
-Split your taskfile into multiple files across subdirectories. Each included directory must contain its own `gogo.yaml`.
+Split your task file into multiple files across subdirectories. Each included directory must contain its own `gogo.yaml`.
 
 ## Basic Setup
 
@@ -54,4 +54,4 @@ gogo build      # resolves to backend:build
 
 ## Dotenv Deduplication
 
-Each included taskfile can define its own `dotenv` files. If multiple includes reference the same `.env` file (by absolute path), it's loaded only once.
+Each included task file can define its own `dotenv` files. If multiple includes reference the same `.env` file (by absolute path), it's loaded only once.

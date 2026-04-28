@@ -88,7 +88,7 @@ func captureExecs(r *Runner) *[]Execution {
 	return &execs
 }
 
-func newTestRunner(t *testing.T, tf *Taskfile, dir string) *Runner {
+func newTestRunner(t *testing.T, tf *Config, dir string) *Runner {
 	t.Helper()
 
 	r, err := NewRunner(tf, dir)
@@ -112,7 +112,7 @@ func envValue(env []string, key string) string {
 func TestRunWithExtraVars(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"caller": {
@@ -145,7 +145,7 @@ func TestRunWithExtraVars(t *testing.T) {
 func TestRunWithExtraVarsOverridesTaskVars(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"caller": {
@@ -180,7 +180,7 @@ func TestRunWithExtraVarsOverridesTaskVars(t *testing.T) {
 func TestRunWithExtraVarsShell(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"caller": {
@@ -211,7 +211,7 @@ func TestRunWithExtraVarsShell(t *testing.T) {
 
 func TestRequiresVarsMissing(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -231,7 +231,7 @@ func TestRequiresVarsMissing(t *testing.T) {
 
 func TestRequiresVarsProvided(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -252,7 +252,7 @@ func TestRequiresVarsProvided(t *testing.T) {
 
 func TestRequiresEnvMissing(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -272,7 +272,7 @@ func TestRequiresEnvMissing(t *testing.T) {
 
 func TestRequiresEnvProvided(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -294,7 +294,7 @@ func TestRequiresEnvProvided(t *testing.T) {
 func TestRunDeduplicatesDeps(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -355,7 +355,7 @@ func TestMatchesPlatform(t *testing.T) {
 func TestPlatformSkipsTask(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -376,7 +376,7 @@ func TestPlatformSkipsTask(t *testing.T) {
 
 func TestWatchRejectsTooSmallInterval(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -395,7 +395,7 @@ func TestWatchRejectsTooSmallInterval(t *testing.T) {
 func TestPlatformRunsTask(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -419,7 +419,7 @@ func TestPlatformRunsTask(t *testing.T) {
 func TestExecutionOrder(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -453,7 +453,7 @@ func TestExecutionOrder(t *testing.T) {
 func TestTaskEnvPassedToExecution(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -480,7 +480,7 @@ func TestTaskDir(t *testing.T) {
 	subdir := filepath.Join(dir, "sub")
 	writeFiles(t, dir, map[string]string{"sub/.keep": ""})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -504,7 +504,7 @@ func TestTaskDir(t *testing.T) {
 func TestOpSecretsDetection(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -528,7 +528,7 @@ func TestOpSecretsDetection(t *testing.T) {
 func TestGlobalVarsInEnv(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:  dir,
 		Vars: map[string]Var{"VERSION": {Value: "1.2.3"}},
 		Tasks: map[string]Task{
@@ -552,7 +552,7 @@ func TestGlobalVarsInEnv(t *testing.T) {
 
 func TestTaskNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:        dir,
 		Tasks:      map[string]Task{},
 		DotenvVars: make(map[string]string),
@@ -567,7 +567,7 @@ func TestTaskNotFound(t *testing.T) {
 
 func TestAliasCollisionDetected(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"cli:github":    {Aliases: StringList{"gh"}, Cmds: []Cmd{{Cmd: "gh cli"}}},
@@ -582,7 +582,7 @@ func TestAliasCollisionDetected(t *testing.T) {
 
 func TestAliasResolution(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"github": {
@@ -609,7 +609,7 @@ func TestNamespaceResolution(t *testing.T) {
 	writeFiles(t, dir, map[string]string{"cli/.keep": ""})
 	cliDir := filepath.Join(dir, "cli")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"cli:build": {
@@ -633,7 +633,7 @@ func TestNamespaceResolution(t *testing.T) {
 
 func TestDryRunSkipsExecution(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -654,7 +654,7 @@ func TestDryRunSkipsExecution(t *testing.T) {
 
 func TestCLIArgsExpansion(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"test": {
@@ -674,13 +674,13 @@ func TestCLIArgsExpansion(t *testing.T) {
 	assert.Equal(t, "go test -v -run TestFoo", (*execs)[0].Command)
 }
 
-func TestTaskfileDirVar(t *testing.T) {
+func TestBuiltinDirVar(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"show": {
-				Cmds: []Cmd{{Cmd: "echo ${TASKFILE_DIR}"}},
+				Cmds: []Cmd{{Cmd: "echo ${TASK_FILE_DIR}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -694,12 +694,12 @@ func TestTaskfileDirVar(t *testing.T) {
 
 	require.Len(t, *execs, 1)
 	assert.Equal(t, "echo "+dir, (*execs)[0].Command)
-	assert.Equal(t, dir, envValue((*execs)[0].Env, "TASKFILE_DIR"))
+	assert.Equal(t, dir, envValue((*execs)[0].Env, "TASK_FILE_DIR"))
 }
 
 func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:  dir,
 		Vars: map[string]Var{"MODE": {Value: "global"}},
 		Tasks: map[string]Task{
@@ -723,7 +723,7 @@ func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 
 func TestEnvExpansionReferencesVars(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -747,7 +747,7 @@ func TestEnvExpansionReferencesVars(t *testing.T) {
 
 func TestResetRanAllowsRerun(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -775,7 +775,7 @@ func TestResetRanAllowsRerun(t *testing.T) {
 
 func TestCommandFailureStopsExecution(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -810,7 +810,7 @@ func TestCommandFailureStopsExecution(t *testing.T) {
 
 func TestDepFailurePreventsTask(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -845,7 +845,7 @@ func TestDepFailurePreventsTask(t *testing.T) {
 
 func TestTaskWithOnlyDeps(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -884,7 +884,7 @@ func TestExpandVarsCLIArgs(t *testing.T) {
 
 func TestNoOpSecretsUseOpRunFalse(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -907,7 +907,7 @@ func TestNoOpSecretsUseOpRunFalse(t *testing.T) {
 
 func TestDotenvVarsInBaseEnv(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:        dir,
 		Tasks:      map[string]Task{"build": {Cmds: []Cmd{{Cmd: "go build"}}}},
 		DotenvVars: map[string]string{"DB_HOST": "localhost", "DB_PORT": "5432"},
@@ -928,7 +928,7 @@ func TestDotenvVarsInBaseEnv(t *testing.T) {
 
 func TestDedupDoesNotApplyWithExtraVars(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"caller": {
@@ -955,9 +955,9 @@ func TestDedupDoesNotApplyWithExtraVars(t *testing.T) {
 	assert.Equal(t, "echo goodbye", (*execs)[1].Command)
 }
 
-func TestDefaultDirIsTaskfileDir(t *testing.T) {
+func TestDefaultDirIsRootDir(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {Cmds: []Cmd{{Cmd: "make"}}},
@@ -978,7 +978,7 @@ func TestSourcesChecksumSkipsUpToDate(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1006,7 +1006,7 @@ func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1034,7 +1034,7 @@ func TestForceIgnoresSources(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1066,7 +1066,7 @@ func TestGeneratesSkipsUpToDate(t *testing.T) {
 	outputTime := time.Now().Add(time.Hour)
 	require.NoError(t, os.Chtimes(filepath.Join(dir, "main"), outputTime, outputTime))
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1087,7 +1087,7 @@ func TestGeneratesSkipsUpToDate(t *testing.T) {
 
 func TestMultipleDepFailures(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -1129,7 +1129,7 @@ func TestAbsoluteTaskDir(t *testing.T) {
 	writeFiles(t, dir, map[string]string{"absolute/.keep": ""})
 	absDir := filepath.Join(dir, "absolute")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1151,7 +1151,7 @@ func TestAbsoluteTaskDir(t *testing.T) {
 
 func TestBuildEnvNoDuplicateKeys(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:  dir,
 		Vars: map[string]Var{"FOO": {Value: "from-var"}},
 		Tasks: map[string]Task{
@@ -1182,7 +1182,7 @@ func TestBuildEnvNoDuplicateKeys(t *testing.T) {
 
 func TestEnvPrecedenceOrder(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir:  dir,
 		Vars: map[string]Var{"FOO": {Value: "from-var"}},
 		Tasks: map[string]Task{
@@ -1207,7 +1207,7 @@ func TestEnvPrecedenceOrder(t *testing.T) {
 
 func TestTemplateVarsThroughRunner(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"greet": {
@@ -1237,7 +1237,7 @@ func TestTaskLevelDotenvThroughRunner(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env.task": "TASK_SECRET=abc\n"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1263,7 +1263,7 @@ func TestNamespaceResolutionPicksMostSpecific(t *testing.T) {
 	cliDir := filepath.Join(dir, "cli")
 	cliUtilsDir := filepath.Join(dir, "cli", "utils")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"cli:build":       {Dir: cliDir, Cmds: []Cmd{{Cmd: "go build cli"}}},
@@ -1284,15 +1284,15 @@ func TestNamespaceResolutionPicksMostSpecific(t *testing.T) {
 }
 
 func TestNamespaceResolutionSelfPrefix(t *testing.T) {
-	// When running a sub-Taskfile as its own root, a task name qualified with
+	// When running a sub task file as its own root, a task name qualified with
 	// the directory's basename (e.g. "proxy:deploy-prod" from inside proxy/)
 	// should resolve to the bare task ("deploy-prod"). This matches the name
-	// the task has when the parent Taskfile is the root.
+	// the task has when the parent task file is the root.
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"proxy/.keep": ""})
 	proxyDir := filepath.Join(dir, "proxy")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: proxyDir,
 		Tasks: map[string]Task{
 			"deploy-prod": {Cmds: []Cmd{{Cmd: "deploy"}}},
@@ -1317,7 +1317,7 @@ func TestNamespaceResolutionMiss(t *testing.T) {
 	cliDir := filepath.Join(dir, "cli")
 	otherDir := filepath.Join(dir, "other")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"cli:build": {
@@ -1353,7 +1353,7 @@ func TestOpSecretsInDotenvTriggerOpRun(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env.task": "TOKEN=op://vault/item/field\n"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1392,7 +1392,7 @@ func TestExpandVarsTemplateFromEnv(t *testing.T) {
 
 func TestInlineTaskCallFailure(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"parent": {
@@ -1433,7 +1433,7 @@ func TestBuildEnvDotenvError(t *testing.T) {
 	// Create an invalid dotenv file
 	writeFiles(t, dir, map[string]string{".env.bad": "BAD-KEY=value\n"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1454,7 +1454,7 @@ func TestBuildEnvDotenvError(t *testing.T) {
 
 func TestDedupPropagatesErrorToWaitingGoroutine(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"all": {
@@ -1500,7 +1500,7 @@ func TestTaskDotenvDoesNotOverrideGlobalDotenv(t *testing.T) {
 		".env.task": "SHARED_KEY=from-task\nTASK_ONLY=task-value\n",
 	})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1534,7 +1534,7 @@ func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env": "MY_VAR=from-dotenv\n"})
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1561,7 +1561,7 @@ func TestTaskDotenvDoesNotOverrideOSEnv(t *testing.T) {
 
 func TestDryRunWithTaskReference(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"parent": {
@@ -1589,7 +1589,7 @@ func TestDryRunWithTaskReference(t *testing.T) {
 
 func TestRequiresBothVarsAndEnv(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1614,7 +1614,7 @@ func TestRequiresBothVarsAndEnv(t *testing.T) {
 
 func TestEnvEntriesReferenceEachOther(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1636,7 +1636,7 @@ func TestEnvEntriesReferenceEachOther(t *testing.T) {
 
 func TestEnvReverseAlphabeticalReference(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1659,7 +1659,7 @@ func TestEnvReverseAlphabeticalReference(t *testing.T) {
 
 func TestEnvMutualRecursionDoesNotOverflow(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1684,7 +1684,7 @@ func TestEnvExpandsFromOSEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOGO_BASE", "/opt")
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1706,7 +1706,7 @@ func TestEnvExpandsFromOSEnv(t *testing.T) {
 
 func TestPreconditionSeesTaskEnv(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1729,7 +1729,7 @@ func TestPreconditionSeesTaskEnv(t *testing.T) {
 
 func TestPreconditionPasses(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1752,7 +1752,7 @@ func TestPreconditionPasses(t *testing.T) {
 
 func TestPreconditionFails(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1775,7 +1775,7 @@ func TestPreconditionFails(t *testing.T) {
 
 func TestPreconditionFailsWithDefaultMessage(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1798,7 +1798,7 @@ func TestPreconditionFailsWithDefaultMessage(t *testing.T) {
 
 func TestPreconditionStringShorthand(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1823,7 +1823,7 @@ func TestPreconditionStringShorthand(t *testing.T) {
 func TestSourcesChecksumErrorPropagates(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1844,7 +1844,7 @@ func TestSourcesChecksumErrorPropagates(t *testing.T) {
 
 func TestResolveVarShellError(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1868,7 +1868,7 @@ func TestResolveVarShellError(t *testing.T) {
 func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
 	dir := t.TempDir()
 
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1894,7 +1894,7 @@ func TestSourcesNoMatchAlwaysRuns(t *testing.T) {
 
 func TestShellRunnerRunsPreconditionsWithoutRunningRealShell(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"deploy": {
@@ -1926,7 +1926,7 @@ func TestShellRunnerRunsPreconditionsWithoutRunningRealShell(t *testing.T) {
 
 func TestShellRunnerResolvesShellVariablesWithoutRunningRealShell(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1961,7 +1961,7 @@ func TestShellRunnerResolvesShellVariablesWithoutRunningRealShell(t *testing.T) 
 func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -1983,7 +1983,7 @@ func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
 
 func TestRunnerLogsToInjectedStderr(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {
@@ -2005,7 +2005,7 @@ func TestRunnerLogsToInjectedStderr(t *testing.T) {
 
 func TestRunnerPassesInjectedIOToShellCommands(t *testing.T) {
 	dir := t.TempDir()
-	tf := &Taskfile{
+	tf := &Config{
 		Dir: dir,
 		Tasks: map[string]Task{
 			"build": {

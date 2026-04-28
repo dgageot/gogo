@@ -19,7 +19,7 @@ gogo -w test
 
 ## Polling Interval
 
-The default interval is 500ms. Override it in the taskfile:
+The default interval is 500ms. Override it in the task file:
 
 ```yaml
 interval: 1s

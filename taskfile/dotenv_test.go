@@ -110,7 +110,7 @@ func TestBuildEnvWithTaskDotenv(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env.task": "TASK_VAR=task_value\n"})
 
-	tf := &Taskfile{Dir: dir, Tasks: make(map[string]Task), DotenvVars: make(map[string]string)}
+	tf := &Config{Dir: dir, Tasks: make(map[string]Task), DotenvVars: make(map[string]string)}
 	r, err := NewRunner(tf, dir)
 	require.NoError(t, err)
 
@@ -121,7 +121,7 @@ func TestBuildEnvWithTaskDotenv(t *testing.T) {
 }
 
 func TestBuildEnvWithoutTaskDotenv(t *testing.T) {
-	tf := &Taskfile{Dir: t.TempDir(), Tasks: make(map[string]Task), DotenvVars: make(map[string]string)}
+	tf := &Config{Dir: t.TempDir(), Tasks: make(map[string]Task), DotenvVars: make(map[string]string)}
 	r, err := NewRunner(tf, tf.Dir)
 	require.NoError(t, err)
 

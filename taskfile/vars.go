@@ -41,7 +41,7 @@ func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]V
 // resolveVars computes the effective variables for a task.
 func (r *Runner) resolveVars(task *Task, taskDir string) (map[string]string, error) {
 	resolved := map[string]string{
-		"TASKFILE_DIR": taskDir,
+		"TASK_FILE_DIR": taskDir,
 	}
 	if err := r.addVars(resolved, r.tf.Vars, r.tf.Dir); err != nil {
 		return nil, err

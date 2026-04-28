@@ -23,9 +23,9 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 		}
 	}
 
-	// Try stripping a self-prefix that matches the taskfile root's basename.
-	// This lets "proxy:deploy-prod" work when running from a sub-Taskfile at
-	// proxy/ — the same name also works when the parent Taskfile is the root.
+	// Try stripping a self-prefix that matches the task file root's basename.
+	// This lets "proxy:deploy-prod" work when running from a sub task file at
+	// proxy/ — the same name also works when the parent task file is the root.
 	if prefix, suffix, ok := strings.Cut(name, ":"); ok && prefix == filepath.Base(r.tf.Dir) {
 		if resolved, ok := r.resolveTaskName(suffix); ok {
 			return resolved, true
@@ -37,7 +37,7 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 
 // cwdNamespace returns the most specific namespace whose directory contains
 // the runner's current working directory. Used to let users invoke tasks by
-// their short name when cwd sits under an included Taskfile.
+// their short name when cwd sits under an included task file.
 func (r *Runner) cwdNamespace() (string, bool) {
 	var bestDir, bestNS string
 	for dir, ns := range r.tf.Namespaces {

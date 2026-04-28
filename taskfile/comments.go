@@ -9,7 +9,7 @@ import (
 
 // applyTaskComments parses the YAML AST to extract comments above task keys
 // and uses them as task descriptions when no explicit desc is set.
-func applyTaskComments(tf *Taskfile, data []byte) {
+func applyTaskComments(tf *Config, data []byte) {
 	file, err := parser.ParseBytes(data, parser.ParseComments)
 	if err != nil || len(file.Docs) == 0 {
 		return

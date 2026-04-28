@@ -1,8 +1,8 @@
 ---
-title: Taskfile Syntax
+title: Task File Syntax
 ---
 
-# Taskfile Syntax
+# Task File Syntax
 
 gogo reads task definitions from a `gogo.yaml` file in the current directory.
 
@@ -11,7 +11,7 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | string | Optional version identifier |
-| `includes` | list of strings | Subdirectories containing other taskfiles |
+| `includes` | list of strings | Subdirectories containing other task files |
 | `dotenv` | list of strings | Paths to `.env` files to load |
 | `vars` | map | Global variables |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |

@@ -113,8 +113,8 @@ func walkRecursive(dir, pattern string) []string {
 }
 
 // checksumPath returns the file path for a task's stored checksum.
-func checksumPath(taskfileDir, taskName string) string {
-	return filepath.Join(taskfileDir, ".gogo", "checksum", sanitizeTaskName(taskName))
+func checksumPath(fileDir, taskName string) string {
+	return filepath.Join(fileDir, ".gogo", "checksum", sanitizeTaskName(taskName))
 }
 
 // sanitizeTaskName encodes a task name as a filesystem-safe filename using
@@ -126,8 +126,8 @@ func sanitizeTaskName(name string) string {
 }
 
 // readStoredChecksum returns the previously stored checksum for a task, or empty if none.
-func readStoredChecksum(taskfileDir, taskName string) string {
-	data, err := os.ReadFile(checksumPath(taskfileDir, taskName))
+func readStoredChecksum(fileDir, taskName string) string {
+	data, err := os.ReadFile(checksumPath(fileDir, taskName))
 	if err != nil {
 		return ""
 	}
@@ -135,8 +135,8 @@ func readStoredChecksum(taskfileDir, taskName string) string {
 }
 
 // writeChecksum stores the checksum for a task.
-func writeChecksum(taskfileDir, taskName, checksum string) error {
-	p := checksumPath(taskfileDir, taskName)
+func writeChecksum(fileDir, taskName, checksum string) error {
+	p := checksumPath(fileDir, taskName)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}

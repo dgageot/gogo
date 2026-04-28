@@ -9,11 +9,11 @@ import (
 	yaml "github.com/goccy/go-yaml"
 )
 
-const taskfileName = "gogo.yaml"
+const fileName = "gogo.yaml"
 
-// Parse reads and parses a Taskfile from the given directory.
-func Parse(dir string) (*Taskfile, error) {
-	path := findTaskfile(dir)
+// Parse reads and parses a task file from the given directory.
+func Parse(dir string) (*Config, error) {
+	path := findFile(dir)
 	if path == "" {
 		return nil, fmt.Errorf("no gogo.yaml found in %s", dir)
 	}
@@ -25,7 +25,7 @@ func Parse(dir string) (*Taskfile, error) {
 
 	data = expandTemplates(data)
 
-	var tf Taskfile
+	var tf Config
 	if err := yaml.UnmarshalWithOptions(data, &tf, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
 	}
@@ -41,9 +41,9 @@ func Parse(dir string) (*Taskfile, error) {
 	return &tf, nil
 }
 
-// findTaskfile returns the path to the taskfile in dir, or empty if none exists.
-func findTaskfile(dir string) string {
-	path := filepath.Join(dir, taskfileName)
+// findFile returns the path to the task file in dir, or empty if none exists.
+func findFile(dir string) string {
+	path := filepath.Join(dir, fileName)
 	if _, err := os.Stat(path); err == nil {
 		return path
 	}
@@ -58,7 +58,7 @@ func FindRootDir(dir string) (string, error) {
 	}
 
 	for {
-		if findTaskfile(dir) != "" {
+		if findFile(dir) != "" {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

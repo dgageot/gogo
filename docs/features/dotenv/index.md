@@ -55,10 +55,10 @@ DB_PASSWORD='s3cret'
 - Per-task dotenv values override global dotenv values
 - Existing environment variables are never overridden
 - Missing files are silently skipped
-- Global dotenv paths are relative to the taskfile directory
+- Global dotenv paths are relative to the task file directory
 - Per-task dotenv paths are relative to the task's working directory
 - `~/` is expanded to the home directory
 
 ## With Includes
 
-When using [includes](../includes/), each included taskfile can define its own `dotenv` files. Files are deduplicated by absolute path — the same `.env` file is never loaded twice.
+When using [includes](../includes/), each included task file can define its own `dotenv` files. Files are deduplicated by absolute path — the same `.env` file is never loaded twice.

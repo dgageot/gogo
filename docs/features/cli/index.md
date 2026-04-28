@@ -51,6 +51,6 @@ gogo -w test
 gogo test -- -v -run TestFoo
 ```
 
-## Taskfile Discovery
+## Task File Discovery
 
-gogo walks up the directory tree to find the topmost directory containing a `gogo.yaml` file. This means you can run gogo from any subdirectory and it will find the root taskfile.
+gogo walks up the directory tree to find the topmost directory containing a `gogo.yaml` file. This means you can run gogo from any subdirectory and it will find the root task file.
