@@ -2003,6 +2003,116 @@ func TestRunnerLogsToInjectedStderr(t *testing.T) {
 	assert.Contains(t, stderr.String(), "go build")
 }
 
+func TestSilentSuppressesPerCmdLog(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Silent: true,
+				Cmds:   []Cmd{{Cmd: "go build"}, {Cmd: "go install"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	// Commands still run.
+	require.Len(t, *execs, 2)
+	assert.Equal(t, "go build", (*execs)[0].Command)
+	assert.Equal(t, "go install", (*execs)[1].Command)
+
+	// But the per-cmd "[build] ..." log line is suppressed.
+	assert.NotContains(t, stderr.String(), "[build]")
+}
+
+func TestNonSilentLogsPerCmd(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Cmds: []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	assert.Contains(t, stderr.String(), "[build]")
+	assert.Contains(t, stderr.String(), "go build")
+}
+
+func TestSilentDoesNotPropagateToCalledTasks(t *testing.T) {
+	// silent: true on a task suppresses logs for *its own* cmds only.
+	// A non-silent task invoked via `task:` from a silent caller still logs.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"caller": {
+				Silent: true,
+				Cmds: []Cmd{
+					{Cmd: "echo from-caller"},
+					{Task: "callee"},
+				},
+			},
+			"callee": {
+				Cmds: []Cmd{{Cmd: "echo from-callee"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("caller", ""))
+
+	output := stderr.String()
+	assert.NotContains(t, output, "[caller]", "silent caller's cmd line should be suppressed")
+	assert.NotContains(t, output, "echo from-caller", "silent caller's cmd should not be echoed")
+	assert.Contains(t, output, "[callee]", "non-silent callee should still log")
+	assert.Contains(t, output, "echo from-callee", "non-silent callee's cmd should still be echoed")
+}
+
+func TestSilentInDryRunStillSkipsExecution(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Silent: true,
+				Cmds:   []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	runner.DryRun = true
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	assert.Empty(t, *execs, "dry-run should not execute commands")
+	assert.NotContains(t, stderr.String(), "[build]", "silent should suppress log even in dry-run")
+}
+
 func TestRunnerPassesInjectedIOToShellCommands(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{

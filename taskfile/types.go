@@ -27,7 +27,8 @@ type Task struct {
 	Platforms     StringList        `yaml:"platforms"`
 	Requires      Requires          `yaml:"requires"`
 	Preconditions []Precondition    `yaml:"preconditions"`
-	Desc          string            `yaml:"-"` // set from YAML comments, not from a field
+	Silent        bool              `yaml:"silent"` // when true, suppress the per-cmd "[task] cmd" log line
+	Desc          string            `yaml:"-"`      // set from YAML comments, not from a field
 }
 
 // UnmarshalYAML normalizes the singular "cmd" field into the "cmds" list.

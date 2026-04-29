@@ -133,7 +133,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 		return nil
 	}
 
-	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env)); err != nil {
+	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env), task.Silent); err != nil {
 		return err
 	}
 
@@ -143,8 +143,10 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 	return nil
 }
 
-// runCmds executes a list of commands in sequence.
-func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun bool) error {
+// runCmds executes a list of commands in sequence. When silent is true, the
+// per-cmd "[task] cmd" log line is suppressed; the command itself still runs
+// and its own stdout/stderr are unaffected.
+func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool) error {
 	for _, cmd := range cmds {
 		if cmd.Task != "" {
 			if err := r.Run(cmd.Task, cliArgs, cmd.Vars); err != nil {
@@ -153,8 +155,10 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			continue
 		}
 
-		// Log the original command template to avoid leaking expanded secrets.
-		r.logTask(colorGreen, taskName, cmd.Cmd)
+		if !silent {
+			// Log the original command template to avoid leaking expanded secrets.
+			r.logTask(colorGreen, taskName, cmd.Cmd)
+		}
 
 		if r.DryRun {
 			continue

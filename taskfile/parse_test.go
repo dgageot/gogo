@@ -236,6 +236,27 @@ tasks:
 	assert.Empty(t, task.Preconditions[1].Msg)
 }
 
+func TestParseSilentField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  setup:
+    silent: true
+    cmds:
+      - echo step1
+      - echo step2
+  build:
+    cmds:
+      - go build
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.True(t, tf.Tasks["setup"].Silent)
+	assert.False(t, tf.Tasks["build"].Silent, "silent defaults to false")
+}
+
 func TestApplyTaskComments(t *testing.T) {
 	yamlData := []byte(`version: "3"
 tasks:
