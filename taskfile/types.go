@@ -4,6 +4,7 @@ package taskfile
 type Config struct {
 	Version    string            `yaml:"version"`
 	Includes   []string          `yaml:"includes"`
+	Flatten    []string          `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
 	Dotenv     []string          `yaml:"dotenv"`
 	Vars       map[string]Var    `yaml:"vars"`
 	Tasks      map[string]Task   `yaml:"tasks"`

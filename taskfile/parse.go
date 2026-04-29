@@ -17,7 +17,13 @@ func Parse(dir string) (*Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no gogo.yaml found in %s", dir)
 	}
+	return parseFile(path, dir)
+}
 
+// parseFile reads and parses a YAML file at the given path. The dir argument
+// becomes the Config's Dir, and is used to resolve relative paths for dotenv,
+// nested includes and (for an included gogo.yaml) the task file's own dir.
+func parseFile(path, dir string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)

@@ -1981,6 +1981,36 @@ func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
 	assert.NoFileExists(t, checksumPath(dir, "build"))
 }
 
+func TestFlattenedTaskRunsFromRootDir(t *testing.T) {
+	// End-to-end: a task defined inside a flatten file with `dir: backend`
+	// must run from <root>/backend, not from the flatten file's containing dir.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"backend/.keep": "",
+		"gogo.yaml": `version: "1"
+flatten:
+  - tasks/build.yml
+`,
+		"tasks/build.yml": `version: "1"
+tasks:
+  build:
+    dir: backend
+    cmd: go build
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "go build", (*execs)[0].Command)
+	assert.Equal(t, filepath.Join(dir, "backend"), (*execs)[0].Dir)
+}
+
 func TestCLIArgsOverriddenByCallSiteVars(t *testing.T) {
 	// agentic-platform pattern: a wrapper task calls a flag-aware sub-task
 	// with `vars: { CLI_ARGS: -f }` to force a specific behavior, regardless
