@@ -36,8 +36,12 @@ RUN --mount=type=bind,from=osxcross,src=/osxsdk,target=/xx-sdk \
     else
       export CGO_ENABLED=0
     fi
-    xx-go build -trimpath -ldflags "-s -w" -o /binaries/gogo-$TARGETOS-$TARGETARCH .
-    xx-verify /binaries/gogo-$TARGETOS-$TARGETARCH
+    EXT=""
+    if [ "$TARGETOS" = "windows" ]; then
+      EXT=".exe"
+    fi
+    xx-go build -trimpath -ldflags "-s -w" -o /binaries/gogo-$TARGETOS-$TARGETARCH$EXT .
+    xx-verify /binaries/gogo-$TARGETOS-$TARGETARCH$EXT
 EOT
 
 FROM scratch AS cross
@@ -45,4 +49,4 @@ COPY --from=builder /binaries .
 
 FROM scratch AS local
 ARG TARGETOS TARGETARCH
-COPY --from=builder /binaries/gogo-$TARGETOS-$TARGETARCH gogo
+COPY --from=builder /binaries/gogo-$TARGETOS-$TARGETARCH* gogo
