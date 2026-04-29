@@ -11,7 +11,8 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | string | Optional version identifier |
-| `includes` | list of strings | Subdirectories containing other task files |
+| `includes` | list of strings | Subdirectories containing other task files (namespaced — see [Includes](../includes/)) |
+| `flatten` | list of strings | YAML files whose tasks merge into the current namespace without a prefix (see [Includes](../includes/#flatten)) |
 | `dotenv` | list of strings | Paths to `.env` files to load |
 | `vars` | map | Global variables |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
@@ -36,6 +37,7 @@ Each task supports the following fields:
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |
 | `preconditions` | list | Shell commands that must succeed before the task runs |
+| `silent` | bool | When `true`, suppress the `[task] cmd` log line for each command |
 
 ## Commands
 
@@ -167,3 +169,18 @@ tasks:
 ```
 
 Call-site variables override the called task's own `vars`.
+
+## Silent Tasks
+
+By default, gogo prints each command before running it (e.g. `[build] go build ./...`). Set `silent: true` to suppress that log line — only the command's own output is shown:
+
+```yaml
+tasks:
+  setup:
+    silent: true
+    cmds:
+      - mkdir -p build
+      - touch build/.keep
+```
+
+`silent` only affects the calling task's own `cmds`. A non-silent task invoked via `task:` from a silent caller still logs normally.

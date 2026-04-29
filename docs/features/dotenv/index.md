@@ -39,7 +39,7 @@ tasks:
 
 ## File Format
 
-Standard `.env` format with support for comments and quoted values:
+Standard `.env` format with support for comments, quoted values, and an optional `export` prefix:
 
 ```
 # Database config
@@ -47,7 +47,18 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME="myapp_dev"
 DB_PASSWORD='s3cret'
+
+# An `export` prefix is allowed and ignored
+export API_TOKEN=abc123
 ```
+
+Quoting rules:
+
+- **Single quotes** are literal — the value between them is taken verbatim.
+- **Double quotes** support the escape sequences `\"`, `\\`, `\n` (newline), and `\t` (tab).
+- **Unquoted** values are trimmed of surrounding whitespace.
+
+Keys must match `[A-Za-z_][A-Za-z0-9_]*`; invalid lines cause a parse error.
 
 ## Resolution Rules
 

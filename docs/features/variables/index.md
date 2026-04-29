@@ -99,3 +99,29 @@ tasks:
       NODE_ENV: production
     cmd: node server.js
 ```
+
+### Cross-References Between Env Entries
+
+`env` values can reference other entries in the same `env` block. References are resolved transparently before the command runs:
+
+```yaml
+tasks:
+  serve:
+    env:
+      HOST: localhost
+      PORT: "8080"
+      ADDR: "${HOST}:${PORT}"   # → localhost:8080
+    cmd: server --addr $ADDR
+```
+
+Lookup order for `${VAR}` inside an env value: another key in the same `env` block first, then task `vars`, then the process environment. Self-cycles or mutual cycles between env keys resolve to the empty string rather than looping forever.
+
+## Variable Resolution Order
+
+When resolving `{{ "{{" }}.VAR}}` or `${VAR}` inside a command, gogo looks up the name in this order:
+
+1. Task-scoped `vars` (which override global `vars`)
+2. `CLI_ARGS` (if the lookup is for that name)
+3. The process environment
+
+Unknown `${VAR}` references are left intact for the shell to expand. Unknown `{{ "{{" }}.VAR}}` templates are left verbatim.
