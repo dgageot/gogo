@@ -85,13 +85,18 @@ func (r *Runner) resolveVar(v Var, dir string) (string, error) {
 // {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, and environment.
 // Unknown ${VAR} references are left for the shell to expand. Unknown
 // {{.VAR}} templates are left verbatim (matching expandTemplates at parse time).
+//
+// CLI_ARGS resolves through the same lookup as any other variable: a value
+// in `vars` (e.g. a call-site `vars: { CLI_ARGS: -f }`) wins, and the cliArgs
+// argument is used only as a fallback default. Env never satisfies CLI_ARGS,
+// because the cliArgs fallback is always considered "found" (even when empty).
 func expandVars(s string, vars map[string]string, cliArgs string) string {
 	lookup := func(key string) (string, bool) {
-		if key == "CLI_ARGS" {
-			return cliArgs, true
-		}
 		if val, ok := vars[key]; ok {
 			return val, true
+		}
+		if key == "CLI_ARGS" {
+			return cliArgs, true
 		}
 		return os.LookupEnv(key)
 	}

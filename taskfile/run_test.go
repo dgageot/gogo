@@ -1981,6 +1981,130 @@ func TestPreconditionFailureStopsBeforeUpToDateCheck(t *testing.T) {
 	assert.NoFileExists(t, checksumPath(dir, "build"))
 }
 
+func TestCLIArgsOverriddenByCallSiteVars(t *testing.T) {
+	// agentic-platform pattern: a wrapper task calls a flag-aware sub-task
+	// with `vars: { CLI_ARGS: -f }` to force a specific behavior, regardless
+	// of what the user passed on the host CLI.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"caller": {
+				Cmds: []Cmd{
+					{Task: "inject", Vars: map[string]Var{
+						"CLI_ARGS": {Value: "-f"},
+					}},
+				},
+			},
+			"inject": {
+				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	// Caller is invoked with no CLI args from the host.
+	require.NoError(t, runner.Run("caller", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op inject -f", (*execs)[0].Command)
+}
+
+func TestCLIArgsOverrideAlsoWorksInTemplates(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"caller": {
+				Cmds: []Cmd{
+					{Task: "inject", Vars: map[string]Var{
+						"CLI_ARGS": {Value: "-f"},
+					}},
+				},
+			},
+			"inject": {
+				Cmds: []Cmd{{Cmd: "op inject {{.CLI_ARGS}}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("caller", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op inject -f", (*execs)[0].Command)
+}
+
+func TestCLIArgsOverrideBeatsHostCLIArgs(t *testing.T) {
+	// Even when the user passed `-- --extra-flag` on the host, a call-site
+	// `vars: { CLI_ARGS: ... }` must override it for the called sub-task.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"caller": {
+				Cmds: []Cmd{
+					{Task: "inject", Vars: map[string]Var{
+						"CLI_ARGS": {Value: "-f"},
+					}},
+				},
+			},
+			"inject": {
+				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("caller", "--extra-flag"))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op inject -f", (*execs)[0].Command)
+}
+
+func TestCLIArgsFallsThroughWhenNotOverridden(t *testing.T) {
+	// Without a call-site override, a sub-task still inherits the host's
+	// CLI_ARGS via the propagated cliArgs param.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"caller": {
+				Cmds: []Cmd{{Task: "inject"}},
+			},
+			"inject": {
+				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("caller", "--extra-flag"))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op inject --extra-flag", (*execs)[0].Command)
+}
+
+func TestExpandVarsCallSiteVarBeatsCLIArgsParam(t *testing.T) {
+	// Direct unit-level coverage of the new lookup ordering inside expandVars:
+	// a value in `vars` wins over the cliArgs fallback.
+	vars := map[string]string{"CLI_ARGS": "-f"}
+	assert.Equal(t, "op inject -f", expandVars("op inject ${CLI_ARGS}", vars, "--from-host"))
+	assert.Equal(t, "op inject -f", expandVars("op inject {{.CLI_ARGS}}", vars, "--from-host"))
+}
+
 func TestRunnerLogsToInjectedStderr(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
