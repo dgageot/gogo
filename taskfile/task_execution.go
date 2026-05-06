@@ -156,8 +156,10 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		}
 
 		if !silent {
-			// Log the original command template to avoid leaking expanded secrets.
-			r.logTask(colorGreen, taskName, cmd.Cmd)
+			// Log the original command template with CLI_ARGS substituted in,
+			// so the user sees what they actually passed without leaking other
+			// expanded variables (which may carry secrets).
+			r.logTask(colorGreen, taskName, expandCLIArgsOnly(cmd.Cmd, vars, cliArgs))
 		}
 
 		if r.DryRun {

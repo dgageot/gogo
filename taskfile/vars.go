@@ -120,3 +120,32 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 		return match
 	})
 }
+
+// expandCLIArgsOnly substitutes only CLI_ARGS in a command string, leaving
+// every other ${VAR} and {{.VAR}} reference untouched. It is used to render
+// the per-cmd log line: CLI_ARGS comes from the user's invocation and is safe
+// to surface, while other variables may carry secrets sourced from env or
+// dotenv files and are deliberately not expanded in logs.
+//
+// CLI_ARGS resolution mirrors expandVars: a value in `vars` (typically a
+// call-site `vars: { CLI_ARGS: -f }`) wins over the cliArgs fallback.
+func expandCLIArgsOnly(s string, vars map[string]string, cliArgs string) string {
+	val := cliArgs
+	if v, ok := vars["CLI_ARGS"]; ok {
+		val = v
+	}
+
+	s = os.Expand(s, func(key string) string {
+		if key == "CLI_ARGS" {
+			return val
+		}
+		return "${" + key + "}"
+	})
+
+	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
+		if templatePattern.FindStringSubmatch(match)[1] == "CLI_ARGS" {
+			return val
+		}
+		return match
+	})
+}

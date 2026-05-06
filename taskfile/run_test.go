@@ -2135,6 +2135,72 @@ func TestExpandVarsCallSiteVarBeatsCLIArgsParam(t *testing.T) {
 	assert.Equal(t, "op inject -f", expandVars("op inject {{.CLI_ARGS}}", vars, "--from-host"))
 }
 
+func TestExpandCLIArgsOnly(t *testing.T) {
+	// Only CLI_ARGS is expanded — every other variable is left as-is so logs
+	// don't accidentally leak secret values.
+	assert.Equal(t, "pytest -n 4 backend/tests",
+		expandCLIArgsOnly("pytest -n 4 {{.CLI_ARGS}}", nil, "backend/tests"))
+	assert.Equal(t, "pytest -n 4 backend/tests",
+		expandCLIArgsOnly("pytest -n 4 ${CLI_ARGS}", nil, "backend/tests"))
+	assert.Equal(t, "curl -H Authorization:${TOKEN} arg",
+		expandCLIArgsOnly("curl -H Authorization:${TOKEN} {{.CLI_ARGS}}", map[string]string{"TOKEN": "hunter2"}, "arg"))
+	// Call-site override beats the cliArgs param.
+	assert.Equal(t, "pytest -f",
+		expandCLIArgsOnly("pytest {{.CLI_ARGS}}", map[string]string{"CLI_ARGS": "-f"}, "--from-host"))
+}
+
+func TestRunnerLogExpandsCLIArgs(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"test": {
+				Cmds: []Cmd{{Cmd: "poetry run pytest -n 4 {{.CLI_ARGS}}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("test", "backend/tests/views/test_ask.py"))
+
+	// The log should show the CLI_ARGS expanded — not the raw `{{.CLI_ARGS}}` template.
+	log := stderr.String()
+	assert.Contains(t, log, "poetry run pytest -n 4 backend/tests/views/test_ask.py")
+	assert.NotContains(t, log, "{{.CLI_ARGS}}")
+}
+
+func TestRunnerLogDoesNotExpandOtherVars(t *testing.T) {
+	// Other ${VAR} / {{.VAR}} references stay un-expanded in the log so we
+	// don't accidentally surface secrets, while CLI_ARGS is shown.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Env:  map[string]string{"TOKEN": "hunter2"},
+				Cmds: []Cmd{{Cmd: "deploy --token ${TOKEN} {{.CLI_ARGS}}"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", "--dry-run"))
+
+	log := stderr.String()
+	assert.Contains(t, log, "deploy --token ${TOKEN} --dry-run")
+	assert.NotContains(t, log, "hunter2")
+}
+
 func TestRunnerLogsToInjectedStderr(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
