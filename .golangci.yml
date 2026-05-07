@@ -7,10 +7,12 @@ linters:
     - asciicheck
     - bidichk
     - containedctx
+    - contextcheck
     - copyloopvar
     - decorder
     - depguard
     - dogsled
+    - dupword
     - durationcheck
     - embeddedstructfieldcheck
     - errcheck
@@ -19,6 +21,7 @@ linters:
     - exptostd
     - fatcontext
     - forbidigo
+    - forcetypeassert
     - ginkgolinter
     - gocheckcompilerdirectives
     - godoclint
@@ -55,6 +58,7 @@ linters:
     - testableexamples
     - testifylint
     - thelper
+    - tparallel
     - unconvert
     - unparam
     - unused

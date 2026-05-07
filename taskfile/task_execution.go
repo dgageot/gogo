@@ -80,7 +80,11 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
 	}
 
 	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{})
-	return entry.(*taskRun).do(func() error {
+	tr, ok := entry.(*taskRun)
+	if !ok {
+		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
+	}
+	return tr.do(func() error {
 		return r.run(resolved, cliArgs, nil)
 	})
 }
