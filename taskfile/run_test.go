@@ -101,8 +101,8 @@ func newTestRunner(t *testing.T, tf *Config, dir string) *Runner {
 
 // envValue returns the last value for key in an env slice, or "" if not found.
 func envValue(env []string, key string) string {
-	for i := len(env) - 1; i >= 0; i-- {
-		if k, v, ok := strings.Cut(env[i], "="); ok && k == key {
+	for _, e := range slices.Backward(env) {
+		if k, v, ok := strings.Cut(e, "="); ok && k == key {
 			return v
 		}
 	}
