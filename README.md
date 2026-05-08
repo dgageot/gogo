@@ -61,7 +61,7 @@ gogo -n build
 - **Incremental builds** via source checksums or timestamp-based `sources`/`generates`
 - **Watch mode** for automatic re-runs on file changes
 - **Concurrent dependencies** with automatic deduplication
-- **Variables** with template expansion and shell commands
+- **Variables** with template expansion, shell commands, and built-in `{{.GIT_*}}` (commit, tag, branch, dirty)
 - **Dotenv** support (global and per-task)
 - **Includes** for splitting task files across subdirectories
 - **Platform filtering** to restrict tasks to specific OS/arch

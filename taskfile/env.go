@@ -72,7 +72,7 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 	}
 
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		env = setEnv(env, k, resolveEnvValue(k, task.Env, vars))
+		env = setEnv(env, k, resolveEnvValue(k, task.Env, vars, r.builtinLookup))
 	}
 
 	return env, nil
@@ -81,7 +81,11 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]str
 // resolveEnvValue expands ${VAR} references in task.Env[key], transparently
 // following cross-references to other task.Env keys. Cycles (self- or mutual)
 // resolve to the empty string.
-func resolveEnvValue(key string, taskEnv, vars map[string]string) string {
+//
+// builtin may be nil. When non-nil it is consulted *after* task.Env and task
+// vars, but *before* the process environment, so a task-level override of a
+// built-in name (e.g. GIT_COMMIT) wins.
+func resolveEnvValue(key string, taskEnv, vars map[string]string, builtin func(string) (string, bool)) string {
 	resolved := make(map[string]string)
 	visiting := make(map[string]struct{})
 
@@ -97,6 +101,11 @@ func resolveEnvValue(key string, taskEnv, vars map[string]string) string {
 		if !ok {
 			if v, ok := vars[k]; ok {
 				return v
+			}
+			if builtin != nil {
+				if v, ok := builtin(k); ok {
+					return v
+				}
 			}
 			return os.Getenv(k)
 		}

@@ -44,6 +44,8 @@ type Runner struct {
 	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
 	IO          RunnerIO          // process streams used for logs and command stdio
 	runs        sync.Map          // resolved task name -> *taskRun
+	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
+	gitOnce     sync.Once         // guards gitVars construction
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;
@@ -83,8 +85,24 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 	return r, nil
 }
 
+// builtinLookup returns the value of a gogo-provided variable (currently the
+// {{.GIT_*}} family). The gitVars resolver is constructed on first call so
+// tests that swap r.ShellRunner after NewRunner still see git invocations
+// routed through their fake runner — binding earlier would capture the real
+// shell runner in the lazy closures.
+func (r *Runner) builtinLookup(name string) (string, bool) {
+	r.gitOnce.Do(func() {
+		r.gitVars = newGitVars(r.tf.Dir, r.ShellRunner)
+	})
+	return r.gitVars.lookup(name)
+}
+
 // ResetRan clears the memoized task results, allowing tasks to run again.
-// This is used by watch mode between iterations.
+// This is used by watch mode between iterations. Built-in git vars are
+// re-resolved too because file edits between iterations may have changed
+// the working tree's dirty state or HEAD.
 func (r *Runner) ResetRan() {
 	r.runs = sync.Map{}
+	r.gitOnce = sync.Once{}
+	r.gitVars = nil
 }

@@ -872,14 +872,14 @@ func TestTaskWithOnlyDeps(t *testing.T) {
 func TestExpandVarsTemplateAndShell(t *testing.T) {
 	vars := map[string]string{"NAME": "world"}
 
-	assert.Equal(t, "hello world", expandVars("hello ${NAME}", vars, ""))
-	assert.Equal(t, "hello world", expandVars("hello {{.NAME}}", vars, ""))
-	assert.Equal(t, "hello ${UNKNOWN}", expandVars("hello ${UNKNOWN}", vars, ""))
-	assert.Equal(t, "hello {{.UNKNOWN}}", expandVars("hello {{.UNKNOWN}}", vars, ""))
+	assert.Equal(t, "hello world", expandVars("hello ${NAME}", vars, "", nil))
+	assert.Equal(t, "hello world", expandVars("hello {{.NAME}}", vars, "", nil))
+	assert.Equal(t, "hello ${UNKNOWN}", expandVars("hello ${UNKNOWN}", vars, "", nil))
+	assert.Equal(t, "hello {{.UNKNOWN}}", expandVars("hello {{.UNKNOWN}}", vars, "", nil))
 }
 
 func TestExpandVarsCLIArgs(t *testing.T) {
-	assert.Equal(t, "test -v", expandVars("test ${CLI_ARGS}", nil, "-v"))
+	assert.Equal(t, "test -v", expandVars("test ${CLI_ARGS}", nil, "-v", nil))
 }
 
 func TestNoOpSecretsUseOpRunFalse(t *testing.T) {
@@ -1229,7 +1229,7 @@ func TestTemplateVarsThroughRunner(t *testing.T) {
 
 func TestMixedTemplateAndShellExpansion(t *testing.T) {
 	vars := map[string]string{"A": "1", "B": "2"}
-	result := expandVars("{{.A}} and ${B}", vars, "")
+	result := expandVars("{{.A}} and ${B}", vars, "", nil)
 	assert.Equal(t, "1 and 2", result)
 }
 
@@ -1338,7 +1338,7 @@ func TestNamespaceResolutionMiss(t *testing.T) {
 }
 
 func TestCLIArgsTemplateExpansion(t *testing.T) {
-	result := expandVars("test {{.CLI_ARGS}}", nil, "-v")
+	result := expandVars("test {{.CLI_ARGS}}", nil, "-v", nil)
 	assert.Equal(t, "test -v", result)
 }
 
@@ -1380,13 +1380,13 @@ func TestMatchesPlatformArchOnly(t *testing.T) {
 
 func TestExpandVarsFromEnv(t *testing.T) {
 	t.Setenv("GOGO_TEST_VAR", "from-env")
-	result := expandVars("echo ${GOGO_TEST_VAR}", nil, "")
+	result := expandVars("echo ${GOGO_TEST_VAR}", nil, "", nil)
 	assert.Equal(t, "echo from-env", result)
 }
 
 func TestExpandVarsTemplateFromEnv(t *testing.T) {
 	t.Setenv("GOGO_TEST_VAR", "from-env")
-	result := expandVars("echo {{.GOGO_TEST_VAR}}", nil, "")
+	result := expandVars("echo {{.GOGO_TEST_VAR}}", nil, "", nil)
 	assert.Equal(t, "echo from-env", result)
 }
 
@@ -2131,8 +2131,8 @@ func TestExpandVarsCallSiteVarBeatsCLIArgsParam(t *testing.T) {
 	// Direct unit-level coverage of the new lookup ordering inside expandVars:
 	// a value in `vars` wins over the cliArgs fallback.
 	vars := map[string]string{"CLI_ARGS": "-f"}
-	assert.Equal(t, "op inject -f", expandVars("op inject ${CLI_ARGS}", vars, "--from-host"))
-	assert.Equal(t, "op inject -f", expandVars("op inject {{.CLI_ARGS}}", vars, "--from-host"))
+	assert.Equal(t, "op inject -f", expandVars("op inject ${CLI_ARGS}", vars, "--from-host", nil))
+	assert.Equal(t, "op inject -f", expandVars("op inject {{.CLI_ARGS}}", vars, "--from-host", nil))
 }
 
 func TestExpandCLIArgsOnly(t *testing.T) {

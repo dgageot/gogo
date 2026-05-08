@@ -148,21 +148,32 @@ func (r *Runner) resolveVar(v Var, dir string) (string, error) {
 }
 
 // expandVars substitutes template and shell variables in a command string.
-// {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, and environment.
-// Unknown ${VAR} references are left for the shell to expand. Unknown
-// {{.VAR}} templates are left verbatim (matching expandConfigEnvTemplates at parse time).
+// {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, the
+// optional builtin lookup (currently {{.GIT_*}}), and finally the process
+// environment. Unknown ${VAR} references are left for the shell to expand.
+// Unknown {{.VAR}} templates are left verbatim (matching
+// expandConfigEnvTemplates at parse time).
 //
 // CLI_ARGS resolves through the same lookup as any other variable: a value
 // in `vars` (e.g. a call-site `vars: { CLI_ARGS: -f }`) wins, and the cliArgs
 // argument is used only as a fallback default. Env never satisfies CLI_ARGS,
 // because the cliArgs fallback is always considered "found" (even when empty).
-func expandVars(s string, vars map[string]string, cliArgs string) string {
+//
+// builtin may be nil. When non-nil it is consulted *after* user vars and
+// CLI_ARGS but *before* the process environment, so a user-defined var with
+// the same name as a built-in (e.g. GIT_COMMIT) always wins.
+func expandVars(s string, vars map[string]string, cliArgs string, builtin func(string) (string, bool)) string {
 	lookup := func(key string) (string, bool) {
 		if val, ok := vars[key]; ok {
 			return val, true
 		}
 		if key == "CLI_ARGS" {
 			return cliArgs, true
+		}
+		if builtin != nil {
+			if val, ok := builtin(key); ok {
+				return val, true
+			}
 		}
 		return os.LookupEnv(key)
 	}

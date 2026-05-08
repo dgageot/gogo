@@ -30,12 +30,21 @@ func matchesPlatform(platforms []string) bool {
 	return len(platforms) == 0
 }
 
-// checkRequires validates that all required vars and env are set.
-func checkRequires(taskName string, task *Task, vars map[string]string) error {
+// checkRequires validates that all required vars and env are set. Built-in
+// variables (e.g. {{.GIT_COMMIT}}) satisfy a `requires.vars:` entry as long
+// as builtin reports them known — even when the value is empty, since
+// "missing exact-match tag" or "clean working tree" are valid empty results.
+func checkRequires(taskName string, task *Task, vars map[string]string, builtin func(string) (string, bool)) error {
 	for _, name := range task.Requires.Vars {
-		if _, ok := vars[name]; !ok {
-			return fmt.Errorf("task %q requires variable %q to be set", taskName, name)
+		if _, ok := vars[name]; ok {
+			continue
 		}
+		if builtin != nil {
+			if _, ok := builtin(name); ok {
+				continue
+			}
+		}
+		return fmt.Errorf("task %q requires variable %q to be set", taskName, name)
 	}
 	for _, name := range task.Requires.Env {
 		if _, ok := os.LookupEnv(name); !ok {
@@ -115,7 +124,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 		return err
 	}
 
-	if err := checkRequires(resolved, &task, vars); err != nil {
+	if err := checkRequires(resolved, &task, vars, r.builtinLookup); err != nil {
 		return err
 	}
 
@@ -170,7 +179,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			continue
 		}
 
-		expanded := expandVars(cmd.Cmd, vars, cliArgs)
+		expanded := expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup)
 		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
 			return err
 		}

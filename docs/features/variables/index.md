@@ -57,6 +57,35 @@ tasks:
 |----------|-------------|
 | `TASK_FILE_DIR` | The working directory for the task (defaults to the task file directory) |
 | `CLI_ARGS` | Extra arguments passed after `--` |
+| `GIT_COMMIT` | Full SHA at `HEAD` (empty outside a git repo) |
+| `GIT_SHORT_COMMIT` | 7-char SHA at `HEAD` (empty outside a git repo) |
+| `GIT_TAG` | Exact-match tag at `HEAD`, or empty if `HEAD` isn't tagged |
+| `GIT_BRANCH` | Current branch name; `HEAD` when detached |
+| `GIT_DIRTY` | `dirty` if the working tree has changes; empty when clean |
+
+### Built-in Git Variables
+
+The `GIT_*` variables are resolved lazily on first use and cached for the lifetime of one `gogo` invocation, so a task that doesn't reference any of them never shells out to git. Outside a git repo all five resolve to the empty string — they never raise an error.
+
+A user-defined variable with the same name always wins, so a project can pin (for example) `GIT_COMMIT` in CI for a reproducible build:
+
+```yaml
+vars:
+  GIT_COMMIT: "{{ "{{" }}.CI_COMMIT_SHA}}"   # take it from the CI env instead of git
+```
+
+### Example: ldflags from git metadata
+
+```yaml
+tasks:
+  build:
+    cmd: >
+      go build
+      -ldflags '-X main.Version={{ "{{" }}.GIT_TAG}} -X main.Commit={{ "{{" }}.GIT_COMMIT}}'
+      -o bin/myapp .
+```
+
+No `vars:` block, no `sh: git rev-parse HEAD`. The same template can be written shell-style — `${GIT_COMMIT}` — because gogo expands both forms before handing the command to `/bin/sh`.
 
 ## CLI Arguments
 
@@ -122,6 +151,7 @@ When resolving `{{ "{{" }}.VAR}}` or `${VAR}` inside a command, gogo looks up th
 
 1. Task-scoped `vars` (which override global `vars`)
 2. `CLI_ARGS` (if the lookup is for that name)
-3. The process environment
+3. Built-in variables (`GIT_*`)
+4. The process environment
 
 Unknown `${VAR}` references are left intact for the shell to expand. Unknown `{{ "{{" }}.VAR}}` templates are left verbatim.
