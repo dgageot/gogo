@@ -143,7 +143,39 @@ tasks:
     cmd: server --addr $ADDR
 ```
 
-Lookup order for `${VAR}` inside an env value: another key in the same `env` block first, then task `vars`, then the process environment. Self-cycles or mutual cycles between env keys resolve to the empty string rather than looping forever.
+Lookup order for `${VAR}` inside an env value: another key in the same `env` block first, then task `vars`, then **inherited parent env (when invoked via `cmds: - task: X`)**, then the process environment. Self-cycles or mutual cycles between env keys resolve to the empty string rather than looping forever.
+
+## Parent-to-child Env Propagation
+
+When a task calls another via `cmds: - task: X`, the child inherits the parent's resolved environment — vars, dotenv, and the parent's own `env:` block all flow down. This matches shell-function semantics and makes parent-driven workflows pleasant:
+
+```yaml
+tasks:
+  smoke:
+    env:
+      TESTSET_SIZE: "2"
+      MIRROR_FS: "1"
+    cmds:
+      - task: gen      # sees TESTSET_SIZE and MIRROR_FS
+      - task: ingest   # same
+```
+
+The child's own declarations override the inherited ones on a per-key basis:
+
+```yaml
+tasks:
+  parent:
+    env: { MODE: parent, SHARED: from-parent }
+    cmds:
+      - task: child
+  child:
+    env: { MODE: child }              # wins for MODE
+    cmd: echo $MODE / $SHARED         # prints: child / from-parent
+```
+
+**Deps don't inherit.** Tasks listed in `deps:` run as prerequisites before the parent's body and do *not* see the parent's `env:` block. Only `cmds: - task: X` invocations trigger propagation.
+
+When the same child is called by two different parents (or twice by the same parent with different env), each call site is a distinct execution — gogo bypasses its task-level memoization so the child re-runs with each set of inherited values.
 
 ## Variable Resolution Order
 

@@ -11,6 +11,7 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | string | Optional version identifier |
+| `default` | string | Task to run when none is given on the CLI — replaces the convention of declaring a `default` task. Must reference a defined (possibly namespaced) task |
 | `includes` | list of strings | Subdirectories containing other task files (namespaced — see [Includes](../includes/)) |
 | `flatten` | list of strings | YAML files whose tasks merge into the current namespace without a prefix (see [Includes](../includes/#flatten)) |
 | `dotenv` | list of strings | Paths to `.env` files to load |
@@ -40,6 +41,45 @@ Each task supports the following fields:
 | `preconditions` | list | Shell commands that must succeed before the task runs |
 | `silent` | bool | When `true`, suppress the `[task] cmd` log line for each command |
 
+## Default Task
+
+A top-level `default:` field names the task that runs when no task is given on the command line:
+
+```yaml
+default: dev
+
+tasks:
+  dev:
+    deps: [build, test]
+  build:
+    cmd: go build ./...
+  test:
+    cmd: go test ./...
+```
+
+```sh
+gogo            # runs `dev`
+gogo build      # explicit task still wins over `default:`
+```
+
+If `default:` is unset, gogo falls back to running a task literally named `default` (the original convention). The two forms are interchangeable; `default:` simply removes the no-op trampoline:
+
+```yaml
+# Before — trampoline
+tasks:
+  default:
+    cmds:
+      - task: dev
+  dev: { cmd: ... }
+
+# After — top-level field
+default: dev
+tasks:
+  dev: { cmd: ... }
+```
+
+A `default:` that names a non-existent task is rejected at load time.
+
 ## Commands
 
 A command can be a simple string:
@@ -60,15 +100,20 @@ tasks:
       - golangci-lint run
 ```
 
-A command can also reference another task:
+A command can also reference another task. The sub-task **inherits the calling task's environment** (its `vars`, dotenv, and `env` block), so a parent's environment flows down without having to re-export it:
 
 ```yaml
 tasks:
-  all:
+  smoke:
+    env:
+      TESTSET_SIZE: "2"
+      MIRROR_FS: "1"
     cmds:
-      - task: build
-      - task: test
+      - task: gen      # both children see TESTSET_SIZE and MIRROR_FS
+      - task: ingest
 ```
+
+The child's own `env` block (or a per-call `vars:` override) wins per key. See [Variables](../variables/#parent-to-child-env-propagation) for the full precedence rules.
 
 ## Task Descriptions
 

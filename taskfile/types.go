@@ -6,6 +6,7 @@ type Config struct {
 	Includes   []string              `yaml:"includes"`
 	Flatten    []string              `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
 	Dotenv     []string              `yaml:"dotenv"`
+	Default    string                `yaml:"default"` // task to run when none is given on the CLI; replaces the convention of declaring a `default` task
 	Vars       map[string]Var        `yaml:"vars"`
 	Sources    map[string]StringList `yaml:"sources"` // named source presets, referenced from task.Sources by name
 	Tasks      map[string]Task       `yaml:"tasks"`

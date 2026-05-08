@@ -85,7 +85,7 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
 
 	// Each call site with extra vars is a distinct execution — bypass memoization.
 	if hasExtraVars(extraVars) {
-		return r.run(resolved, cliArgs, extraVars)
+		return r.run(resolved, cliArgs, extraVars, nil)
 	}
 
 	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{})
@@ -94,8 +94,25 @@ func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
 		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
 	}
 	return tr.do(func() error {
-		return r.run(resolved, cliArgs, nil)
+		return r.run(resolved, cliArgs, nil, nil)
 	})
+}
+
+// runSubTask is the entry point for `cmds: - task: X` calls. Each sub-task
+// invocation propagates the parent task's resolved env down so child tasks
+// see what the parent declared in its `env:` block (matching shell-function
+// semantics). Memoization is always bypassed because two parents calling the
+// same child with different env are genuinely different executions.
+func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string) error {
+	resolved, err := r.resolveTask(name)
+	if err != nil {
+		return err
+	}
+	var ev []map[string]Var
+	if len(extraVars) > 0 {
+		ev = []map[string]Var{extraVars}
+	}
+	return r.run(resolved, cliArgs, ev, parentEnv)
 }
 
 // hasExtraVars reports whether the variadic extraVars carries any overrides.
@@ -104,8 +121,9 @@ func hasExtraVars(extraVars []map[string]Var) bool {
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
-// always runs the task, so recursive calls from runCmds must go through Run.
-func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error {
+// always runs the task, so recursive calls from runCmds must go through Run
+// (or runSubTask, which threads the parent env down).
+func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, parentEnv []string) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
@@ -128,7 +146,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 		return err
 	}
 
-	env, err := r.buildEnv(&task, dir, vars)
+	env, err := r.buildEnv(&task, dir, vars, parentEnv)
 	if err != nil {
 		return err
 	}
@@ -162,7 +180,11 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var) error
 func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool) error {
 	for _, cmd := range cmds {
 		if cmd.Task != "" {
-			if err := r.Run(cmd.Task, cliArgs, cmd.Vars); err != nil {
+			// `task: X` sub-calls inherit the parent's resolved env so a
+			// task-level `env:` block flows down without the user having to
+			// shell out to `gogo` to plumb env through. Child env still wins
+			// per-key (composed inside buildEnv).
+			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env); err != nil {
 				return err
 			}
 			continue

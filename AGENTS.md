@@ -123,10 +123,16 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `taskfile.Config` test in `run_test.go` plus a `Parse`-based test in
   `parse_test.go` if YAML shape matters.
 - **Touching env/var resolution**: respect the existing precedence
-  (`BaseEnv` < task dotenv < task vars < task env) and the rule that
-  *task dotenv never overrides global dotenv or OS env* (see
-  `TestTaskDotenvDoesNotOverrideGlobalDotenv`). The built-in `GIT_*`
-  resolver in `taskfile/gitvars.go` is wired through
+- **Touching env/var resolution**: respect the existing precedence
+  (`BaseEnv` < parent task env < task dotenv < task vars < task env) and the
+  rule that *task dotenv never overrides global dotenv or OS env* (see
+  `TestTaskDotenvDoesNotOverrideGlobalDotenv`). Sub-task calls
+  (`cmds: - task: X`) propagate the parent's resolved env via
+  `Runner.runSubTask` — deps do NOT (they're prerequisites, not sequenced
+  sub-calls; see `TestDepsDoNotInheritParentEnv`). Memoization is bypassed
+  whenever extraVars or parentEnv is non-nil so two call sites with
+  different context don't collapse into one execution. The built-in
+  `GIT_*` resolver in `taskfile/gitvars.go` is wired through
   `Runner.builtinLookup` and is consulted *after* user vars / CLI_ARGS
   but *before* the process environment by `expandVars`,
   `resolveEnvValue`, and `checkRequires`. Watch mode must call
