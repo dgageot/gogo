@@ -11,15 +11,81 @@ import (
 
 var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
-// expandTemplates replaces {{.VAR}} patterns with environment variable values.
-func expandTemplates(data []byte) []byte {
-	return templatePattern.ReplaceAllFunc(data, func(match []byte) []byte {
-		name := string(templatePattern.FindSubmatch(match)[1])
+// expandEnvTemplates replaces {{.VAR}} references in s with values from the
+// process environment. Unknown templates are left verbatim. This is the
+// post-parse equivalent of substituting at the byte level: it only touches
+// user-supplied string values, never YAML structure or map keys, so an env
+// value containing newlines, quotes, or `:` cannot inject new tasks/fields.
+func expandEnvTemplates(s string) string {
+	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
+		name := templatePattern.FindStringSubmatch(match)[1]
 		if val, ok := os.LookupEnv(name); ok {
-			return []byte(val)
+			return val
 		}
 		return match
 	})
+}
+
+// expandConfigEnvTemplates expands {{.VAR}} env-variable references in every
+// user-configurable string field of a parsed Config. Map keys (task names,
+// var names, env keys) are left untouched so an environment value can never
+// alter the document's structure.
+func expandConfigEnvTemplates(c *Config) {
+	expandStringSlice(c.Includes)
+	expandStringSlice(c.Flatten)
+	expandStringSlice(c.Dotenv)
+	c.Interval = expandEnvTemplates(c.Interval)
+	expandVarsMap(c.Vars)
+	for name, t := range c.Tasks {
+		expandTaskTemplates(&t)
+		c.Tasks[name] = t
+	}
+}
+
+// expandStringSlice rewrites each entry in place. Works for both []string
+// and named slice types like StringList because slice headers share storage.
+func expandStringSlice(s []string) {
+	for i, v := range s {
+		s[i] = expandEnvTemplates(v)
+	}
+}
+
+func expandVarsMap(m map[string]Var) {
+	for k, v := range m {
+		v.Value = expandEnvTemplates(v.Value)
+		v.Sh = expandEnvTemplates(v.Sh)
+		m[k] = v
+	}
+}
+
+func expandTaskTemplates(t *Task) {
+	t.Dir = expandEnvTemplates(t.Dir)
+	expandStringSlice(t.Sources)
+	expandStringSlice(t.Generates)
+	expandStringSlice(t.Aliases)
+	expandStringSlice(t.Platforms)
+	expandStringSlice(t.Dotenv)
+	expandStringSlice(t.Requires.Vars)
+	expandStringSlice(t.Requires.Env)
+	for k, v := range t.Env {
+		t.Env[k] = expandEnvTemplates(v)
+	}
+	expandVarsMap(t.Vars)
+	for i, c := range t.Cmds {
+		c.Cmd = expandEnvTemplates(c.Cmd)
+		c.Task = expandEnvTemplates(c.Task)
+		expandVarsMap(c.Vars)
+		t.Cmds[i] = c
+	}
+	for i, d := range t.Deps {
+		d.Task = expandEnvTemplates(d.Task)
+		t.Deps[i] = d
+	}
+	for i, p := range t.Preconditions {
+		p.Sh = expandEnvTemplates(p.Sh)
+		p.Msg = expandEnvTemplates(p.Msg)
+		t.Preconditions[i] = p
+	}
 }
 
 // resolveAllVars computes the effective variables for a task, including extra vars from call sites.
@@ -84,7 +150,7 @@ func (r *Runner) resolveVar(v Var, dir string) (string, error) {
 // expandVars substitutes template and shell variables in a command string.
 // {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, and environment.
 // Unknown ${VAR} references are left for the shell to expand. Unknown
-// {{.VAR}} templates are left verbatim (matching expandTemplates at parse time).
+// {{.VAR}} templates are left verbatim (matching expandConfigEnvTemplates at parse time).
 //
 // CLI_ARGS resolves through the same lookup as any other variable: a value
 // in `vars` (e.g. a call-site `vars: { CLI_ARGS: -f }`) wins, and the cliArgs
@@ -111,7 +177,7 @@ func expandVars(s string, vars map[string]string, cliArgs string) string {
 	})
 
 	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
-	// run-time behavior matches expandTemplates at parse time.
+	// run-time behavior matches expandConfigEnvTemplates at parse time.
 	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
 		key := templatePattern.FindStringSubmatch(match)[1]
 		if val, ok := lookup(key); ok {

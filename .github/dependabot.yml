@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Go module dependencies (catches transitive vulnerabilities the moment a
+  # fix is published, complementing the `vulncheck` CI job).
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+
+  # Keeps `uses:` SHA pins in .github/workflows/*.yml fresh. Pair with the
+  # `ghapin` skill when reviewing PRs to ensure new pins stay on full SHAs.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      gha:
+        patterns:
+          - "*"
+
+  # Base images and tooling pinned in the Dockerfile (golang, alpine,
+  # tonistiigi/xx, crazymax/osxcross).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

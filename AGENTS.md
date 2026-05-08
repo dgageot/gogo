@@ -21,7 +21,7 @@ CI (`.github/workflows/ci.yml`) runs tests, `golangci-lint`, and the
 multi-platform Docker build. Releases (`release.yml`) are tag-driven and
 publish cross-built binaries via `gh release create`.
 
-The Go toolchain version comes from `go.mod` (`go 1.26.2`). Tests run with
+The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
 `-tests=true` under golangci-lint v2.
 
 ## Code style and conventions
