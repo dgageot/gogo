@@ -131,8 +131,12 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `Runner.runSubTask` — deps do NOT (they're prerequisites, not sequenced
   sub-calls; see `TestDepsDoNotInheritParentEnv`). Memoization is bypassed
   whenever extraVars or parentEnv is non-nil so two call sites with
-  different context don't collapse into one execution. The built-in
-  `GIT_*` resolver in `taskfile/gitvars.go` is wired through
+  different context don't collapse into one execution. Vars in `vars:`
+  resolve lazily through a recursive lookup in `resolveAllVars` (see
+  `taskfile/vars.go`); they may reference each other and the built-in
+  `GIT_*` family transitively, declaration order is irrelevant, and
+  cycles short-circuit to the empty string. The built-in `GIT_*`
+  resolver in `taskfile/gitvars.go` is wired through
   `Runner.builtinLookup` and is consulted *after* user vars / CLI_ARGS
   but *before* the process environment by `expandVars`,
   `resolveEnvValue`, and `checkRequires`. Watch mode must call
