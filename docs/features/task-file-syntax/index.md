@@ -17,6 +17,7 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | `dotenv` | list of strings | Paths to `.env` files to load |
 | `vars` | map | Global variables |
 | `sources` | map | Named source-pattern presets, referenced by task `sources:` (see [Sources & Checksums](../sources-checksums/#presets)) |
+| `secrets` | map | Named secret URIs (`op://`, `aws-creds://`, …), referenced by task `secrets:` (see [Secrets](../secrets/)) |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
 | `tasks` | map | Task definitions (see below) |
 
@@ -33,6 +34,7 @@ Each task supports the following fields:
 | `dotenv` | list | Paths to `.env` files to load for this task |
 | `env` | map | Environment variables (supports `op://` references for 1Password secrets) |
 | `vars` | map | Task-scoped variables |
+| `secrets` | list or string | Names referencing entries in the top-level `secrets:` map (see [Secrets](../secrets/)) |
 | `sources` | list or string | Glob patterns for incremental builds and watch mode. A bare name resolves to a [source preset](../sources-checksums/#presets) (e.g. `sources: go`) |
 | `generates` | list | Output file patterns for timestamp-based incremental builds |
 | `aliases` | list | Alternative names for the task |

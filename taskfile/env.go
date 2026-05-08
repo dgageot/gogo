@@ -54,7 +54,11 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 //     block flows down to its children),
 //  3. add task-level dotenv (only for keys not already present),
 //  4. overlay task vars,
-//  5. overlay task env, resolving any ${VAR} cross-references.
+//  5. overlay task env, resolving any ${VAR} cross-references,
+//  6. overlay resolved task secrets (highest precedence; an explicit
+//     `secrets: [X]` reference is a stronger signal than a same-named
+//     `env: { X: ... }` entry, and is the only way op:// values reach the
+//     env when secrets are declared centrally).
 func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parentEnv []string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
@@ -85,6 +89,14 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parent
 
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
 		env = setEnv(env, k, resolveEnvValue(k, task.Env, vars, r.builtinLookup))
+	}
+
+	secrets, err := r.resolveTaskSecrets(task)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range slices.Sorted(maps.Keys(secrets)) {
+		env = setEnv(env, k, secrets[k])
 	}
 
 	return env, nil

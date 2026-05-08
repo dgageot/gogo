@@ -101,6 +101,9 @@ func (l *includeLoader) load() (*Config, error) {
 	if err := validateDefaultTask(l.root); err != nil {
 		return nil, err
 	}
+	if err := validateSecrets(l.root); err != nil {
+		return nil, err
+	}
 	return l.root, nil
 }
 
@@ -166,6 +169,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 
 	l.mergeVars(included.Vars)
 	l.mergeSourcePresets(included.Sources)
+	l.mergeSecrets(included.Secrets)
 	return l.mergeTasks(included)
 }
 
@@ -338,6 +342,22 @@ func (l *includeLoader) mergeSourcePresets(presets map[string]StringList) {
 	for k, v := range presets {
 		if _, exists := l.root.Sources[k]; !exists {
 			l.root.Sources[k] = v
+		}
+	}
+}
+
+// mergeSecrets merges child secret declarations into the root. Root entries
+// win conflicts, mirroring the precedence used by mergeVars.
+func (l *includeLoader) mergeSecrets(secrets map[string]string) {
+	if len(secrets) == 0 {
+		return
+	}
+	if l.root.Secrets == nil {
+		l.root.Secrets = make(map[string]string)
+	}
+	for k, v := range secrets {
+		if _, exists := l.root.Secrets[k]; !exists {
+			l.root.Secrets[k] = v
 		}
 	}
 }

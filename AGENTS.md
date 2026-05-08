@@ -152,7 +152,12 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `Precondition`, or `Var`).
 - **Touching the `op://` path**: the trigger is `hasOpSecrets(env)` over
   the *fully-built* env (so dotenv-sourced secrets count). Don't move the
-  check to before env composition.
+  check to before env composition. The new top-level `secrets:` block in
+  `taskfile/secrets.go` runs as the *last* layer of `buildEnv`, so a
+  `secrets: [X]` reference still feeds the existing `op://` detection.
+  New backends plug in by adding a `case strings.HasPrefix(uri, ...)`
+  branch in `resolveSecretURI` and a scheme constant in
+  `supportedSecretSchemes`.
 - **Editing watch behavior**: source collection is recursive over deps via
   `collectSources`; remember to `r.ResetRan()` between iterations or the
   memoized first run will be returned forever.
