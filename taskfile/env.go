@@ -49,11 +49,23 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 // buildEnv composes the environment used to run a task's commands:
 //
 //  1. start from r.BaseEnv (os env + global dotenv),
-//  2. add task-level dotenv (only for keys not already present),
-//  3. overlay task vars,
-//  4. overlay task env, resolving any ${VAR} cross-references.
-func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string) ([]string, error) {
+//  2. overlay parentEnv (only set when invoked as a sub-task via `cmds:
+//     - task: X`; matches shell-function semantics so a parent's `env:`
+//     block flows down to its children),
+//  3. add task-level dotenv (only for keys not already present),
+//  4. overlay task vars,
+//  5. overlay task env, resolving any ${VAR} cross-references.
+func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parentEnv []string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
+
+	// Inherited parent env wins over BaseEnv (a parent's `env: { GOOS: linux }`
+	// must override the OS GOOS for child tasks). Child task.dotenv/vars/env
+	// then layer on top — the child still gets the final say.
+	for _, e := range parentEnv {
+		if k, v, ok := strings.Cut(e, "="); ok {
+			env = setEnv(env, k, v)
+		}
+	}
 
 	if len(task.Dotenv) > 0 {
 		taskDotenv, err := loadDotenvFiles(dir, task.Dotenv, make(map[string]struct{}))

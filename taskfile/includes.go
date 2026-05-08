@@ -98,7 +98,23 @@ func (l *includeLoader) load() (*Config, error) {
 	}
 
 	l.root.DotenvVars = l.dotenvVars
+	if err := validateDefaultTask(l.root); err != nil {
+		return nil, err
+	}
 	return l.root, nil
+}
+
+// validateDefaultTask ensures that a top-level `default:` field references
+// a real task. Catching this at load time gives the user a clear error
+// instead of the generic "task not found" they'd otherwise see at run time.
+func validateDefaultTask(c *Config) error {
+	if c.Default == "" {
+		return nil
+	}
+	if _, ok := c.Tasks[c.Default]; ok {
+		return nil
+	}
+	return fmt.Errorf("top-level default: %q does not reference any defined task", c.Default)
 }
 
 type includeRequest struct {

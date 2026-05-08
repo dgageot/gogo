@@ -196,3 +196,53 @@ func TestAppPropagatesGetwdError(t *testing.T) {
 	err := app.Run(t.Context())
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
+
+func TestDefaultTaskNameUsesTopLevelDefault(t *testing.T) {
+	tf := &taskfile.Config{Default: "build"}
+	assert.Equal(t, "build", defaultTaskName("default", tf))
+
+	// An explicit positional arg always wins over the top-level field, so
+	// `gogo test` still runs `test` even when default: build is declared.
+	assert.Equal(t, "test", defaultTaskName("test", tf))
+}
+
+func TestDefaultTaskNameFallbackWhenUnset(t *testing.T) {
+	// Backward compatibility: with no top-level default the implicit
+	// "task literally named default" convention still works.
+	tf := &taskfile.Config{}
+	assert.Equal(t, "default", defaultTaskName("default", tf))
+}
+
+func TestAppRunsTopLevelDefaultTask(t *testing.T) {
+	// End-to-end: `gogo` (no positional arg) runs the task named by the
+	// top-level `default:` field instead of falling back to the implicit
+	// `default` task. --dry prints the cmd without executing it.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+default: dev
+tasks:
+  dev:
+    cmd: echo running-dev
+`)
+
+	app, _, stderr := newTestApp(t, dir, "--dry")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "echo running-dev")
+}
+
+func TestAppRejectsUnknownDefault(t *testing.T) {
+	// A top-level `default:` that names a non-existent task fails fast at
+	// load time — the user gets a clear error rather than "task not found".
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+default: missing
+tasks:
+  build:
+    cmd: true
+`)
+
+	app, _, _ := newTestApp(t, dir)
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"missing"`)
+}

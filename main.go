@@ -94,6 +94,8 @@ func (a *App) Run(ctx context.Context) error {
 	runner.DryRun = parsed.DryRun
 	runner.Force = parsed.Force
 
+	taskName := defaultTaskName(parsed.Task, tf)
+
 	if parsed.Watch {
 		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -103,14 +105,25 @@ func (a *App) Run(ctx context.Context) error {
 			return err
 		}
 
-		err = runner.Watch(sigCtx, parsed.Task, cliArgs, interval)
+		err = runner.Watch(sigCtx, taskName, cliArgs, interval)
 		if err != nil && sigCtx.Err() != nil {
 			return nil // graceful shutdown
 		}
 		return err
 	}
 
-	return runner.Run(parsed.Task, cliArgs)
+	return runner.Run(taskName, cliArgs)
+}
+
+// defaultTaskName picks the task to run when the CLI position arg is the
+// arg-parser default ("default"). A top-level `default:` field in the task
+// file wins over the implicit "task literally named default" convention,
+// which lets users skip the `default:` trampoline entirely.
+func defaultTaskName(parsed string, tf *taskfile.Config) string {
+	if parsed == "default" && tf.Default != "" {
+		return tf.Default
+	}
+	return parsed
 }
 
 // shellJoin quotes each CLI argument so it survives splicing into a
