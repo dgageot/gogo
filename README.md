@@ -59,7 +59,7 @@ gogo -n build
 - **Source presets** — reuse named glob lists (built-in `go`, or define your own)
 - **Watch mode** for automatic re-runs on file changes
 - **Concurrent dependencies** with automatic deduplication
-- **Variables** with template expansion and shell commands
+- **Variables** with template expansion, shell commands, and built-in `{{.GIT_*}}` (commit, tag, branch, dirty)
 - **Dotenv** support (global and per-task)
 - **Includes** for splitting task files across subdirectories
 - **Platform filtering** to restrict tasks to specific OS/arch

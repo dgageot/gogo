@@ -125,7 +125,13 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
 - **Touching env/var resolution**: respect the existing precedence
   (`BaseEnv` < task dotenv < task vars < task env) and the rule that
   *task dotenv never overrides global dotenv or OS env* (see
-  `TestTaskDotenvDoesNotOverrideGlobalDotenv`).
+  `TestTaskDotenvDoesNotOverrideGlobalDotenv`). The built-in `GIT_*`
+  resolver in `taskfile/gitvars.go` is wired through
+  `Runner.builtinLookup` and is consulted *after* user vars / CLI_ARGS
+  but *before* the process environment by `expandVars`,
+  `resolveEnvValue`, and `checkRequires`. Watch mode must call
+  `ResetRan` between iterations — it also clears the gitVars cache so
+  `{{.GIT_DIRTY}}` re-evaluates after each edit.
 - **Touching include logic**: cycles must be detected by absolute dir
   (`includeStack`), nested namespaces are colon-joined
   (`parent:child:grandchild`), and dotenv files dedupe globally via
