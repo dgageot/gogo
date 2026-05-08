@@ -88,63 +88,123 @@ func expandTaskTemplates(t *Task) {
 	}
 }
 
-// resolveAllVars computes the effective variables for a task, including extra vars from call sites.
+// resolveAllVars computes the effective variables for a task. Vars are
+// resolved lazily and may reference each other (transitively) via {{.OTHER}}
+// or ${OTHER} — declaration order in YAML is irrelevant. Cycles resolve to
+// the empty string (matching how task.env cross-references behave).
+//
+// Precedence on a name collision: extra (call-site) > task > global. Within
+// each layer the value is template-expanded against everything below it,
+// then against the built-in lookup (e.g. {{.GIT_COMMIT}}).
 func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]Var) (map[string]string, error) {
-	vars, err := r.resolveVars(task, dir)
-	if err != nil {
-		return nil, err
+	type source struct {
+		v   Var
+		dir string // working directory for `sh:` evaluation
 	}
 
+	// Build a unified source map. Later assignments win; we layer global
+	// vars first, then task vars, then any call-site extra vars.
+	sources := make(map[string]source, len(r.tf.Vars)+len(task.Vars))
+	for k, v := range r.tf.Vars {
+		sources[k] = source{v, r.tf.Dir}
+	}
+	for k, v := range task.Vars {
+		sources[k] = source{v, dir}
+	}
 	for _, ev := range extraVars {
-		if err := r.addVars(vars, ev, dir); err != nil {
-			return nil, err
+		for k, v := range ev {
+			sources[k] = source{v, dir}
 		}
 	}
 
-	return vars, nil
-}
-
-// resolveVars computes the effective variables for a task.
-func (r *Runner) resolveVars(task *Task, taskDir string) (map[string]string, error) {
 	resolved := map[string]string{
-		"TASK_FILE_DIR": taskDir,
+		"TASK_FILE_DIR": dir,
 	}
-	if err := r.addVars(resolved, r.tf.Vars, r.tf.Dir); err != nil {
-		return nil, err
+	visiting := make(map[string]struct{})
+	var firstErr error
+
+	var lookup func(key string) (string, bool)
+	lookup = func(key string) (string, bool) {
+		if firstErr != nil {
+			return "", false
+		}
+		if v, ok := resolved[key]; ok {
+			return v, true
+		}
+		// Cycles short-circuit to the empty string. Treating the value as
+		// "resolved" lets the rest of the expansion finish so the user gets
+		// a complete (if mostly empty) value to debug from.
+		if _, onPath := visiting[key]; onPath {
+			return "", true
+		}
+		s, ok := sources[key]
+		if !ok {
+			// Unknown user-vars fall through to gogo built-ins. CLI_ARGS, OS
+			// env and the cliArgs fallback are NOT consulted here — those
+			// only apply when expanding command strings, not var bodies.
+			return r.builtinLookup(key)
+		}
+		visiting[key] = struct{}{}
+		defer delete(visiting, key)
+
+		var value string
+		if s.v.Sh != "" {
+			// Expand template references inside the shell command itself so
+			// patterns like `sh: echo {{.IMAGE}}-{{.GIT_TAG}}.tar` work.
+			cmdLine := expandTemplates(s.v.Sh, lookup)
+			out, err := r.ShellRunner.Output(ShellCommand{
+				Kind:    ShellCommandVar,
+				Command: cmdLine,
+				Dir:     s.dir,
+			})
+			if err != nil {
+				firstErr = fmt.Errorf("resolving variable (sh: %s): %w", s.v.Sh, err)
+				return "", true
+			}
+			value = strings.TrimSpace(string(out))
+		} else {
+			value = expandTemplates(s.v.Value, lookup)
+		}
+		resolved[key] = value
+		return value, true
 	}
-	if err := r.addVars(resolved, task.Vars, taskDir); err != nil {
-		return nil, err
+
+	// Force-resolve every declared name so the returned map is complete:
+	// downstream consumers (env composition, requires, expandVars on cmd
+	// strings) read from a flat map and don't go through this lookup again.
+	for _, name := range slices.Sorted(maps.Keys(sources)) {
+		lookup(name)
+		if firstErr != nil {
+			return nil, firstErr
+		}
 	}
 	return resolved, nil
 }
 
-// addVars resolves each Var in src (sorted for determinism) and writes it into dst.
-func (r *Runner) addVars(dst map[string]string, src map[string]Var, dir string) error {
-	for _, k := range slices.Sorted(maps.Keys(src)) {
-		v, err := r.resolveVar(src[k], dir)
-		if err != nil {
-			return err
+// expandTemplates substitutes ${VAR} and {{.VAR}} references in s using the
+// supplied lookup. Unknown ${VAR} references are left for the shell to
+// expand; unknown {{.VAR}} templates are left verbatim. Both forms share a
+// single lookup so callers can layer vars / CLI_ARGS / built-ins / env in
+// whatever priority makes sense for their context.
+func expandTemplates(s string, lookup func(string) (string, bool)) string {
+	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
+	// don't start with $. Unknown variables are left as ${KEY} for the shell.
+	s = os.Expand(s, func(key string) string {
+		if val, ok := lookup(key); ok {
+			return val
 		}
-		dst[k] = v
-	}
-	return nil
-}
-
-// resolveVar evaluates a single variable, running a shell command if needed.
-func (r *Runner) resolveVar(v Var, dir string) (string, error) {
-	if v.Sh == "" {
-		return v.Value, nil
-	}
-
-	out, err := r.ShellRunner.Output(ShellCommand{
-		Kind:    ShellCommandVar,
-		Command: v.Sh,
-		Dir:     dir,
+		return "${" + key + "}"
 	})
-	if err != nil {
-		return "", fmt.Errorf("resolving variable (sh: %s): %w", v.Sh, err)
-	}
-	return strings.TrimSpace(string(out)), nil
+
+	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
+	// run-time behavior matches expandConfigEnvTemplates at parse time.
+	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
+		key := templatePattern.FindStringSubmatch(match)[1]
+		if val, ok := lookup(key); ok {
+			return val
+		}
+		return match
+	})
 }
 
 // expandVars substitutes template and shell variables in a command string.
@@ -163,7 +223,7 @@ func (r *Runner) resolveVar(v Var, dir string) (string, error) {
 // CLI_ARGS but *before* the process environment, so a user-defined var with
 // the same name as a built-in (e.g. GIT_COMMIT) always wins.
 func expandVars(s string, vars map[string]string, cliArgs string, builtin func(string) (string, bool)) string {
-	lookup := func(key string) (string, bool) {
+	return expandTemplates(s, func(key string) (string, bool) {
 		if val, ok := vars[key]; ok {
 			return val, true
 		}
@@ -176,25 +236,6 @@ func expandVars(s string, vars map[string]string, cliArgs string, builtin func(s
 			}
 		}
 		return os.LookupEnv(key)
-	}
-
-	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
-	// don't start with $. Unknown variables are left as ${KEY} for the shell.
-	s = os.Expand(s, func(key string) string {
-		if val, ok := lookup(key); ok {
-			return val
-		}
-		return "${" + key + "}"
-	})
-
-	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
-	// run-time behavior matches expandConfigEnvTemplates at parse time.
-	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
-		key := templatePattern.FindStringSubmatch(match)[1]
-		if val, ok := lookup(key); ok {
-			return val
-		}
-		return match
 	})
 }
 

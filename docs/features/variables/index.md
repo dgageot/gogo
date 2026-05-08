@@ -51,6 +51,30 @@ tasks:
     cmd: deploy --env {{ "{{" }}.ENV}}
 ```
 
+## Variable References Inside Variables
+
+A variable's value (or `sh:` command) can reference any other variable, including [built-ins](#built-in-variables). References are resolved transitively at run time and declaration order is irrelevant:
+
+```yaml
+vars:
+  GIT_TAG: "{{ "{{" }}.GIT_TAG}}"          # built-in
+  LDFLAGS: "-X main.Version={{ "{{" }}.GIT_TAG}} -X main.Commit={{ "{{" }}.GIT_COMMIT}}"
+
+tasks:
+  build:
+    cmd: go build -ldflags '{{ "{{" }}.LDFLAGS}}' .
+```
+
+The `sh:` form is template-expanded too, so a shell command can be parameterised by other vars:
+
+```yaml
+vars:
+  IMAGE: cagent-proxy
+  LATEST: { sh: "ls -1 dist/{{ "{{" }}.IMAGE}}-*.tar | sort | tail -1" }
+```
+
+Cycles — `A: "{{ "{{" }}.B}}"`, `B: "{{ "{{" }}.A}}"` — short-circuit to the empty string rather than looping forever, mirroring how task `env:` cross-references behave.
+
 ## Built-in Variables
 
 | Variable | Description |
@@ -185,5 +209,7 @@ When resolving `{{ "{{" }}.VAR}}` or `${VAR}` inside a command, gogo looks up th
 2. `CLI_ARGS` (if the lookup is for that name)
 3. Built-in variables (`GIT_*`)
 4. The process environment
+
+Var bodies (the `value:` and `sh:` of another variable) use a slightly tighter chain — only other vars and built-ins, no `CLI_ARGS` or process env. This keeps `vars:` deterministic and free of CLI/shell context.
 
 Unknown `${VAR}` references are left intact for the shell to expand. Unknown `{{ "{{" }}.VAR}}` templates are left verbatim.
