@@ -52,14 +52,13 @@ tasks:
   # Build the project
   build:
     cmd: go build ./...
+    sources: go        # built-in preset: **/*.go + go.mod + go.sum
 
   # Run all tests
   test:
     deps: [build]
     cmd: go test ./...
-    sources:
-      - "*.go"
-      - "cmd/*.go"
+    sources: go
 
   # Format and lint
   lint:

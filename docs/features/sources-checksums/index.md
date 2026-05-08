@@ -58,6 +58,60 @@ Patterns containing `**` are matched recursively across all subdirectories (hidd
 | `**/*.go` | All Go files in any subdirectory |
 | `**/*.proto` | All proto files recursively |
 
+## Presets
+
+The same source list — `**/*.go`, `go.mod`, `go.sum` — is repeated on every Go build/lint/test task. Source **presets** let you name a list once and reference it by name:
+
+```yaml
+sources:
+  lint: [go, .golangci.yml]    # composes the built-in `go` preset with one literal
+
+tasks:
+  build:
+    cmd: go build ./...
+    sources: go                # short form: a single name
+  test:
+    cmd: go test ./...
+    sources: go
+  lint:
+    cmd: golangci-lint run
+    sources: lint              # references the user-defined preset above
+  format:
+    cmd: goimports -w .
+    sources: "**/*.go"         # plain globs still work
+```
+
+A `sources:` entry that has **no glob characters** (`*`, `?`, `[`, `]`, `/`, `\`) is looked up in the preset map first; if no preset matches, it's treated as a literal path. So `go.mod` and `.golangci.yml` continue to work as bare filenames.
+
+### Built-in Presets
+
+gogo ships with two built-ins. User-defined entries with the same name win.
+
+| Preset | Expands to |
+|--------|-----------|
+| `go` | `**/*.go`, `go.mod`, `go.sum` |
+| `go-vendored` | the `go` preset, plus `vendor/**` |
+
+### Composition
+
+Presets can reference other presets — the resolver expands recursively, deduplicates, and rejects cycles:
+
+```yaml
+sources:
+  go-strict: [go, .golangci.yml, .editorconfig]
+  ci: [go-strict, scripts/**]
+```
+
+### Overriding a Built-in
+
+Define a preset with the same name to replace the built-in:
+
+```yaml
+sources:
+  # This project doesn't track go.sum.
+  go: ["**/*.go", "go.mod"]
+```
+
 ## Checksum Storage
 
 Checksums are stored in `.gogo/checksum/` relative to the task file directory. You should add `.gogo/` to your `.gitignore`:

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"slices"
 	"time"
 )
 
@@ -18,7 +17,10 @@ type dirPatterns struct {
 }
 
 // collectSources gathers all source patterns from the task and its dependencies (recursively),
-// preserving each task's working directory.
+// preserving each task's working directory. Preset references in task.Sources
+// are expanded against the config's preset map (with built-ins applied).
+// Tasks whose sources fail to resolve are silently skipped — the actual
+// run-time error is surfaced by isUpToDate.
 func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []dirPatterns {
 	if _, ok := visited[taskName]; ok {
 		return nil
@@ -32,10 +34,12 @@ func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []
 
 	var result []dirPatterns
 	if len(task.Sources) > 0 {
-		result = append(result, dirPatterns{
-			Dir:      r.taskDir(&task),
-			Patterns: slices.Clone([]string(task.Sources)),
-		})
+		if resolved, err := r.tf.taskSources([]string(task.Sources)); err == nil && len(resolved) > 0 {
+			result = append(result, dirPatterns{
+				Dir:      r.taskDir(&task),
+				Patterns: resolved,
+			})
+		}
 	}
 	for _, dep := range task.Deps {
 		resolved, ok := r.resolveTaskName(dep.Task)

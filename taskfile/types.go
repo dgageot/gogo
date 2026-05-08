@@ -2,16 +2,17 @@ package taskfile
 
 // Config represents a parsed gogo.yaml.
 type Config struct {
-	Version    string            `yaml:"version"`
-	Includes   []string          `yaml:"includes"`
-	Flatten    []string          `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
-	Dotenv     []string          `yaml:"dotenv"`
-	Vars       map[string]Var    `yaml:"vars"`
-	Tasks      map[string]Task   `yaml:"tasks"`
-	Dir        string            `yaml:"-"`
-	Interval   string            `yaml:"interval"`
-	Namespaces map[string]string `yaml:"-"` // dir -> namespace
-	DotenvVars map[string]string `yaml:"-"` // resolved dotenv variables
+	Version    string                `yaml:"version"`
+	Includes   []string              `yaml:"includes"`
+	Flatten    []string              `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
+	Dotenv     []string              `yaml:"dotenv"`
+	Vars       map[string]Var        `yaml:"vars"`
+	Sources    map[string]StringList `yaml:"sources"` // named source presets, referenced from task.Sources by name
+	Tasks      map[string]Task       `yaml:"tasks"`
+	Dir        string                `yaml:"-"`
+	Interval   string                `yaml:"interval"`
+	Namespaces map[string]string     `yaml:"-"` // dir -> namespace
+	DotenvVars map[string]string     `yaml:"-"` // resolved dotenv variables
 }
 
 // Task represents a single task definition.

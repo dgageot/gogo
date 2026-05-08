@@ -1,5 +1,11 @@
 version: "1"
 
+# Named source presets, referenced from each task's `sources:` field by name.
+# `go` is also a built-in preset (**/*.go + go.mod + go.sum); the entry below
+# extends it with the lint config so a .golangci.yml change re-runs `lint`.
+sources:
+  lint: [go, .golangci.yml]
+
 tasks:
   # Build, lint, and test
   default:
@@ -8,56 +14,36 @@ tasks:
   # Build, lint, and test on source changes
   dev:
     deps: [build, lint, test]
-    sources:
-      - "**/*.go"
-      - go.mod
-      - go.sum
+    sources: go
 
   # Build the binary
   build:
-    cmds:
-      - go build -trimpath -ldflags "-s -w" -o bin/gogo .
-    sources:
-      - "**/*.go"
-      - go.mod
-      - go.sum
+    cmd: go build -trimpath -ldflags "-s -w" -o bin/gogo .
+    sources: go
 
   # Remove build artifacts
   clean:
-    cmds:
-      - rm -rf bin
+    cmd: rm -rf bin
 
   # Run linters
   lint:
-    cmds:
-      - golangci-lint run
-    sources:
-      - "**/*.go"
-      - go.mod
-      - go.sum
-      - .golangci.yml
+    cmd: golangci-lint run
+    sources: lint
 
   # Run tests
   test:
-    cmds:
-      - go test ./...
-    sources:
-      - "**/*.go"
-      - go.mod
-      - go.sum
+    cmd: go test ./...
+    sources: go
 
   # Format Go source files
   format:
-    cmds:
-      - goimports -w .
-    sources:
-      - "**/*.go"
+    cmd: goimports -w .
+    sources: "**/*.go"
 
   # Cross-compile for all platforms
   build-cross:
-    cmds:
-      - >
-        docker buildx build
-        --target=cross
-        --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-        .
+    cmd: >
+      docker buildx build
+      --target=cross
+      --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+      .

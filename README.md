@@ -19,16 +19,13 @@ tasks:
 
   build:
     cmd: go build -o bin/myapp ./...
-    sources:
-      - "**/*.go"
-      - go.mod
+    sources: go            # built-in preset: **/*.go + go.mod + go.sum
     generates:
       - bin/myapp
 
   test:
     cmd: go test ./...
-    sources:
-      - "**/*.go"
+    sources: go
 ```
 
 Run a task:
@@ -59,6 +56,7 @@ gogo -n build
 ## Features
 
 - **Incremental builds** via source checksums or timestamp-based `sources`/`generates`
+- **Source presets** — reuse named glob lists (built-in `go`, or define your own)
 - **Watch mode** for automatic re-runs on file changes
 - **Concurrent dependencies** with automatic deduplication
 - **Variables** with template expansion and shell commands
