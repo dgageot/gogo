@@ -9,6 +9,7 @@ type Config struct {
 	Default    string                `yaml:"default"` // task to run when none is given on the CLI; replaces the convention of declaring a `default` task
 	Vars       map[string]Var        `yaml:"vars"`
 	Sources    map[string]StringList `yaml:"sources"` // named source presets, referenced from task.Sources by name
+	Secrets    map[string]string     `yaml:"secrets"` // named secret URIs (op://, aws-creds://, ...), referenced from task.Secrets
 	Tasks      map[string]Task       `yaml:"tasks"`
 	Dir        string                `yaml:"-"`
 	Interval   string                `yaml:"interval"`
@@ -24,6 +25,7 @@ type Task struct {
 	Dotenv        []string          `yaml:"dotenv"`
 	Env           map[string]string `yaml:"env"`
 	Vars          map[string]Var    `yaml:"vars"`
+	Secrets       StringList        `yaml:"secrets"` // names referencing entries in Config.Secrets
 	Sources       StringList        `yaml:"sources"`
 	Generates     StringList        `yaml:"generates"`
 	Aliases       StringList        `yaml:"aliases"`
