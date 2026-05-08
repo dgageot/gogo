@@ -5,11 +5,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	yaml "github.com/goccy/go-yaml"
 )
 
 const fileName = "gogo.yaml"
+
+// validateTaskName rejects task names containing characters that could escape
+// the on-disk checksum directory or otherwise misbehave when joined into a
+// filesystem path. Namespace separators (':') and ordinary identifier
+// characters are allowed; '/', '\\' and '..' are not.
+func validateTaskName(name string) error {
+	if name == "" {
+		return errors.New("task name must not be empty")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("task name %q must not contain '/' or '\\'", name)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("task name %q must not contain '..'", name)
+	}
+	return nil
+}
 
 // Parse reads and parses a task file from the given directory.
 func Parse(dir string) (*Config, error) {
@@ -29,8 +47,6 @@ func parseFile(path, dir string) (*Config, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	data = expandTemplates(data)
-
 	var tf Config
 	if err := yaml.UnmarshalWithOptions(data, &tf, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("parsing %s:\n%s", path, yaml.FormatError(err, true, true))
@@ -40,6 +56,16 @@ func parseFile(path, dir string) (*Config, error) {
 	if tf.Tasks == nil {
 		tf.Tasks = make(map[string]Task)
 	}
+
+	for name := range tf.Tasks {
+		if err := validateTaskName(name); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+
+	// Expand {{.VAR}} env-variable references on parsed string values only,
+	// never on raw bytes — so an env value can't inject YAML structure.
+	expandConfigEnvTemplates(&tf)
 
 	// Extract comments from AST to use as task descriptions
 	applyTaskComments(&tf, data)

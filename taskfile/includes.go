@@ -1,11 +1,33 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 )
+
+// validateIncludeName ensures an `includes:` entry resolves to a direct
+// subdirectory of the task file that declares it. Absolute paths,
+// parent-directory escapes ('..'), and path separators are rejected so an
+// include can never reach outside its parent's tree.
+func validateIncludeName(name string) error {
+	if name == "" {
+		return errors.New("include name must not be empty")
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("include %q must be a subdirectory (absolute paths are not allowed)", name)
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("include %q must be a subdirectory (path separators are not allowed)", name)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("include %q must be a subdirectory ('..' is not allowed)", name)
+	}
+	return nil
+}
 
 // LoadWithIncludes parses a task file and resolves all includes into a flat task map.
 func LoadWithIncludes(dir string) (*Config, error) {
@@ -127,11 +149,13 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 	}
 
 	l.mergeVars(included.Vars)
-	l.mergeTasks(included)
-	return nil
+	return l.mergeTasks(included)
 }
 
 func (l *includeLoader) parseInclude(req includeRequest) (*includedConfig, error) {
+	if err := validateIncludeName(req.name); err != nil {
+		return nil, fmt.Errorf("%s: %w", req.parentFile(), err)
+	}
 	childDir, err := req.childDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolving include %q from %s: %w", req.namespace, req.parentFile(), err)
@@ -259,8 +283,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 	}
 
 	l.mergeVars(flattened.Vars)
-	l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
-	return nil
+	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
 }
 
 func namespaceJoin(prefix, name string) string {
@@ -285,11 +308,16 @@ func (l *includeLoader) mergeVars(vars map[string]Var) {
 	}
 }
 
-func (l *includeLoader) mergeTasks(included *includedConfig) {
+func (l *includeLoader) mergeTasks(included *includedConfig) error {
 	for _, name := range slices.Sorted(maps.Keys(included.Tasks)) {
 		task := normalizedIncludedTask(included, name)
-		l.root.Tasks[included.Namespace+":"+name] = task
+		finalName := included.Namespace + ":" + name
+		if err := validateTaskName(finalName); err != nil {
+			return err
+		}
+		l.root.Tasks[finalName] = task
 	}
+	return nil
 }
 
 // mergeFlattenedTasks merges tasks from a flattened file into l.root at the
@@ -297,9 +325,12 @@ func (l *includeLoader) mergeTasks(included *includedConfig) {
 // (this is the agentic-platform pattern for splitting one file across many).
 // First defined wins, so a parent file can override a flattened task by
 // declaring it locally with the same name.
-func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancestorDir string) {
+func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancestorDir string) error {
 	for _, name := range slices.Sorted(maps.Keys(flattened.Tasks)) {
 		finalName := namespaceJoin(namespace, name)
+		if err := validateTaskName(finalName); err != nil {
+			return err
+		}
 		if _, exists := l.root.Tasks[finalName]; exists {
 			continue // first wins (root or earlier flatten file beats this one)
 		}
@@ -311,6 +342,7 @@ func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancest
 		}
 		l.root.Tasks[finalName] = task
 	}
+	return nil
 }
 
 func normalizedIncludedTask(included *includedConfig, name string) Task {

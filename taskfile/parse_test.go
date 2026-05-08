@@ -94,7 +94,10 @@ tasks:
 	assert.Contains(t, tf.Tasks, "cli:nested:test")
 }
 
-func TestLoadWithIncludesRejectsCycles(t *testing.T) {
+func TestLoadWithIncludesRejectsParentEscape(t *testing.T) {
+	// `includes:` must point at a direct subdirectory, so `..` (or any path
+	// that climbs out of the parent) is rejected. This makes parent-escape
+	// cycles unreachable: an include cycle would require a parent jump.
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"gogo.yaml": `version: "1"
@@ -113,8 +116,30 @@ includes:
 
 	_, err := LoadWithIncludes(dir)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cyclic include")
+	assert.Contains(t, err.Error(), "must be a subdirectory")
 	assert.Contains(t, err.Error(), filepath.Join(dir, "cli", "root", "gogo.yaml"))
+}
+
+func TestLoadWithIncludesRejectsNonSubdirectory(t *testing.T) {
+	cases := map[string]string{
+		"parent":      "..",
+		"sibling":     "../sibling",
+		"absolute":    "/etc",
+		"nested-path": "sub/dir",
+		"backslash":   `sub\dir`,
+	}
+	for label, badName := range cases {
+		t.Run(label, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{
+				"gogo.yaml": fmt.Sprintf("version: \"1\"\nincludes:\n  - %q\n", badName),
+			})
+
+			_, err := LoadWithIncludes(dir)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "must be a subdirectory")
+		})
+	}
 }
 
 func TestLoadWithIncludesMissingMentionsParentFile(t *testing.T) {
@@ -206,12 +231,72 @@ tasks:
 	assert.Contains(t, tf.Tasks, "server:utils:fmt", "nested include under server should be namespaced as server:utils:fmt")
 }
 
-func TestExpandTemplates(t *testing.T) {
+func TestExpandEnvTemplatesValueOnly(t *testing.T) {
 	t.Setenv("MY_VAR", "hello")
 
-	assert.Equal(t, []byte("value: hello"), expandTemplates([]byte("value: {{.MY_VAR}}")))
-	assert.Equal(t, []byte("value: hello"), expandTemplates([]byte("value: {{ .MY_VAR }}")))
-	assert.Equal(t, []byte("value: {{.UNSET_VAR}}"), expandTemplates([]byte("value: {{.UNSET_VAR}}")))
+	assert.Equal(t, "value: hello", expandEnvTemplates("value: {{.MY_VAR}}"))
+	assert.Equal(t, "value: hello", expandEnvTemplates("value: {{ .MY_VAR }}"))
+	assert.Equal(t, "value: {{.UNSET_VAR}}", expandEnvTemplates("value: {{.UNSET_VAR}}"))
+}
+
+func TestParseEnvExpansionAppliesToValuesNotStructure(t *testing.T) {
+	// An env value containing YAML-structural characters (newline, ':', '-')
+	// must NOT be able to inject new tasks or fields. The substitution happens
+	// after YAML parsing, so the parser sees the original document.
+	t.Setenv("GOGO_INJECT", "injected\n  evil:\n    cmd: rm -rf /")
+
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+tasks:
+  build:
+    cmd: echo {{.GOGO_INJECT}}
+`,
+	})
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	// The malicious env value lands inside the cmd string verbatim — no
+	// 'evil' task is conjured into existence.
+	assert.NotContains(t, tf.Tasks, "evil")
+	require.Contains(t, tf.Tasks, "build")
+	require.Len(t, tf.Tasks["build"].Cmds, 1)
+	assert.Equal(t,
+		"echo injected\n  evil:\n    cmd: rm -rf /",
+		tf.Tasks["build"].Cmds[0].Cmd,
+	)
+}
+
+func TestParseEnvExpansionInVariousFields(t *testing.T) {
+	// Verify the documented "expand {{.VAR}} from env at parse time" behavior
+	// still works for the common user-configurable string fields.
+	t.Setenv("GOGO_TARGET", "prod")
+	t.Setenv("GOGO_DIR", "backend")
+	t.Setenv("GOGO_VERSION", "1.2.3")
+
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+vars:
+  RELEASE: "v{{.GOGO_VERSION}}"
+tasks:
+  build:
+    dir: "{{.GOGO_DIR}}"
+    env:
+      TARGET: "{{.GOGO_TARGET}}"
+    cmd: echo {{.GOGO_TARGET}}
+`,
+	})
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, "v1.2.3", tf.Vars["RELEASE"].Value)
+	build := tf.Tasks["build"]
+	assert.Equal(t, "backend", build.Dir)
+	assert.Equal(t, "prod", build.Env["TARGET"])
+	assert.Equal(t, "echo prod", build.Cmds[0].Cmd)
 }
 
 func TestParsePreconditions(t *testing.T) {
@@ -664,4 +749,47 @@ flatten:
 	tf, err := Parse(dir)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tasks/a.yml", "tasks/b.yml"}, tf.Flatten)
+}
+
+func TestParseRejectsUnsafeTaskNames(t *testing.T) {
+	// Names containing path separators or '..' could be used to escape the
+	// .gogo/checksum/ directory when joined with checksumPath.
+	cases := map[string]string{
+		"slash":      "foo/bar",
+		"backslash":  `foo\bar`,
+		"parent":     "..",
+		"traversal":  "../etc/passwd",
+		"dotdot-mid": "foo..bar",
+	}
+	for label, name := range cases {
+		t.Run(label, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{
+				"gogo.yaml": fmt.Sprintf("version: \"1\"\ntasks:\n  %q:\n    cmd: echo hi\n", name),
+			})
+
+			_, err := Parse(dir)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "task name")
+		})
+	}
+}
+
+func TestLoadWithFlattenRejectsUnsafeTaskName(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+flatten:
+  - tasks/extras.yml
+`,
+		"tasks/extras.yml": `version: "1"
+tasks:
+  "../escape":
+    cmd: echo hi
+`,
+	})
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "task name")
 }
