@@ -8,7 +8,7 @@ ARG XX_VERSION="1.9.0"
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
 # osxcross contains the MacOSX cross toolchain for xx
-FROM crazymax/osxcross:15.5-debian AS osxcross
+FROM crazymax/osxcross:26.1-debian AS osxcross
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder-base
 COPY --from=xx / /
