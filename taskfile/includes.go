@@ -149,6 +149,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 	}
 
 	l.mergeVars(included.Vars)
+	l.mergeSourcePresets(included.Sources)
 	return l.mergeTasks(included)
 }
 
@@ -283,6 +284,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 	}
 
 	l.mergeVars(flattened.Vars)
+	l.mergeSourcePresets(flattened.Sources)
 	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
 }
 
@@ -304,6 +306,22 @@ func (l *includeLoader) mergeVars(vars map[string]Var) {
 	for k, v := range vars {
 		if _, exists := l.root.Vars[k]; !exists {
 			l.root.Vars[k] = v
+		}
+	}
+}
+
+// mergeSourcePresets merges child source presets into the root. Root presets
+// win conflicts, mirroring the precedence used by mergeVars.
+func (l *includeLoader) mergeSourcePresets(presets map[string]StringList) {
+	if len(presets) == 0 {
+		return
+	}
+	if l.root.Sources == nil {
+		l.root.Sources = make(map[string]StringList)
+	}
+	for k, v := range presets {
+		if _, exists := l.root.Sources[k]; !exists {
+			l.root.Sources[k] = v
 		}
 	}
 }

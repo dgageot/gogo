@@ -11,13 +11,18 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool,
 		return false, "", nil
 	}
 
+	sources, err := r.tf.taskSources([]string(task.Sources))
+	if err != nil {
+		return false, "", fmt.Errorf("resolving sources for task %q: %w", taskName, err)
+	}
+
 	// When generates is set, use timestamp-based comparison
 	if len(task.Generates) > 0 {
-		upToDate, err := outputsNewerThanSources(dir, task.Sources, task.Generates)
+		upToDate, err := outputsNewerThanSources(dir, sources, task.Generates)
 		return upToDate, "", err
 	}
 
-	checksum, err := sourcesChecksum(dir, task.Sources)
+	checksum, err := sourcesChecksum(dir, sources)
 	if err != nil {
 		return false, "", fmt.Errorf("computing sources checksum: %w", err)
 	}

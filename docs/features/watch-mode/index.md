@@ -29,9 +29,7 @@ interval: 1s
 tasks:
   test:
     cmd: go test ./...
-    sources:
-      - "*.go"
-      - "cmd/*.go"
+    sources: go
 ```
 
 The `interval` field accepts any Go duration string: `100ms`, `1s`, `2s`, etc.
@@ -43,10 +41,7 @@ The `interval` field accepts any Go duration string: `100ms`, `1s`, `2s`, etc.
 tasks:
   test:
     cmd: go test ./...
-    sources:
-      - "*.go"
-      - "cmd/*.go"
-      - go.mod
+    sources: go     # built-in preset — see Sources & Checksums
 ```
 
 ```sh

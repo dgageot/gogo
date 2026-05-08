@@ -15,6 +15,7 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | `flatten` | list of strings | YAML files whose tasks merge into the current namespace without a prefix (see [Includes](../includes/#flatten)) |
 | `dotenv` | list of strings | Paths to `.env` files to load |
 | `vars` | map | Global variables |
+| `sources` | map | Named source-pattern presets, referenced by task `sources:` (see [Sources & Checksums](../sources-checksums/#presets)) |
 | `interval` | string | Default polling interval for watch mode (e.g. `500ms`) |
 | `tasks` | map | Task definitions (see below) |
 
@@ -31,7 +32,7 @@ Each task supports the following fields:
 | `dotenv` | list | Paths to `.env` files to load for this task |
 | `env` | map | Environment variables (supports `op://` references for 1Password secrets) |
 | `vars` | map | Task-scoped variables |
-| `sources` | list | Glob patterns for incremental builds and watch mode |
+| `sources` | list or string | Glob patterns for incremental builds and watch mode. A bare name resolves to a [source preset](../sources-checksums/#presets) (e.g. `sources: go`) |
 | `generates` | list | Output file patterns for timestamp-based incremental builds |
 | `aliases` | list | Alternative names for the task |
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
