@@ -29,3 +29,8 @@
       url: /features/cli/
     - title: Errors & Troubleshooting
       url: /features/errors/
+
+- section: Reference
+  items:
+    - title: Design Notes & Non-Goals
+      url: /design-notes/
