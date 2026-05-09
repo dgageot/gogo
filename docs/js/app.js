@@ -103,31 +103,65 @@ function addCopyButtons() {
 }
 
 // ---------- Search ----------
-// Build a search index from sidebar links and page content
+// The index is seeded from sidebar links (so search works offline / before
+// the JSON arrives) and then enriched with full-page content fetched from
+// /search.json (generated at build time by docs/search.json).
 const searchIndex = [];
+const searchIndexByUrl = new Map();
+
+function normalizeUrl(url) {
+  return (url || '').replace(/\/+$/, '');
+}
+
+function sectionForUrl(url) {
+  const link = document.querySelector(`.sidebar-link[href$="${url}"]`);
+  return link?.closest('.sidebar-section')?.querySelector('.sidebar-heading')?.textContent || '';
+}
+
+function addOrUpdateEntry(entry) {
+  const key = normalizeUrl(entry.url);
+  let existing = searchIndexByUrl.get(key);
+  if (!existing) {
+    existing = { title: entry.title, url: entry.url, section: entry.section || '', searchText: '' };
+    searchIndexByUrl.set(key, existing);
+    searchIndex.push(existing);
+  }
+  if (entry.title) existing.title = entry.title;
+  if (entry.section) existing.section = entry.section;
+  const extra = [entry.title, entry.section, entry.content].filter(Boolean).join(' ').toLowerCase();
+  if (extra) existing.searchText = (existing.searchText + ' ' + extra).trim();
+}
 
 function buildSearchIndex() {
-  // Index from sidebar navigation
+  // Seed from sidebar so the modal is useful even before the JSON loads.
   document.querySelectorAll('.sidebar-link').forEach(link => {
     const section = link.closest('.sidebar-section')?.querySelector('.sidebar-heading')?.textContent || '';
-    searchIndex.push({
+    addOrUpdateEntry({
       title: link.textContent.trim(),
       url: link.getAttribute('href'),
-      section: section,
-      searchText: `${link.textContent} ${section}`.toLowerCase(),
+      section,
     });
   });
 
-  // Also index current page content for richer results
-  if ($content) {
-    const currentEntry = searchIndex.find(e => {
-      const currentPath = window.location.pathname;
-      return currentPath.endsWith(e.url) || currentPath.endsWith(e.url.replace(/\/$/, ''));
-    });
-    if (currentEntry) {
-      currentEntry.searchText += ' ' + $content.textContent.replace(/\s+/g, ' ').toLowerCase();
-    }
-  }
+  // Enrich with full-page content from the build-time JSON index.
+  const url = window.SITE_SEARCH_URL || '/search.json';
+  fetch(url, { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : [])
+    .then(pages => {
+      for (const p of pages) {
+        addOrUpdateEntry({
+          title: p.title,
+          url: p.url,
+          section: sectionForUrl(p.url),
+          content: p.content,
+        });
+      }
+      // If the modal is already open, refresh the visible result list.
+      if ($searchOverlay?.classList.contains('active')) {
+        renderSearchResults($searchModal?.value || '');
+      }
+    })
+    .catch(() => { /* search degrades to sidebar-only */ });
 }
 
 function openSearch() {

@@ -1,0 +1,16 @@
+---
+layout: null
+permalink: /search.json
+sitemap: false
+---
+[
+{%- assign pages = site.html_pages | where_exp: "p", "p.title" -%}
+{%- for p in pages -%}
+  {%- unless forloop.first %},{% endunless -%}
+  {
+    "title": {{ p.title | jsonify }},
+    "url": {{ p.url | relative_url | jsonify }},
+    "content": {{ p.content | strip_html | normalize_whitespace | jsonify }}
+  }
+{%- endfor -%}
+]
