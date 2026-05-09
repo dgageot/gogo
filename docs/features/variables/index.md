@@ -87,6 +87,52 @@ Cycles — `A: "{{ "{{" }}.B}}"`, `B: "{{ "{{" }}.A}}"` — short-circuit to the
 | `GIT_BRANCH` | Current branch name; `HEAD` when detached |
 | `GIT_DIRTY` | `dirty` if the working tree has changes; empty when clean |
 
+### `TASK_FILE_DIR`
+
+`TASK_FILE_DIR` is the working directory the task runs in — the same value gogo passes as the shell's `cwd`. The rules are simple but the most common foot-gun in gogo, especially with `dir:` and includes, so it's worth a worked example. The full algorithm lives in `Runner.taskDir` (`taskfile/task_execution.go`) and `makeTaskDirAbsolute` (`taskfile/includes.go`).
+
+Three cases, by ascending complexity:
+
+```
+project/
+├── gogo.yaml
+└── frontend/
+    └── gogo.yaml
+```
+
+```yaml
+# project/gogo.yaml
+includes:
+  - frontend
+
+tasks:
+  here:
+    cmd: echo $TASK_FILE_DIR        # → /abs/path/to/project
+
+  there:
+    dir: tools
+    cmd: echo $TASK_FILE_DIR        # → /abs/path/to/project/tools
+```
+
+```yaml
+# project/frontend/gogo.yaml
+tasks:
+  build:
+    cmd: echo $TASK_FILE_DIR        # → /abs/path/to/project/frontend
+
+  build-src:
+    dir: src
+    cmd: echo $TASK_FILE_DIR        # → /abs/path/to/project/frontend/src
+```
+
+Key takeaways:
+
+- For an **included task**, `TASK_FILE_DIR` is the include's own directory — not the root project directory. This is what users almost always want (`gogo frontend:build` should build *the frontend*).
+- A **relative `dir:`** is rebased against whichever file declares the task: relative to the root for root tasks, relative to the include's directory for included tasks. Includes can never "escape" to the root by accident.
+- An **absolute `dir:`** is taken verbatim. Useful for tasks that operate on a sibling repository.
+- `TASK_FILE_DIR` is *always* an absolute path, even when `dir:` was written as a relative one.
+- Sub-task calls (`cmds: - task: X`) recompute `TASK_FILE_DIR` for the child — it reflects the *child's* file/`dir:`, not the parent's.
+
 ### Built-in Git Variables
 
 The `GIT_*` variables are resolved lazily on first use and cached for the lifetime of one `gogo` invocation, so a task that doesn't reference any of them never shells out to git. Outside a git repo all five resolve to the empty string — they never raise an error.
