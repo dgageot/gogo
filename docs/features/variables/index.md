@@ -201,15 +201,36 @@ tasks:
 
 When the same child is called by two different parents (or twice by the same parent with different env), each call site is a distinct execution — gogo bypasses its task-level memoization so the child re-runs with each set of inherited values.
 
-## Variable Resolution Order
+## Resolution & Precedence
 
-When resolving `{{ "{{" }}.VAR}}` or `${VAR}` inside a command, gogo looks up the name in this order:
+Two distinct precedence chains govern how variables work in gogo. Most tasks only need to think about the first one; the second matters when you mix `env:`, `dotenv:`, and `secrets:`.
 
-1. Task-scoped `vars` (which override global `vars`)
-2. `CLI_ARGS` (if the lookup is for that name)
-3. Built-in variables (`GIT_*`)
+### 1. Variable lookup (`{{ "{{" }}.VAR}}` and `${VAR}` inside commands)
+
+When gogo expands a reference *inside a command* (and inside a task's own `env` values), it consults these sources in order:
+
+1. Task-scoped `vars` (which already shadow global `vars`)
+2. `CLI_ARGS` — only when the lookup is for that name
+3. Built-in variables (`GIT_*`, `TASK_FILE_DIR`)
 4. The process environment
 
-Var bodies (the `value:` and `sh:` of another variable) use a slightly tighter chain — only other vars and built-ins, no `CLI_ARGS` or process env. This keeps `vars:` deterministic and free of CLI/shell context.
+Var bodies (the `value:` and `sh:` of another variable) use a slightly tighter chain — only other vars and built-ins, no `CLI_ARGS` and no process env. This keeps `vars:` deterministic and free of CLI/shell context.
 
 Unknown `${VAR}` references are left intact for the shell to expand. Unknown `{{ "{{" }}.VAR}}` templates are left verbatim.
+
+### 2. Final task environment (what the command actually sees)
+
+The environment handed to `/bin/sh` is built up in layers, each one overriding the one above on a per-key basis:
+
+1. **`BaseEnv`** — the OS environment plus global `dotenv:` files
+2. **Inherited parent env** — only on sub-task calls (`cmds: - task: X`); deps don't inherit
+3. **Task `dotenv:`** — never overrides `BaseEnv` (i.e. global dotenv and OS env always win)
+4. **Task `vars:`** — promoted into env so commands can read them with `$NAME`
+5. **Task `env:`** — with cross-references resolved (see [Cross-References Between Env Entries](#cross-references-between-env-entries))
+6. **Task `secrets:`** — **highest precedence**; declaring a secret overrides any same-named placeholder in `env:`
+
+A few non-obvious consequences:
+
+- A task `dotenv:` that names a key already set in the global dotenv (or in the user's shell) is silently ignored — see [Dotenv › Resolution Rules](../dotenv/#resolution-rules).
+- Sub-tasks called from `cmds:` see the parent's resolved env (vars + dotenv + `env:` block). Same task name called from two parents with different env runs twice, because gogo bypasses task-level memoization when extra context is in play. See [Parent-to-child Env Propagation](#parent-to-child-env-propagation).
+- A task that declares both `env: { OPENAI_API_KEY: dummy }` and `secrets: [OPENAI_API_KEY]` gets the secret value at run time. Use this pattern to keep a clear placeholder for local dev while still resolving the real value in CI.

@@ -64,11 +64,13 @@ Keys must match `[A-Za-z_][A-Za-z0-9_]*`; invalid lines cause a parse error.
 
 - Files are loaded in order; later files override earlier ones
 - Per-task dotenv values override global dotenv values
-- Existing environment variables are never overridden
+- Existing environment variables (OS env + global dotenv) are never overridden by a task `dotenv:`
 - Missing files are silently skipped
 - Global dotenv paths are relative to the task file directory
 - Per-task dotenv paths are relative to the task's working directory
 - `~/` is expanded to the home directory
+
+Dotenv is one layer of the broader environment-composition order — see [Variables › Final task environment](../variables/#2-final-task-environment-what-the-command-actually-sees) for the full picture (parent-env inheritance, secrets, etc.).
 
 ## With Includes
 

@@ -51,16 +51,9 @@ You can mix and match: a `secrets:` block for the values you want centralised, p
 
 ## Precedence
 
-When the same env-var name comes from multiple sources, the order is:
+A task's `secrets:` block sits at the **top** of the environment-composition stack — it overrides task `env:`, task `vars:`, dotenv, inherited parent env, and the process environment. So a task that declares both `env: { OPENAI_API_KEY: DUMMY }` (a placeholder for local dev) and `secrets: [OPENAI_API_KEY]` resolves to the secret at run time. Declaring a secret is a strong signal that the value should come from the backend.
 
-1. `BaseEnv` (OS env + global dotenv)
-2. Inherited parent env (sub-task calls)
-3. Task `dotenv:`
-4. Task `vars:`
-5. Task `env:`
-6. **Task `secrets:`** (highest precedence)
-
-So if a task declares both `env: { OPENAI_API_KEY: DUMMY }` (a placeholder for local dev) and `secrets: [OPENAI_API_KEY]`, the secret wins. Declaring a secret is a strong signal that the value should come from the backend.
+The full layered order is documented once on the [Variables](../variables/#2-final-task-environment-what-the-command-actually-sees) page; everything in this guide composes with that table.
 
 ## Validation
 
