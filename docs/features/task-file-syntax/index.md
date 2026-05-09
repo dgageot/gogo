@@ -232,3 +232,21 @@ tasks:
 ```
 
 `silent` only affects the calling task's own `cmds`. A non-silent task invoked via `task:` from a silent caller still logs normally.
+
+## Field Shorthands
+
+Four fields accept a string *or* a struct, and the long forms are interchangeable. Use whichever reads best at the call site — the parser normalizes both into the same internal shape (see the `UnmarshalYAML` methods on `Cmd`, `Dep`, `Var`, and `Precondition` in `taskfile/types.go`).
+
+| Field | Short form | Long form |
+|-------|------------|-----------|
+| `cmd` / `cmds[]` | `cmd: go build ./...` | `cmds: [{ cmd: go build ./... }]` or `cmds: [{ task: build }]` (sub-task call, optionally with `vars:`) |
+| `deps[]` | `deps: [build]` | `deps: [{ task: build }]` |
+| `vars` value | `VERSION: 1.0.0` | `VERSION: { value: "1.0.0" }` or `VERSION: { sh: git describe --tags }` |
+| `preconditions[]` | `- test -f config.yaml` | `- { sh: test -f config.yaml, msg: config.yaml is missing }` |
+
+A few non-obvious notes that fall out of the shorthand rules:
+
+- `cmd:` (singular) and `cmds:` (list) are aliases, not additive. If both are present, `cmd:` wins and the `cmds:` list is dropped — see `Task.UnmarshalYAML` in `taskfile/types.go`. Pick one per task.
+- `cmds: [{ task: X }]` and `deps: [X]` look similar but behave differently: `cmds` calls run sequentially in order and inherit the parent's resolved env; `deps` run concurrently as prerequisites and do **not** inherit env. See [Variables › Parent-to-child Env Propagation](../variables/#parent-to-child-env-propagation).
+- A `Var` written as a bare string is the same as `value:`; using `sh:` switches to dynamic resolution. The two are mutually exclusive in practice — if both are set, the shell command wins (it is what `Var.Sh != ""` triggers).
+- A bare-string `Precondition` reuses the failed shell command as its error message; the map form lets you provide a human-readable `msg:` instead.
