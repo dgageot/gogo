@@ -41,22 +41,31 @@ This avoids checksum storage and matches traditional `make`-style incremental bu
 
 ## Glob Patterns
 
-Source and generates patterns use Go's [`filepath.Glob`](https://pkg.go.dev/path/filepath#Glob) syntax:
+Non-recursive patterns are matched with Go's [`filepath.Glob`](https://pkg.go.dev/path/filepath#Glob), which supports `*`, `?`, and `[…]` character classes within a single path segment:
 
 | Pattern | Matches |
 |---------|---------|
 | `*.go` | Go files in the task directory |
-| `cmd/*.go` | Go files in the cmd directory |
-| `go.mod` | The go.mod file |
+| `cmd/*.go` | Go files in the `cmd` directory |
+| `go.mod` | The `go.mod` file |
 
-### Recursive Patterns
+### Recursive Patterns (`**`)
 
-Patterns containing `**` are matched recursively across all subdirectories (hidden directories starting with `.` are skipped):
+A pattern containing `**` triggers a recursive walk. gogo's matcher is a small superset of `filepath.Glob` rather than a full doublestar implementation — keep these rules in mind:
+
+- The pattern is split on the **first** `**`. The text before `**` selects the base directory; the text after `**` is matched against each file's **base name** (not its full path).
+- Only one `**` per pattern. A second `**` becomes part of the basename match, which almost certainly isn't what you want.
+- Hidden directories (names starting with `.`, e.g. `.git`, `.gogo`) are skipped during the walk.
+- A trailing `**` with nothing after it matches every file under the base directory.
 
 | Pattern | Matches |
 |---------|---------|
-| `**/*.go` | All Go files in any subdirectory |
-| `**/*.proto` | All proto files recursively |
+| `**/*.go` | All `.go` files in any subdirectory (basename matches `*.go`) |
+| `**/*.proto` | All `.proto` files recursively |
+| `vendor/**` | Every file under `vendor/` |
+| `internal/**/*.go` | All `.go` files under `internal/` (basename matches `*.go`) |
+
+Because matching after `**` is basename-only, a pattern like `**/foo/*.go` doesn't constrain `foo` to be the *direct* parent directory — it just looks for files whose basename matches `foo/*.go`, which won't match anything. Express that constraint as `foo/**/*.go` instead, anchored to a known prefix.
 
 ## Presets
 
