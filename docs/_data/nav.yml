@@ -27,3 +27,5 @@
       url: /features/includes/
     - title: CLI Reference
       url: /features/cli/
+    - title: Errors & Troubleshooting
+      url: /features/errors/
