@@ -1,0 +1,18 @@
+{%- comment -%}
+  Renders an "Edit this page on GitHub" link if the current page comes from a
+  source file we can deep-link into. We rely on `page.path` (set by Jekyll for
+  every page that has a real source file) and the repo coordinates declared in
+  _config.yml (`repository`, `repository_branch`, `docs_root`).
+{%- endcomment -%}
+{%- if site.repository and page.path -%}
+{%- assign branch = site.repository_branch | default: "main" -%}
+{%- assign docs_root = site.docs_root | default: "docs" -%}
+<a class="edit-on-github"
+   href="https://github.com/{{ site.repository }}/edit/{{ branch }}/{{ docs_root }}/{{ page.path }}"
+   target="_blank"
+   rel="noopener"
+   title="Edit this page on GitHub">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+  <span>Edit this page on GitHub</span>
+</a>
+{%- endif -%}

@@ -41,6 +41,7 @@
   <main class="main" role="main">
     <div class="content" id="page-content">
       {{ content }}
+      {% include edit-on-github.html %}
       {% unless page.url == '/' %}{% include page-nav.html %}{% endunless %}
     </div>
   </main>

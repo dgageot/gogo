@@ -755,6 +755,35 @@ body {
   display: block;
 }
 
+/* ===== Edit on GitHub ===== */
+.edit-on-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 48px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.edit-on-github:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  text-decoration: none;
+}
+.edit-on-github:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.edit-on-github svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ===== Page navigation (prev/next) ===== */
 .page-nav {
   display: flex;
@@ -965,7 +994,8 @@ pre:hover .copy-btn { opacity: 1; }
 /* ===== Print stylesheet ===== */
 @media print {
   .header, .sidebar, .sidebar-toggle, .toc-aside,
-  .search-overlay, .page-nav, .copy-btn, .hero-buttons {
+  .search-overlay, .page-nav, .copy-btn, .hero-buttons,
+  .edit-on-github {
     display: none !important;
   }
   .main {
