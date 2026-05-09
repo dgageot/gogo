@@ -55,17 +55,21 @@ gogo -n build
 
 ## Features
 
-- **Incremental builds** via source checksums or timestamp-based `sources`/`generates`
-- **Source presets** — reuse named glob lists (built-in `go`, or define your own)
-- **Watch mode** for automatic re-runs on file changes
-- **Concurrent dependencies** with automatic deduplication
-- **Variables** with template expansion, shell commands, and built-in `{{.GIT_*}}` (commit, tag, branch, dirty)
-- **Dotenv** support (global and per-task)
-- **Includes** for splitting task files across subdirectories
+A quick tour. Each item links to the canonical docs page.
+
+- **Incremental builds** — SHA-256 source checksums or `generates:` timestamp comparison ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/))
+- **Source presets** — reuse named glob lists; built-in `go` / `go-vendored`, or define your own ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/#presets))
+- **Watch mode** — polls sources at a configurable `interval:` and re-runs ([Watch Mode](https://dgageot.github.io/gogo/features/watch-mode/))
+- **Concurrent dependencies** with deduplication ([Dependencies](https://dgageot.github.io/gogo/features/dependencies/))
+- **Variables** — template expansion, `sh:` shell-evaluated values, built-in `{{.GIT_*}}` and `{{.TASK_FILE_DIR}}` ([Variables](https://dgageot.github.io/gogo/features/variables/))
+- **Dotenv** — global and per-task, with deterministic precedence ([Dotenv](https://dgageot.github.io/gogo/features/dotenv/))
+- **1Password secrets** via `op://` references and a top-level `secrets:` block ([Secrets](https://dgageot.github.io/gogo/features/secrets/))
+- **Preconditions & requires** to guard tasks before they run ([Preconditions](https://dgageot.github.io/gogo/features/preconditions/))
 - **Platform filtering** to restrict tasks to specific OS/arch
-- **Required variables** validation before execution
-- **1Password secrets** integration via `op://` references
-- **Dry run** mode to preview commands
+- **Includes & flatten** to split task files across subdirectories ([Includes](https://dgageot.github.io/gogo/features/includes/))
+- **Dry run** mode (`gogo -n`) to preview the plan ([CLI Reference](https://dgageot.github.io/gogo/features/cli/))
+
+**Full documentation:** <https://dgageot.github.io/gogo/>
 
 ## Secrets
 
