@@ -303,3 +303,134 @@ func TestIsInternalTaskEdgeCases(t *testing.T) {
 	assert.False(t, IsInternalTask(":"))
 	assert.False(t, IsInternalTask("ns:"))
 }
+
+func TestPrefixMatchAcrossNamespaceSegments(t *testing.T) {
+	// "gogo s:i" → "sub:install" — each colon-separated segment of the input
+	// is treated as a prefix of the corresponding task-name segment, the way
+	// editors filter file paths. "app:build" is excluded because its first
+	// segment doesn't start with "s".
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"sub/.keep": "",
+		"app/.keep": "",
+	})
+	subDir := filepath.Join(dir, "sub")
+	appDir := filepath.Join(dir, "app")
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"sub:install": {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-install"}}},
+			"sub:build":   {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-build"}}},
+			"app:build":   {Dir: appDir, Cmds: []Cmd{{Cmd: "run app-build"}}},
+		},
+		Namespaces: map[string]string{subDir: "sub", appDir: "app"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("s:i", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "sub:install", (*execs)[0].Task)
+}
+
+func TestPrefixMatchAmbiguousAcrossNamespaceSegments(t *testing.T) {
+	// When the abbreviated namespace itself is ambiguous, every viable
+	// target is reported and nothing runs. "s:i" matches both "sub:install"
+	// and "shell:init", so resolution fails with both candidates listed.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"sub/.keep":   "",
+		"shell/.keep": "",
+	})
+	subDir := filepath.Join(dir, "sub")
+	shellDir := filepath.Join(dir, "shell")
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"sub:install": {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-install"}}},
+			"shell:init":  {Dir: shellDir, Cmds: []Cmd{{Cmd: "run shell-init"}}},
+			"sub:build":   {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-build"}}},
+		},
+		Namespaces: map[string]string{subDir: "sub", shellDir: "shell"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("s:i", "")
+	require.EqualError(t, err, `task "s:i" is ambiguous (matches: shell:init, sub:install)`)
+	assert.Empty(t, *execs)
+}
+
+func TestPrefixMatchAcrossMultipleSegments(t *testing.T) {
+	// Segment-wise matching works at arbitrary depth: "a:b:c" →
+	// "app:build:compile" when that's the only triple that lines up.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"app/build/.keep": "",
+		"app/test/.keep":  "",
+	})
+	appBuildDir := filepath.Join(dir, "app", "build")
+	appTestDir := filepath.Join(dir, "app", "test")
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"app:build:compile": {Dir: appBuildDir, Cmds: []Cmd{{Cmd: "compile"}}},
+			"app:test:run":      {Dir: appTestDir, Cmds: []Cmd{{Cmd: "test-run"}}},
+		},
+		Namespaces: map[string]string{appBuildDir: "app:build", appTestDir: "app:test"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("a:b:c", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "app:build:compile", (*execs)[0].Task)
+}
+
+func TestPrefixMatchSegmentCountMustAgree(t *testing.T) {
+	// A bare "sub" no longer matches "sub:install" — segment-wise matching
+	// requires the user to type something for every namespace level they
+	// want to span. Mistyping the namespace as if it were a flat task name
+	// now fails fast rather than ambiguously matching every task under it.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"sub/.keep": ""})
+	subDir := filepath.Join(dir, "sub")
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"sub:install": {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-install"}}},
+			"sub:build":   {Dir: subDir, Cmds: []Cmd{{Cmd: "run sub-build"}}},
+		},
+		Namespaces: map[string]string{subDir: "sub"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("sub", "")
+	require.EqualError(t, err, `task "sub" not found`)
+	assert.Empty(t, *execs)
+}
+
+func TestPrefixMatchLeadingColon(t *testing.T) {
+	// A leading colon should not match anything — it produces an empty
+	// first segment which can never prefix-match a real task name.
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "install", "build")
+	runner := newTestRunner(t, tf, dir)
+
+	err := runner.Run(":install", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
