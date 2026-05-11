@@ -248,3 +248,58 @@ tasks:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"ins"`)
 }
+
+func TestPrefixMatchEmptyName(t *testing.T) {
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "install", "build")
+	runner := newTestRunner(t, tf, dir)
+
+	err := runner.Run("", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestPrefixMatchColonOnly(t *testing.T) {
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "install", "build")
+	runner := newTestRunner(t, tf, dir)
+
+	err := runner.Run(":", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestPrefixMatchTrailingColon(t *testing.T) {
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "install", "build")
+	runner := newTestRunner(t, tf, dir)
+
+	err := runner.Run("task:", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestPrefixMatchWhenExactMatchIsAlsoPrefix(t *testing.T) {
+	// If we have tasks "i" and "install", and user types "i",
+	// exact match should win (return "i"), not prefix match (which would be ambiguous).
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "i", "install")
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("i", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "i", (*execs)[0].Task)
+}
+
+func TestIsInternalTaskEdgeCases(t *testing.T) {
+	assert.True(t, IsInternalTask("_"))
+	assert.True(t, IsInternalTask("_a"))
+	assert.True(t, IsInternalTask("ns:_"))
+	assert.True(t, IsInternalTask("ns:_a"))
+	assert.False(t, IsInternalTask("a_b"))
+	assert.False(t, IsInternalTask("ns:a_b"))
+	assert.False(t, IsInternalTask(""))
+	assert.False(t, IsInternalTask(":"))
+	assert.False(t, IsInternalTask("ns:"))
+}
