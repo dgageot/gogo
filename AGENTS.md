@@ -123,7 +123,6 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `taskfile.Config` test in `run_test.go` plus a `Parse`-based test in
   `parse_test.go` if YAML shape matters.
 - **Touching env/var resolution**: respect the existing precedence
-- **Touching env/var resolution**: respect the existing precedence
   (`BaseEnv` < parent task env < task dotenv < task vars < task env) and the
   rule that *task dotenv never overrides global dotenv or OS env* (see
   `TestTaskDotenvDoesNotOverrideGlobalDotenv`). Sub-task calls
@@ -135,13 +134,23 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   resolve lazily through a recursive lookup in `resolveAllVars` (see
   `taskfile/vars.go`); they may reference each other and the built-in
   `GIT_*` family transitively, declaration order is irrelevant, and
-  cycles short-circuit to the empty string. The built-in `GIT_*`
-  resolver in `taskfile/gitvars.go` is wired through
-  `Runner.builtinLookup` and is consulted *after* user vars / CLI_ARGS
-  but *before* the process environment by `expandVars`,
-  `resolveEnvValue`, and `checkRequires`. Watch mode must call
-  `ResetRan` between iterations — it also clears the gitVars cache so
-  `{{.GIT_DIRTY}}` re-evaluates after each edit.
+  cycles short-circuit to the empty string. **Vars are namespace-scoped**:
+  a var declared in an included `gogo.yaml` lives in
+  `Config.NamespaceVars[namespace]` (with its own working dir in
+  `Config.NamespaceDirs[namespace]` for `sh:` resolution) and is visible
+  only to tasks at or below that namespace — sibling includes never see
+  each other's vars (see `TestNamespacedVarsIsolateSiblings`). Root vars
+  in `Config.Vars` stay visible everywhere. The most-specific namespace
+  wins on collisions, so `proxy:` and `metrics:` can each declare their
+  own `LDFLAGS` without clobbering. The built-in `GIT_*` resolver in
+  `taskfile/gitvars.go` is wired through `Runner.builtinLookup` and is
+  consulted *after* user vars / CLI_ARGS but *before* the process
+  environment by `expandVars`, `resolveEnvValue`, and `checkRequires`.
+  Unresolved `${VAR}` references survive verbatim through
+  `unknownShellVarSpan`; in particular `$2` (awk positional) is **not**
+  rewritten to `${2}` (see `TestShVarPreservesAwkPositional`). Watch mode
+  must call `ResetRan` between iterations — it also clears the gitVars
+  cache so `{{.GIT_DIRTY}}` re-evaluates after each edit.
 - **Touching include logic**: cycles must be detected by absolute dir
   (`includeStack`), nested namespaces are colon-joined
   (`parent:child:grandchild`), and dotenv files dedupe globally via

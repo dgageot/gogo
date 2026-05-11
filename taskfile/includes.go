@@ -71,6 +71,8 @@ func newIncludeLoader(root *Config) (*includeLoader, error) {
 
 func (l *includeLoader) load() (*Config, error) {
 	l.root.Namespaces = make(map[string]string)
+	l.root.NamespaceDirs = make(map[string]string)
+	l.root.NamespaceVars = make(map[string]map[string]Var)
 
 	// Process flatten files first (their tasks merge into the root namespace).
 	// Order vs. includes doesn't matter for correctness because both honor
@@ -167,7 +169,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 		}
 	}
 
-	l.mergeVars(included.Vars)
+	l.mergeVars(included.Namespace, included.Dir, included.Vars)
 	l.mergeSourcePresets(included.Sources)
 	l.mergeSecrets(included.Secrets)
 	return l.mergeTasks(included)
@@ -199,6 +201,7 @@ func (l *includeLoader) parseInclude(req includeRequest) (*includedConfig, error
 		Parent:    req,
 	}
 	l.root.Namespaces[childDir] = req.namespace
+	l.root.NamespaceDirs[req.namespace] = childDir
 	return included, nil
 }
 
@@ -303,7 +306,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 		}
 	}
 
-	l.mergeVars(flattened.Vars)
+	l.mergeVars(req.namespace, req.ancestorDir, flattened.Vars)
 	l.mergeSourcePresets(flattened.Sources)
 	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
 }
@@ -315,17 +318,40 @@ func namespaceJoin(prefix, name string) string {
 	return prefix + ":" + name
 }
 
-// mergeVars merges child global vars into the root. Root vars win conflicts.
-func (l *includeLoader) mergeVars(vars map[string]Var) {
+// mergeVars merges vars declared by an included or flattened file into the
+// scope that owns them. Vars from the root or root-level flatten files
+// (namespace "") land in Config.Vars and are visible everywhere; vars from
+// an include land in Config.NamespaceVars[namespace] and are visible only
+// to tasks that live at or below that namespace — so two sibling includes
+// can each declare their own LDFLAGS/IMAGE_NAME without leaking values
+// into each other. "First defined wins" still holds within each scope,
+// matching the prior root-merge precedence.
+func (l *includeLoader) mergeVars(namespace, dir string, vars map[string]Var) {
 	if len(vars) == 0 {
 		return
 	}
-	if l.root.Vars == nil {
-		l.root.Vars = make(map[string]Var)
+	if namespace == "" {
+		if l.root.Vars == nil {
+			l.root.Vars = make(map[string]Var)
+		}
+		for k, v := range vars {
+			if _, exists := l.root.Vars[k]; !exists {
+				l.root.Vars[k] = v
+			}
+		}
+		return
+	}
+	if _, ok := l.root.NamespaceDirs[namespace]; !ok {
+		l.root.NamespaceDirs[namespace] = dir
+	}
+	scoped := l.root.NamespaceVars[namespace]
+	if scoped == nil {
+		scoped = make(map[string]Var)
+		l.root.NamespaceVars[namespace] = scoped
 	}
 	for k, v := range vars {
-		if _, exists := l.root.Vars[k]; !exists {
-			l.root.Vars[k] = v
+		if _, exists := scoped[k]; !exists {
+			scoped[k] = v
 		}
 	}
 }

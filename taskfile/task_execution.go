@@ -137,7 +137,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 
 	dir := r.taskDir(&task)
 
-	vars, err := r.resolveAllVars(&task, dir, extraVars)
+	vars, err := r.resolveAllVars(resolved, &task, dir, extraVars)
 	if err != nil {
 		return err
 	}

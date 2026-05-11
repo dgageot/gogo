@@ -88,25 +88,70 @@ func expandTaskTemplates(t *Task) {
 	}
 }
 
+// taskNamespace returns the colon-delimited namespace prefix of a resolved
+// task name (everything before the last colon). The root namespace is the
+// empty string. A bare task name like "build" lives in the root.
+func taskNamespace(name string) string {
+	if i := strings.LastIndex(name, ":"); i >= 0 {
+		return name[:i]
+	}
+	return ""
+}
+
+// ancestorNamespaces returns all namespaces from the outermost include down
+// to and including ns itself, e.g. "a:b:c" -> ["a", "a:b", "a:b:c"]. The
+// root namespace is intentionally not included because root vars are
+// already pulled from Config.Vars separately. An empty ns yields an empty
+// slice. The order matters: callers overlay later entries on top of
+// earlier ones so the most-specific namespace wins on key collisions.
+func ancestorNamespaces(ns string) []string {
+	if ns == "" {
+		return nil
+	}
+	parts := strings.Split(ns, ":")
+	out := make([]string, 0, len(parts))
+	for i := 1; i <= len(parts); i++ {
+		out = append(out, strings.Join(parts[:i], ":"))
+	}
+	return out
+}
+
 // resolveAllVars computes the effective variables for a task. Vars are
 // resolved lazily and may reference each other (transitively) via {{.OTHER}}
 // or ${OTHER} — declaration order in YAML is irrelevant. Cycles resolve to
 // the empty string (matching how task.env cross-references behave).
 //
-// Precedence on a name collision: extra (call-site) > task > global. Within
-// each layer the value is template-expanded against everything below it,
-// then against the built-in lookup (e.g. {{.GIT_COMMIT}}).
-func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]Var) (map[string]string, error) {
+// Precedence on a name collision: extra (call-site) > task > namespace
+// (most-specific wins) > root global. Within each layer the value is
+// template-expanded against everything below it, then against the
+// built-in lookup (e.g. {{.GIT_COMMIT}}).
+//
+// taskName carries the *resolved* task name (with namespace prefix) so we
+// can pull in vars declared at that namespace and its ancestors. Sibling
+// namespaces stay invisible — the whole point of this scoping is that
+// `metrics:build` can have a different LDFLAGS than `proxy:build` without
+// the two clobbering each other in a single global vars map.
+func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars []map[string]Var) (map[string]string, error) {
 	type source struct {
 		v   Var
 		dir string // working directory for `sh:` evaluation
 	}
 
-	// Build a unified source map. Later assignments win; we layer global
-	// vars first, then task vars, then any call-site extra vars.
+	// Build a unified source map. Later assignments win; we layer root vars
+	// first, then any ancestor-namespace vars (least to most specific), then
+	// task vars, then any call-site extra vars.
 	sources := make(map[string]source, len(r.tf.Vars)+len(task.Vars))
 	for k, v := range r.tf.Vars {
 		sources[k] = source{v, r.tf.Dir}
+	}
+	for _, ns := range ancestorNamespaces(taskNamespace(taskName)) {
+		nsDir := r.tf.NamespaceDirs[ns]
+		if nsDir == "" {
+			nsDir = r.tf.Dir
+		}
+		for k, v := range r.tf.NamespaceVars[ns] {
+			sources[k] = source{v, nsDir}
+		}
 	}
 	for k, v := range task.Vars {
 		sources[k] = source{v, dir}
@@ -188,12 +233,13 @@ func (r *Runner) resolveAllVars(task *Task, dir string, extraVars []map[string]V
 // whatever priority makes sense for their context.
 func expandTemplates(s string, lookup func(string) (string, bool)) string {
 	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
-	// don't start with $. Unknown variables are left as ${KEY} for the shell.
+	// don't start with $. Unknown variables are passed through verbatim so
+	// the downstream shell (or awk, sed, etc.) sees what the user wrote.
 	s = os.Expand(s, func(key string) string {
 		if val, ok := lookup(key); ok {
 			return val
 		}
-		return "${" + key + "}"
+		return unknownShellVarSpan(key)
 	})
 
 	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
@@ -205,6 +251,34 @@ func expandTemplates(s string, lookup func(string) (string, bool)) string {
 		}
 		return match
 	})
+}
+
+// unknownShellVarSpan returns the literal text that should replace an
+// unresolved `$key` reference so the downstream shell (or awk/sed/jq)
+// gets the chance to interpret it. os.Expand's tokenizer reports both
+// `${KEY}` and `$KEY` through the same callback with no way to tell
+// them apart, so we always emit `${KEY}` — except for the shell-special
+// single-character names ('*', '#', '$', '@', '!', '?', '-', '0'-'9'),
+// which we emit *without* braces. That preserves `$2` (awk's positional
+// reference) verbatim, which previously got mangled into `${2}` and
+// crashed awk with a syntax error.
+func unknownShellVarSpan(key string) string {
+	if len(key) == 1 && isShellSpecialChar(key[0]) {
+		return "$" + key
+	}
+	return "${" + key + "}"
+}
+
+// isShellSpecialChar mirrors os.Expand's getShellName logic: these are the
+// one-character names that `$` recognises in shell (positional params and
+// other special variables). Matching here keeps unknownShellVarSpan and
+// os.Expand in lockstep.
+func isShellSpecialChar(c byte) bool {
+	switch c {
+	case '*', '#', '$', '@', '!', '?', '-':
+		return true
+	}
+	return c >= '0' && c <= '9'
 }
 
 // expandVars substitutes template and shell variables in a command string.
@@ -257,7 +331,7 @@ func expandCLIArgsOnly(s string, vars map[string]string, cliArgs string) string 
 		if key == "CLI_ARGS" {
 			return val
 		}
-		return "${" + key + "}"
+		return unknownShellVarSpan(key)
 	})
 
 	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {

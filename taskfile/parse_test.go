@@ -184,8 +184,13 @@ tasks:
 	tf, err := LoadWithIncludes(dir)
 	require.NoError(t, err)
 
-	assert.Contains(t, tf.Vars, "VERSION")
-	assert.Equal(t, "1.2.3", tf.Vars["VERSION"].Value)
+	// Child vars are scoped to their include's namespace, not leaked into the
+	// root — a sibling include can declare its own VERSION without clashing.
+	assert.NotContains(t, tf.Vars, "VERSION", "included vars must not leak into the root namespace")
+	require.Contains(t, tf.NamespaceVars, "child")
+	assert.Contains(t, tf.NamespaceVars["child"], "VERSION")
+	assert.Equal(t, "1.2.3", tf.NamespaceVars["child"]["VERSION"].Value)
+	assert.Equal(t, filepath.Join(dir, "child"), tf.NamespaceDirs["child"])
 }
 
 func TestLoadWithIncludesNestedNamespaceCollision(t *testing.T) {
