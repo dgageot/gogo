@@ -58,13 +58,28 @@ func (r *Runner) prefixMatches(name string) []string {
 		if slices.Contains(candSegs, "") {
 			continue
 		}
+		seen := make(map[string]bool)
 		var out []string
 		for taskName := range r.tf.Tasks {
 			if IsInternalTask(taskName) {
 				continue
 			}
 			if segmentPrefixMatch(taskName, candSegs) {
-				out = append(out, taskName)
+				if !seen[taskName] {
+					seen[taskName] = true
+					out = append(out, taskName)
+				}
+			}
+		}
+		for alias, taskName := range r.aliases {
+			if IsInternalTask(taskName) {
+				continue
+			}
+			if segmentPrefixMatch(alias, candSegs) {
+				if !seen[taskName] {
+					seen[taskName] = true
+					out = append(out, taskName)
+				}
 			}
 		}
 		if len(out) > 0 {

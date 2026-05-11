@@ -423,6 +423,163 @@ func TestPrefixMatchSegmentCountMustAgree(t *testing.T) {
 	assert.Empty(t, *execs)
 }
 
+func TestPrefixMatchResolvesViaAlias(t *testing.T) {
+	// A unique alias prefix resolves to the aliased task even though
+	// the task's own name starts with a different letter.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"github": {
+				Aliases: StringList{"gh"},
+				Cmds:    []Cmd{{Cmd: "gh auth status"}},
+			},
+			"build": {Cmds: []Cmd{{Cmd: "go build"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("g", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "github", (*execs)[0].Task)
+}
+
+func TestPrefixMatchResolvesViaAliasOnly(t *testing.T) {
+	// The task name "generate-protos" does not start with "g" in a
+	// prefix-unique way because "github" also starts with "g". But the
+	// alias "gp" is unique so "gp" must resolve via the alias.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"generate-protos": {
+				Aliases: StringList{"gp"},
+				Cmds:    []Cmd{{Cmd: "protoc"}},
+			},
+			"github": {Cmds: []Cmd{{Cmd: "gh auth status"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("gp", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "generate-protos", (*execs)[0].Task)
+}
+
+func TestPrefixMatchAmbiguousWithAlias(t *testing.T) {
+	// "g" matches both the task name "github" and the alias "gp" (which
+	// points to "generate-protos"), creating ambiguity.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"generate-protos": {
+				Aliases: StringList{"gp"},
+				Cmds:    []Cmd{{Cmd: "protoc"}},
+			},
+			"github": {Cmds: []Cmd{{Cmd: "gh auth status"}}},
+			"build":  {Cmds: []Cmd{{Cmd: "go build"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("g", "")
+	require.EqualError(t, err, `task "g" is ambiguous (matches: generate-protos, github)`)
+	assert.Empty(t, *execs)
+}
+
+func TestPrefixMatchAliasAndTaskNameDedup(t *testing.T) {
+	// When both the task name and an alias of the same task match, the
+	// task should appear only once in the results.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"install": {
+				Aliases: StringList{"inst"},
+				Cmds:    []Cmd{{Cmd: "make install"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	// "ins" is a prefix of both "install" (task name) and "inst" (alias)
+	// but should resolve unambiguously.
+	require.NoError(t, runner.Run("ins", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "install", (*execs)[0].Task)
+}
+
+func TestPrefixMatchAliasSkipsInternalTask(t *testing.T) {
+	// An alias pointing to an internal task must be excluded from prefix
+	// matching, the same way internal task names are excluded.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"_setup": {
+				Aliases: StringList{"su"},
+				Cmds:    []Cmd{{Cmd: "setup"}},
+			},
+			"serve": {Cmds: []Cmd{{Cmd: "serve"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	// "s" should uniquely match "serve" — the alias "su" -> "_setup" is
+	// internal and must not participate.
+	require.NoError(t, runner.Run("s", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "serve", (*execs)[0].Task)
+}
+
+func TestPrefixMatchNamespacedAlias(t *testing.T) {
+	// Aliases work with namespaced prefix matching too:
+	// "sub:g" matches alias "sub:gp" → task "sub:generate-protos".
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"sub/.keep": ""})
+	subDir := filepath.Join(dir, "sub")
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"sub:generate-protos": {
+				Dir:     subDir,
+				Aliases: StringList{"sub:gp"},
+				Cmds:    []Cmd{{Cmd: "protoc"}},
+			},
+			"sub:build": {
+				Dir:  subDir,
+				Cmds: []Cmd{{Cmd: "go build"}},
+			},
+		},
+		Namespaces: map[string]string{subDir: "sub"},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("sub:g", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "sub:generate-protos", (*execs)[0].Task)
+}
+
 func TestPrefixMatchLeadingColon(t *testing.T) {
 	// A leading colon should not match anything — it produces an empty
 	// first segment which can never prefix-match a real task name.
