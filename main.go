@@ -205,20 +205,11 @@ func (a *App) loadConfig() (string, *taskfile.Config, error) {
 func visibleTaskNames(tf *taskfile.Config) []string {
 	var names []string
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
-		if !isInternalTask(name) {
+		if !taskfile.IsInternalTask(name) {
 			names = append(names, name)
 		}
 	}
 	return names
-}
-
-// isInternalTask reports whether a task name is internal (starts with _).
-// For namespaced tasks like "ns:_helper", the task part after the last colon is checked.
-func isInternalTask(name string) bool {
-	if i := strings.LastIndex(name, ":"); i >= 0 {
-		name = name[i+1:]
-	}
-	return strings.HasPrefix(name, "_")
 }
 
 func (a *App) printCompletionScript(shell string) error {

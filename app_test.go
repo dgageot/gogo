@@ -37,11 +37,11 @@ func newTestApp(t *testing.T, dir string, cliArgs ...string) (*App, *bytes.Buffe
 }
 
 func TestIsInternalTask(t *testing.T) {
-	assert.False(t, isInternalTask("build"))
-	assert.True(t, isInternalTask("_hidden"))
-	assert.False(t, isInternalTask("cli:build"))
-	assert.True(t, isInternalTask("cli:_hidden"))
-	assert.True(t, isInternalTask("cli:utils:_fmt"))
+	assert.False(t, taskfile.IsInternalTask("build"))
+	assert.True(t, taskfile.IsInternalTask("_hidden"))
+	assert.False(t, taskfile.IsInternalTask("cli:build"))
+	assert.True(t, taskfile.IsInternalTask("cli:_hidden"))
+	assert.True(t, taskfile.IsInternalTask("cli:utils:_fmt"))
 }
 
 func TestVisibleTaskNames(t *testing.T) {
