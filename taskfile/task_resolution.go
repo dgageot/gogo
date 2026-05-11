@@ -8,8 +8,8 @@ import (
 )
 
 // resolveTask resolves user input — an exact name, alias, namespace shortcut,
-// or unique prefix — to a task name. Ambiguous prefixes are rejected so the
-// wrong task is never silently invoked.
+// or a unique segment-wise prefix — to a task name. Ambiguous prefixes are
+// rejected so the wrong task is never silently invoked.
 func (r *Runner) resolveTask(name string) (string, error) {
 	if resolved, ok := r.resolveTaskName(name); ok {
 		return resolved, nil
@@ -40,18 +40,30 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 	return "", false
 }
 
-// prefixMatches returns sorted task names that uniquely identify name as a
-// prefix, honouring the same candidate interpretations as resolveTaskName.
-// Internal tasks ('_'-prefixed local segment) are skipped so prefix matching
-// never lands on a private helper. An empty input matches nothing.
+// prefixMatches returns sorted task names that match name segment-by-segment:
+// each colon-separated piece of the input must be a non-empty prefix of the
+// corresponding piece of the task name, and the number of segments must
+// match. That lets 'sub:i' resolve to 'sub:install' and 's:i' to the same,
+// mirroring the way editors filter file paths. Candidate interpretations
+// from nameCandidates are tried in order so cwd-namespace and self-prefix
+// rules carry over. Internal tasks ('_'-prefixed local segment) are skipped
+// so prefix matching never lands on a private helper, and an empty input
+// (or any empty segment) matches nothing.
 func (r *Runner) prefixMatches(name string) []string {
 	if name == "" {
 		return nil
 	}
 	for _, cand := range r.nameCandidates(name) {
+		candSegs := strings.Split(cand, ":")
+		if slices.Contains(candSegs, "") {
+			continue
+		}
 		var out []string
 		for taskName := range r.tf.Tasks {
-			if strings.HasPrefix(taskName, cand) && !IsInternalTask(taskName) {
+			if IsInternalTask(taskName) {
+				continue
+			}
+			if segmentPrefixMatch(taskName, candSegs) {
 				out = append(out, taskName)
 			}
 		}
@@ -61,6 +73,23 @@ func (r *Runner) prefixMatches(name string) []string {
 		}
 	}
 	return nil
+}
+
+// segmentPrefixMatch reports whether each piece of candSegs is a prefix of
+// the corresponding colon-separated piece of taskName. The segment counts
+// must agree, so 'sub' on its own no longer matches 'sub:install' — the
+// user has to type something into every namespace level they want to span.
+func segmentPrefixMatch(taskName string, candSegs []string) bool {
+	taskSegs := strings.Split(taskName, ":")
+	if len(taskSegs) != len(candSegs) {
+		return false
+	}
+	for i, s := range candSegs {
+		if !strings.HasPrefix(taskSegs[i], s) {
+			return false
+		}
+	}
+	return true
 }
 
 // nameCandidates lists the interpretations of name, in priority order, that
