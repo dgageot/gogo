@@ -185,7 +185,7 @@ If `AWS_REGION` is set in the environment, it will be substituted before the tas
 
 ## Task Environment
 
-Tasks can set environment variables for their commands. Values support `${VAR}` expansion from variables and the environment:
+Tasks can set environment variables for their commands. Values support `${VAR}` and `{{.VAR}}` expansion from variables and the environment:
 
 ```yaml
 vars:
@@ -194,7 +194,7 @@ vars:
 tasks:
   serve:
     env:
-      PORT: "${PORT}"
+      PORT: "{{.PORT}}"
       NODE_ENV: production
     cmd: node server.js
 ```

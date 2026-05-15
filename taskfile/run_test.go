@@ -745,6 +745,78 @@ func TestEnvExpansionReferencesVars(t *testing.T) {
 	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "MY_PATH"))
 }
 
+func TestEnvTemplateExpansionReferencesVars(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"YO": {Value: "abc123"}},
+		Tasks: map[string]Task{
+			"dev": {
+				Env:  map[string]string{"GIT_COMMIT": "{{.YO}}"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("dev", "")
+	require.NoError(t, err)
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "abc123", envValue((*execs)[0].Env, "GIT_COMMIT"))
+}
+
+func TestEnvBareDotReferenceIsLiteral(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"YO": {Value: "abc123"}},
+		Tasks: map[string]Task{
+			"dev": {
+				Env:  map[string]string{"GIT_COMMIT": ".YO"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("dev", "")
+	require.NoError(t, err)
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, ".YO", envValue((*execs)[0].Env, "GIT_COMMIT"))
+}
+
+func TestEnvLiteralOpReferenceIsNotExpanded(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"Team": {Value: "expanded"}},
+		Tasks: map[string]Task{
+			"dev": {
+				Env:  map[string]string{"TOKEN": "op://Team AI Agent/gordon-slack/DOCKER_HUB_USER"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	err := runner.Run("dev", "")
+	require.NoError(t, err)
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op://Team AI Agent/gordon-slack/DOCKER_HUB_USER", envValue((*execs)[0].Env, "TOKEN"))
+}
+
 func TestResetRanAllowsRerun(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{

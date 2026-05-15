@@ -102,9 +102,14 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parent
 	return env, nil
 }
 
-// resolveEnvValue expands ${VAR} references in task.Env[key], transparently
-// following cross-references to other task.Env keys. Cycles (self- or mutual)
-// resolve to the empty string.
+// resolveEnvValue expands references in task.Env[key], transparently following
+// cross-references to other task.Env keys. Cycles (self- or mutual) resolve to
+// the empty string.
+//
+// Both ${VAR} and {{.VAR}} forms are supported so env values follow the same
+// variable syntax as commands and var bodies. Literal op:// secret references
+// are left untouched for the op-run wrapper to resolve at command execution
+// time.
 //
 // builtin may be nil. When non-nil it is consulted *after* task.Env and task
 // vars, but *before* the process environment, so a task-level override of a
@@ -113,34 +118,40 @@ func resolveEnvValue(key string, taskEnv, vars map[string]string, builtin func(s
 	resolved := make(map[string]string)
 	visiting := make(map[string]struct{})
 
-	var lookup func(string) string
-	lookup = func(k string) string {
+	var lookup func(string) (string, bool)
+	lookup = func(k string) (string, bool) {
 		if v, ok := resolved[k]; ok {
-			return v
+			return v, true
 		}
 		if _, onPath := visiting[k]; onPath {
-			return ""
+			return "", true
 		}
 		raw, ok := taskEnv[k]
 		if !ok {
 			if v, ok := vars[k]; ok {
-				return v
+				return v, true
 			}
 			if builtin != nil {
 				if v, ok := builtin(k); ok {
-					return v
+					return v, true
 				}
 			}
-			return os.Getenv(k)
+			return os.LookupEnv(k)
 		}
 		visiting[k] = struct{}{}
-		v := os.Expand(raw, lookup)
+		var v string
+		if strings.HasPrefix(raw, "op://") {
+			v = raw
+		} else {
+			v = expandTemplates(raw, lookup)
+		}
 		delete(visiting, k)
 		resolved[k] = v
-		return v
+		return v, true
 	}
 
-	return lookup(key)
+	v, _ := lookup(key)
+	return v
 }
 
 // hasOpSecrets reports whether any env entry's value is an op:// reference.
