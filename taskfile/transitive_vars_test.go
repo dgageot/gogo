@@ -55,14 +55,15 @@ func TestVarsTransitiveExpansionForwardReference(t *testing.T) {
 	assert.Equal(t, "echo resolved", runCmdAndCapture(t, tf))
 }
 
-func TestVarsTransitiveExpansionShellSyntax(t *testing.T) {
-	// ${VAR} works anywhere {{.VAR}} works. Same single source of truth.
+func TestVarsTransitiveExpansionTemplateSyntaxOnly(t *testing.T) {
+	// Vars can reference each other with {{.VAR}} syntax. Shell syntax belongs
+	// to environment variables and is left untouched.
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
 		Vars: map[string]Var{
 			"A": {Value: "alpha"},
-			"B": {Value: "${A}-beta"},
+			"B": {Value: "{{.A}}-beta"},
 		},
 		Tasks: map[string]Task{
 			"show": {Cmds: []Cmd{{Cmd: "echo {{.B}}"}}},

@@ -90,7 +90,21 @@ tasks:
 	assert.Equal(t, "op://cli/item/field", tf.Secrets["CLI_ONLY"], "child entry merged in")
 }
 
-// --- runtime ----------------------------------------------------------------
+func TestLoadWithIncludesRejectsOpSyntaxInVars(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+vars:
+  TOKEN: op://vault/item/field
+tasks:
+  test:
+    cmd: true
+`), 0o644))
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `variable "TOKEN"`)
+	assert.Contains(t, err.Error(), "only supported in env")
+}
 
 func TestSecretsOpPassThroughTriggersOpRun(t *testing.T) {
 	// op:// is pass-through: the URI itself becomes the env value and

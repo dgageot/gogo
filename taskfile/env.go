@@ -21,6 +21,17 @@ func envHasKey(env []string, key string) bool {
 	})
 }
 
+// envLookup returns the last value for key in env, matching shell duplicate
+// handling and the test helper envValue.
+func envLookup(env []string, key string) (string, bool) {
+	for _, e := range slices.Backward(env) {
+		if k, v, ok := strings.Cut(e, "="); ok && k == key {
+			return v, true
+		}
+	}
+	return "", false
+}
+
 // setEnv sets or replaces an environment variable in the env slice.
 func setEnv(env []string, key, value string) []string {
 	pair := envPair(key, value)
@@ -53,18 +64,17 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 //     - task: X`; matches shell-function semantics so a parent's `env:`
 //     block flows down to its children),
 //  3. add task-level dotenv (only for keys not already present),
-//  4. overlay task vars,
-//  5. overlay task env, resolving any ${VAR} cross-references,
-//  6. overlay resolved task secrets (highest precedence; an explicit
+//  4. overlay task env, resolving any $VAR cross-references from env only,
+//  5. overlay resolved task secrets (highest precedence; an explicit
 //     `secrets: [X]` reference is a stronger signal than a same-named
 //     `env: { X: ... }` entry, and is the only way op:// values reach the
 //     env when secrets are declared centrally).
-func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parentEnv []string) ([]string, error) {
+func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
 	// Inherited parent env wins over BaseEnv (a parent's `env: { GOOS: linux }`
-	// must override the OS GOOS for child tasks). Child task.dotenv/vars/env
-	// then layer on top — the child still gets the final say.
+	// must override the OS GOOS for child tasks). Child task.dotenv/env then
+	// layer on top — the child still gets the final say.
 	for _, e := range parentEnv {
 		if k, v, ok := strings.Cut(e, "="); ok {
 			env = setEnv(env, k, v)
@@ -83,12 +93,10 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parent
 		}
 	}
 
-	for _, k := range slices.Sorted(maps.Keys(vars)) {
-		env = setEnv(env, k, vars[k])
-	}
-
+	base := slices.Clone(env)
+	resolvedTaskEnv := resolveTaskEnv(task.Env, base)
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
-		env = setEnv(env, k, resolveEnvValue(k, task.Env, vars, r.builtinLookup))
+		env = setEnv(env, k, resolvedTaskEnv[k])
 	}
 
 	secrets, err := r.resolveTaskSecrets(task)
@@ -102,20 +110,8 @@ func (r *Runner) buildEnv(task *Task, dir string, vars map[string]string, parent
 	return env, nil
 }
 
-// resolveEnvValue expands references in task.Env[key], transparently following
-// cross-references to other task.Env keys. Cycles (self- or mutual) resolve to
-// the empty string.
-//
-// Both ${VAR} and {{.VAR}} forms are supported so env values follow the same
-// variable syntax as commands and var bodies. Literal op:// secret references
-// are left untouched for the op-run wrapper to resolve at command execution
-// time.
-//
-// builtin may be nil. When non-nil it is consulted *after* task.Env and task
-// vars, but *before* the process environment, so a task-level override of a
-// built-in name (e.g. GIT_COMMIT) wins.
-func resolveEnvValue(key string, taskEnv, vars map[string]string, builtin func(string) (string, bool)) string {
-	resolved := make(map[string]string)
+func resolveTaskEnv(taskEnv map[string]string, baseEnv []string) map[string]string {
+	resolved := make(map[string]string, len(taskEnv))
 	visiting := make(map[string]struct{})
 
 	var lookup func(string) (string, bool)
@@ -124,17 +120,18 @@ func resolveEnvValue(key string, taskEnv, vars map[string]string, builtin func(s
 			return v, true
 		}
 		if _, onPath := visiting[k]; onPath {
+			if value, ok := envLookup(baseEnv, k); ok {
+				return value, true
+			}
+			if value, ok := os.LookupEnv(k); ok {
+				return value, true
+			}
 			return "", true
 		}
 		raw, ok := taskEnv[k]
 		if !ok {
-			if v, ok := vars[k]; ok {
-				return v, true
-			}
-			if builtin != nil {
-				if v, ok := builtin(k); ok {
-					return v, true
-				}
+			if value, ok := envLookup(baseEnv, k); ok {
+				return value, true
 			}
 			return os.LookupEnv(k)
 		}
@@ -143,20 +140,22 @@ func resolveEnvValue(key string, taskEnv, vars map[string]string, builtin func(s
 		if strings.HasPrefix(raw, "op://") {
 			v = raw
 		} else {
-			v = expandTemplates(raw, lookup)
+			v = expandShellEnv(raw, lookup)
 		}
 		delete(visiting, k)
 		resolved[k] = v
 		return v, true
 	}
 
-	v, _ := lookup(key)
-	return v
+	for _, key := range slices.Sorted(maps.Keys(taskEnv)) {
+		lookup(key)
+	}
+	return resolved
 }
 
 // hasOpSecrets reports whether any env entry's value is an op:// reference.
-// This runs over the fully-built env (base + dotenv + vars + task env), so
-// any source of an op:// reference triggers op-run wrapping.
+// This runs over the fully-built env (base + dotenv + task env), so any env
+// source of an op:// reference triggers op-run wrapping.
 func hasOpSecrets(env []string) bool {
 	for _, e := range env {
 		if _, v, ok := strings.Cut(e, "="); ok && strings.HasPrefix(v, "op://") {

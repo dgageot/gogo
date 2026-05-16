@@ -27,15 +27,19 @@ func expandEnvTemplates(s string) string {
 }
 
 // expandConfigEnvTemplates expands {{.VAR}} env-variable references in every
-// user-configurable string field of a parsed Config. Map keys (task names,
-// var names, env keys) are left untouched so an environment value can never
-// alter the document's structure.
+// user-configurable string field of a parsed Config that is *not* re-expanded
+// at run time. Map keys (task names, var names, env keys) are left untouched
+// so an environment value can never alter the document's structure.
+//
+// Fields that go through the run-time resolver (Runner.resolveAllVars,
+// resolveEnvValue, expandVars) are deliberately *not* substituted here.
+// Substituting them at parse time would inject os.Getenv("VAR") ahead of the
+// run-time precedence chain and blur the gogo-var / environment namespaces.
 func expandConfigEnvTemplates(c *Config) {
 	expandStringSlice(c.Includes)
 	expandStringSlice(c.Flatten)
 	expandStringSlice(c.Dotenv)
 	c.Interval = expandEnvTemplates(c.Interval)
-	expandVarsMap(c.Vars)
 	for name, t := range c.Tasks {
 		expandTaskTemplates(&t)
 		c.Tasks[name] = t
@@ -50,14 +54,6 @@ func expandStringSlice(s []string) {
 	}
 }
 
-func expandVarsMap(m map[string]Var) {
-	for k, v := range m {
-		v.Value = expandEnvTemplates(v.Value)
-		v.Sh = expandEnvTemplates(v.Sh)
-		m[k] = v
-	}
-}
-
 func expandTaskTemplates(t *Task) {
 	t.Dir = expandEnvTemplates(t.Dir)
 	expandStringSlice(t.Sources)
@@ -67,14 +63,8 @@ func expandTaskTemplates(t *Task) {
 	expandStringSlice(t.Dotenv)
 	expandStringSlice(t.Requires.Vars)
 	expandStringSlice(t.Requires.Env)
-	for k, v := range t.Env {
-		t.Env[k] = expandEnvTemplates(v)
-	}
-	expandVarsMap(t.Vars)
 	for i, c := range t.Cmds {
-		c.Cmd = expandEnvTemplates(c.Cmd)
 		c.Task = expandEnvTemplates(c.Task)
-		expandVarsMap(c.Vars)
 		t.Cmds[i] = c
 	}
 	for i, d := range t.Deps {
@@ -116,33 +106,36 @@ func ancestorNamespaces(ns string) []string {
 	return out
 }
 
-// resolveAllVars computes the effective variables for a task. Vars are
-// resolved lazily and may reference each other (transitively) via {{.OTHER}}
-// or ${OTHER} — declaration order in YAML is irrelevant. Cycles resolve to
-// the empty string (matching how task.env cross-references behave).
+// resolveAllVars computes the variables that are actually used by a task.
+// Vars are resolved lazily and may reference each other transitively via
+// {{.OTHER}} templates; declaration order in YAML is irrelevant. Cycles
+// resolve to the empty string (matching task.env cross-references).
 //
 // Precedence on a name collision: extra (call-site) > task > namespace
 // (most-specific wins) > root global. Within each layer the value is
-// template-expanded against everything below it, then against the
-// built-in lookup (e.g. {{.GIT_COMMIT}}).
-//
-// taskName carries the *resolved* task name (with namespace prefix) so we
-// can pull in vars declared at that namespace and its ancestors. Sibling
-// namespaces stay invisible — the whole point of this scoping is that
-// `metrics:build` can have a different LDFLAGS than `proxy:build` without
-// the two clobbering each other in a single global vars map.
-func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars []map[string]Var) (map[string]string, error) {
+// template-expanded against everything below it, then against the built-in
+// lookup (e.g. {{.GIT_COMMIT}}).
+func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars []map[string]Var) (map[string]string, []string, error) {
+	type sourceScope int
+
+	const (
+		scopeRoot sourceScope = iota
+		scopeNamespace
+		scopeTask
+		scopeExtra
+	)
+
 	type source struct {
-		v   Var
-		dir string // working directory for `sh:` evaluation
+		v     Var
+		dir   string // working directory for `sh:` evaluation
+		scope sourceScope
 	}
 
 	// Build a unified source map. Later assignments win; we layer root vars
-	// first, then any ancestor-namespace vars (least to most specific), then
-	// task vars, then any call-site extra vars.
+	// first, then ancestor-namespace vars, then task vars, then call-site vars.
 	sources := make(map[string]source, len(r.tf.Vars)+len(task.Vars))
 	for k, v := range r.tf.Vars {
-		sources[k] = source{v, r.tf.Dir}
+		sources[k] = source{v: v, dir: r.tf.Dir, scope: scopeRoot}
 	}
 	for _, ns := range ancestorNamespaces(taskNamespace(taskName)) {
 		nsDir := r.tf.NamespaceDirs[ns]
@@ -150,21 +143,22 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 			nsDir = r.tf.Dir
 		}
 		for k, v := range r.tf.NamespaceVars[ns] {
-			sources[k] = source{v, nsDir}
+			sources[k] = source{v: v, dir: nsDir, scope: scopeNamespace}
 		}
 	}
 	for k, v := range task.Vars {
-		sources[k] = source{v, dir}
+		sources[k] = source{v: v, dir: dir, scope: scopeTask}
 	}
 	for _, ev := range extraVars {
 		for k, v := range ev {
-			sources[k] = source{v, dir}
+			sources[k] = source{v: v, dir: dir, scope: scopeExtra}
 		}
 	}
 
 	resolved := map[string]string{
 		"TASK_FILE_DIR": dir,
 	}
+	used := make(map[string]struct{})
 	visiting := make(map[string]struct{})
 	var firstErr error
 
@@ -176,26 +170,19 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 		if v, ok := resolved[key]; ok {
 			return v, true
 		}
-		// Cycles short-circuit to the empty string. Treating the value as
-		// "resolved" lets the rest of the expansion finish so the user gets
-		// a complete (if mostly empty) value to debug from.
 		if _, onPath := visiting[key]; onPath {
 			return "", true
 		}
 		s, ok := sources[key]
 		if !ok {
-			// Unknown user-vars fall through to gogo built-ins. CLI_ARGS, OS
-			// env and the cliArgs fallback are NOT consulted here — those
-			// only apply when expanding command strings, not var bodies.
 			return r.builtinLookup(key)
 		}
+		used[key] = struct{}{}
 		visiting[key] = struct{}{}
 		defer delete(visiting, key)
 
 		var value string
 		if s.v.Sh != "" {
-			// Expand template references inside the shell command itself so
-			// patterns like `sh: echo {{.IMAGE}}-{{.GIT_TAG}}.tar` work.
 			cmdLine := expandTemplates(s.v.Sh, lookup)
 			out, err := r.ShellRunner.Output(ShellCommand{
 				Kind:    ShellCommandVar,
@@ -214,42 +201,84 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 		return value, true
 	}
 
-	// Force-resolve every declared name so the returned map is complete:
-	// downstream consumers (env composition, requires, expandVars on cmd
-	// strings) read from a flat map and don't go through this lookup again.
-	for _, name := range slices.Sorted(maps.Keys(sources)) {
+	for _, name := range referencedVars(task) {
 		lookup(name)
 		if firstErr != nil {
-			return nil, firstErr
+			return nil, nil, firstErr
 		}
 	}
-	return resolved, nil
+
+	unused := make([]string, 0)
+	for _, name := range slices.Sorted(maps.Keys(sources)) {
+		s := sources[name]
+		if s.scope != scopeTask && s.scope != scopeExtra {
+			continue
+		}
+		if _, ok := used[name]; !ok {
+			unused = append(unused, name)
+		}
+	}
+	return resolved, unused, nil
 }
 
-// expandTemplates substitutes ${VAR} and {{.VAR}} references in s using the
-// supplied lookup. Unknown ${VAR} references are left for the shell to
-// expand; unknown {{.VAR}} templates are left verbatim. Both forms share a
-// single lookup so callers can layer vars / CLI_ARGS / built-ins / env in
-// whatever priority makes sense for their context.
-func expandTemplates(s string, lookup func(string) (string, bool)) string {
-	// Expand ${VAR} first. This won't touch {{.VAR}} templates since they
-	// don't start with $. Unknown variables are passed through verbatim so
-	// the downstream shell (or awk, sed, etc.) sees what the user wrote.
-	s = os.Expand(s, func(key string) string {
-		if val, ok := lookup(key); ok {
-			return val
+func referencedVars(task *Task) []string {
+	refs := make(map[string]struct{})
+	for _, name := range task.Requires.Vars {
+		refs[name] = struct{}{}
+	}
+	for _, cmd := range task.Cmds {
+		for _, name := range templateNames(cmd.Cmd) {
+			refs[name] = struct{}{}
 		}
-		return unknownShellVarSpan(key)
-	})
+		for _, v := range cmd.Vars {
+			for _, name := range templateNames(v.Value) {
+				refs[name] = struct{}{}
+			}
+			for _, name := range templateNames(v.Sh) {
+				refs[name] = struct{}{}
+			}
+		}
+	}
+	out := slices.Sorted(maps.Keys(refs))
+	return out
+}
 
-	// Then replace {{.VAR}} templates. Unknown templates are left as-is so
-	// run-time behavior matches expandConfigEnvTemplates at parse time.
+func templateNames(s string) []string {
+	matches := templatePattern.FindAllStringSubmatch(s, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	refs := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		refs[match[1]] = struct{}{}
+	}
+	return slices.Sorted(maps.Keys(refs))
+}
+
+// expandTemplates substitutes only {{.VAR}} references in s using the supplied
+// lookup. Unknown templates are left verbatim. Shell-style $VAR/${VAR}
+// references are intentionally left untouched here: they belong to the
+// environment namespace and are interpreted by the shell (or by env-specific
+// expansion in resolveEnvValue).
+func expandTemplates(s string, lookup func(string) (string, bool)) string {
 	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
 		key := templatePattern.FindStringSubmatch(match)[1]
 		if val, ok := lookup(key); ok {
 			return val
 		}
 		return match
+	})
+}
+
+// expandShellEnv substitutes $VAR/${VAR} references in s using lookup.
+// Unknown references are preserved so the downstream shell (or awk/sed/jq)
+// can interpret them.
+func expandShellEnv(s string, lookup func(string) (string, bool)) string {
+	return os.Expand(s, func(key string) string {
+		if val, ok := lookup(key); ok {
+			return val
+		}
+		return unknownShellVarSpan(key)
 	})
 }
 
@@ -281,21 +310,10 @@ func isShellSpecialChar(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
-// expandVars substitutes template and shell variables in a command string.
-// {{.VAR}} and ${VAR} are both resolved from task variables, CLI_ARGS, the
-// optional builtin lookup (currently {{.GIT_*}}), and finally the process
-// environment. Unknown ${VAR} references are left for the shell to expand.
-// Unknown {{.VAR}} templates are left verbatim (matching
-// expandConfigEnvTemplates at parse time).
-//
-// CLI_ARGS resolves through the same lookup as any other variable: a value
-// in `vars` (e.g. a call-site `vars: { CLI_ARGS: -f }`) wins, and the cliArgs
-// argument is used only as a fallback default. Env never satisfies CLI_ARGS,
-// because the cliArgs fallback is always considered "found" (even when empty).
-//
-// builtin may be nil. When non-nil it is consulted *after* user vars and
-// CLI_ARGS but *before* the process environment, so a user-defined var with
-// the same name as a built-in (e.g. GIT_COMMIT) always wins.
+// expandVars substitutes gogo template variables in a command string.
+// {{.VAR}} resolves from task variables, CLI_ARGS, and optional built-ins.
+// Shell-style $VAR/${VAR} references are left untouched for the shell to
+// resolve from the task environment.
 func expandVars(s string, vars map[string]string, cliArgs string, builtin func(string) (string, bool)) string {
 	return expandTemplates(s, func(key string) (string, bool) {
 		if val, ok := vars[key]; ok {
@@ -309,35 +327,6 @@ func expandVars(s string, vars map[string]string, cliArgs string, builtin func(s
 				return val, true
 			}
 		}
-		return os.LookupEnv(key)
-	})
-}
-
-// expandCLIArgsOnly substitutes only CLI_ARGS in a command string, leaving
-// every other ${VAR} and {{.VAR}} reference untouched. It is used to render
-// the per-cmd log line: CLI_ARGS comes from the user's invocation and is safe
-// to surface, while other variables may carry secrets sourced from env or
-// dotenv files and are deliberately not expanded in logs.
-//
-// CLI_ARGS resolution mirrors expandVars: a value in `vars` (typically a
-// call-site `vars: { CLI_ARGS: -f }`) wins over the cliArgs fallback.
-func expandCLIArgsOnly(s string, vars map[string]string, cliArgs string) string {
-	val := cliArgs
-	if v, ok := vars["CLI_ARGS"]; ok {
-		val = v
-	}
-
-	s = os.Expand(s, func(key string) string {
-		if key == "CLI_ARGS" {
-			return val
-		}
-		return unknownShellVarSpan(key)
-	})
-
-	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
-		if templatePattern.FindStringSubmatch(match)[1] == "CLI_ARGS" {
-			return val
-		}
-		return match
+		return "", false
 	})
 }

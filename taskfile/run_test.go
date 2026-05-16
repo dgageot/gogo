@@ -124,7 +124,7 @@ func TestRunWithExtraVars(t *testing.T) {
 			},
 			"callee": {
 				Cmds: []Cmd{
-					{Cmd: "printf ${MSG}"},
+					{Cmd: "printf {{.MSG}}"},
 				},
 			},
 		},
@@ -160,7 +160,7 @@ func TestRunWithExtraVarsOverridesTaskVars(t *testing.T) {
 					"MSG": {Value: "default"},
 				},
 				Cmds: []Cmd{
-					{Cmd: "printf ${MSG}"},
+					{Cmd: "printf {{.MSG}}"},
 				},
 			},
 		},
@@ -192,7 +192,7 @@ func TestRunWithExtraVarsShell(t *testing.T) {
 			},
 			"callee": {
 				Cmds: []Cmd{
-					{Cmd: "printf ${MSG}"},
+					{Cmd: "printf {{.MSG}}"},
 				},
 			},
 		},
@@ -525,7 +525,7 @@ func TestOpSecretsDetection(t *testing.T) {
 	assert.True(t, (*execs)[0].UseOpRun)
 }
 
-func TestGlobalVarsInEnv(t *testing.T) {
+func TestGlobalVarsAreNotInjectedIntoEnv(t *testing.T) {
 	dir := t.TempDir()
 
 	tf := &Config{
@@ -533,7 +533,7 @@ func TestGlobalVarsInEnv(t *testing.T) {
 		Vars: map[string]Var{"VERSION": {Value: "1.2.3"}},
 		Tasks: map[string]Task{
 			"build": {
-				Cmds: []Cmd{{Cmd: "echo ${VERSION}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.VERSION}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -547,7 +547,7 @@ func TestGlobalVarsInEnv(t *testing.T) {
 
 	require.Len(t, *execs, 1)
 	assert.Equal(t, "echo 1.2.3", (*execs)[0].Command)
-	assert.Equal(t, "1.2.3", envValue((*execs)[0].Env, "VERSION"))
+	assert.Empty(t, envValue((*execs)[0].Env, "VERSION"))
 }
 
 func TestTaskNotFound(t *testing.T) {
@@ -658,7 +658,7 @@ func TestCLIArgsExpansion(t *testing.T) {
 		Dir: dir,
 		Tasks: map[string]Task{
 			"test": {
-				Cmds: []Cmd{{Cmd: "go test ${CLI_ARGS}"}},
+				Cmds: []Cmd{{Cmd: "go test {{.CLI_ARGS}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -680,7 +680,7 @@ func TestBuiltinDirVar(t *testing.T) {
 		Dir: dir,
 		Tasks: map[string]Task{
 			"show": {
-				Cmds: []Cmd{{Cmd: "echo ${TASK_FILE_DIR}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.TASK_FILE_DIR}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -694,7 +694,6 @@ func TestBuiltinDirVar(t *testing.T) {
 
 	require.Len(t, *execs, 1)
 	assert.Equal(t, "echo "+dir, (*execs)[0].Command)
-	assert.Equal(t, dir, envValue((*execs)[0].Env, "TASK_FILE_DIR"))
 }
 
 func TestTaskVarsOverrideGlobalVars(t *testing.T) {
@@ -705,7 +704,7 @@ func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 		Tasks: map[string]Task{
 			"build": {
 				Vars: map[string]Var{"MODE": {Value: "local"}},
-				Cmds: []Cmd{{Cmd: "echo ${MODE}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.MODE}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -721,7 +720,7 @@ func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 	assert.Equal(t, "echo local", (*execs)[0].Command)
 }
 
-func TestEnvExpansionReferencesVars(t *testing.T) {
+func TestEnvExpansionDoesNotReferenceVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -742,10 +741,10 @@ func TestEnvExpansionReferencesVars(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, *execs, 1)
-	assert.Equal(t, "/opt/bin", envValue((*execs)[0].Env, "MY_PATH"))
+	assert.Equal(t, "${BASE}/bin", envValue((*execs)[0].Env, "MY_PATH"))
 }
 
-func TestEnvTemplateExpansionReferencesVars(t *testing.T) {
+func TestEnvTemplateExpansionDoesNotReferenceVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir:  dir,
@@ -766,7 +765,66 @@ func TestEnvTemplateExpansionReferencesVars(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, *execs, 1)
-	assert.Equal(t, "abc123", envValue((*execs)[0].Env, "GIT_COMMIT"))
+	assert.Equal(t, "{{.YO}}", envValue((*execs)[0].Env, "GIT_COMMIT"))
+}
+
+func TestEnvTemplateDoesNotReferenceUserVarAfterParse(t *testing.T) {
+	// Env values belong to the environment namespace. {{.VAR}} syntax is only
+	// expanded in command/precondition strings and var values, not task.env.
+	t.Setenv("YO", "from-os")
+
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+vars:
+  YO: from-vars
+tasks:
+  dev:
+    env:
+      GIT_COMMIT: "{{.YO}}"
+    cmd: run
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("dev", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "{{.YO}}", envValue((*execs)[0].Env, "GIT_COMMIT"))
+}
+
+func TestCmdTemplateUserVarBeatsOSEnvAfterParse(t *testing.T) {
+	// Same regression as above but for cmd strings: parse-time expansion
+	// must not consume {{.VAR}} references that the runtime resolver is
+	// going to handle with the right precedence.
+	t.Setenv("YO", "from-os")
+
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+vars:
+  YO: from-vars
+tasks:
+  show:
+    cmd: echo {{.YO}}
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("show", ""))
+
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "echo from-vars", (*execs)[0].Command)
 }
 
 func TestEnvBareDotReferenceIsLiteral(t *testing.T) {
@@ -941,17 +999,18 @@ func TestTaskWithOnlyDeps(t *testing.T) {
 	assert.ElementsMatch(t, []string{"a", "b"}, tasks)
 }
 
-func TestExpandVarsTemplateAndShell(t *testing.T) {
+func TestExpandVarsTemplateOnly(t *testing.T) {
 	vars := map[string]string{"NAME": "world"}
 
-	assert.Equal(t, "hello world", expandVars("hello ${NAME}", vars, "", nil))
+	assert.Equal(t, "hello ${NAME}", expandVars("hello ${NAME}", vars, "", nil))
 	assert.Equal(t, "hello world", expandVars("hello {{.NAME}}", vars, "", nil))
 	assert.Equal(t, "hello ${UNKNOWN}", expandVars("hello ${UNKNOWN}", vars, "", nil))
 	assert.Equal(t, "hello {{.UNKNOWN}}", expandVars("hello {{.UNKNOWN}}", vars, "", nil))
 }
 
 func TestExpandVarsCLIArgs(t *testing.T) {
-	assert.Equal(t, "test -v", expandVars("test ${CLI_ARGS}", nil, "-v", nil))
+	assert.Equal(t, "test -v", expandVars("test {{.CLI_ARGS}}", nil, "-v", nil))
+	assert.Equal(t, "test ${CLI_ARGS}", expandVars("test ${CLI_ARGS}", nil, "-v", nil))
 }
 
 func TestNoOpSecretsUseOpRunFalse(t *testing.T) {
@@ -1010,7 +1069,7 @@ func TestDedupDoesNotApplyWithExtraVars(t *testing.T) {
 				},
 			},
 			"greet": {
-				Cmds: []Cmd{{Cmd: "echo ${MSG}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.MSG}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -1302,7 +1361,7 @@ func TestTemplateVarsThroughRunner(t *testing.T) {
 func TestMixedTemplateAndShellExpansion(t *testing.T) {
 	vars := map[string]string{"A": "1", "B": "2"}
 	result := expandVars("{{.A}} and ${B}", vars, "", nil)
-	assert.Equal(t, "1 and 2", result)
+	assert.Equal(t, "1 and ${B}", result)
 }
 
 func TestTaskLevelDotenvThroughRunner(t *testing.T) {
@@ -1453,13 +1512,13 @@ func TestMatchesPlatformArchOnly(t *testing.T) {
 func TestExpandVarsFromEnv(t *testing.T) {
 	t.Setenv("GOGO_TEST_VAR", "from-env")
 	result := expandVars("echo ${GOGO_TEST_VAR}", nil, "", nil)
-	assert.Equal(t, "echo from-env", result)
+	assert.Equal(t, "echo ${GOGO_TEST_VAR}", result)
 }
 
-func TestExpandVarsTemplateFromEnv(t *testing.T) {
+func TestExpandVarsTemplateDoesNotReadEnv(t *testing.T) {
 	t.Setenv("GOGO_TEST_VAR", "from-env")
 	result := expandVars("echo {{.GOGO_TEST_VAR}}", nil, "", nil)
-	assert.Equal(t, "echo from-env", result)
+	assert.Equal(t, "echo {{.GOGO_TEST_VAR}}", result)
 }
 
 func TestInlineTaskCallFailure(t *testing.T) {
@@ -1921,7 +1980,7 @@ func TestResolveVarShellError(t *testing.T) {
 		Tasks: map[string]Task{
 			"build": {
 				Vars: map[string]Var{"VER": {Sh: "exit 1"}},
-				Cmds: []Cmd{{Cmd: "echo ${VER}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.VER}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -2003,7 +2062,7 @@ func TestShellRunnerResolvesShellVariablesWithoutRunningRealShell(t *testing.T) 
 		Tasks: map[string]Task{
 			"build": {
 				Vars: map[string]Var{"VERSION": {Sh: "git describe --tags"}},
-				Cmds: []Cmd{{Cmd: "echo ${VERSION}"}},
+				Cmds: []Cmd{{Cmd: "echo {{.VERSION}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -2099,7 +2158,7 @@ func TestCLIArgsOverriddenByCallSiteVars(t *testing.T) {
 				},
 			},
 			"inject": {
-				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+				Cmds: []Cmd{{Cmd: "op inject {{.CLI_ARGS}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -2158,7 +2217,7 @@ func TestCLIArgsOverrideBeatsHostCLIArgs(t *testing.T) {
 				},
 			},
 			"inject": {
-				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+				Cmds: []Cmd{{Cmd: "op inject {{.CLI_ARGS}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -2184,7 +2243,7 @@ func TestCLIArgsFallsThroughWhenNotOverridden(t *testing.T) {
 				Cmds: []Cmd{{Task: "inject"}},
 			},
 			"inject": {
-				Cmds: []Cmd{{Cmd: "op inject ${CLI_ARGS}"}},
+				Cmds: []Cmd{{Cmd: "op inject {{.CLI_ARGS}}"}},
 			},
 		},
 		DotenvVars: make(map[string]string),
@@ -2200,28 +2259,14 @@ func TestCLIArgsFallsThroughWhenNotOverridden(t *testing.T) {
 }
 
 func TestExpandVarsCallSiteVarBeatsCLIArgsParam(t *testing.T) {
-	// Direct unit-level coverage of the new lookup ordering inside expandVars:
-	// a value in `vars` wins over the cliArgs fallback.
+	// Direct unit-level coverage of the lookup ordering inside expandVars: a
+	// value in `vars` wins over the cliArgs fallback.
 	vars := map[string]string{"CLI_ARGS": "-f"}
-	assert.Equal(t, "op inject -f", expandVars("op inject ${CLI_ARGS}", vars, "--from-host", nil))
+	assert.Equal(t, "op inject ${CLI_ARGS}", expandVars("op inject ${CLI_ARGS}", vars, "--from-host", nil))
 	assert.Equal(t, "op inject -f", expandVars("op inject {{.CLI_ARGS}}", vars, "--from-host", nil))
 }
 
-func TestExpandCLIArgsOnly(t *testing.T) {
-	// Only CLI_ARGS is expanded — every other variable is left as-is so logs
-	// don't accidentally leak secret values.
-	assert.Equal(t, "pytest -n 4 backend/tests",
-		expandCLIArgsOnly("pytest -n 4 {{.CLI_ARGS}}", nil, "backend/tests"))
-	assert.Equal(t, "pytest -n 4 backend/tests",
-		expandCLIArgsOnly("pytest -n 4 ${CLI_ARGS}", nil, "backend/tests"))
-	assert.Equal(t, "curl -H Authorization:${TOKEN} arg",
-		expandCLIArgsOnly("curl -H Authorization:${TOKEN} {{.CLI_ARGS}}", map[string]string{"TOKEN": "hunter2"}, "arg"))
-	// Call-site override beats the cliArgs param.
-	assert.Equal(t, "pytest -f",
-		expandCLIArgsOnly("pytest {{.CLI_ARGS}}", map[string]string{"CLI_ARGS": "-f"}, "--from-host"))
-}
-
-func TestRunnerLogExpandsCLIArgs(t *testing.T) {
+func TestRunnerLogExpandsVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -2246,9 +2291,9 @@ func TestRunnerLogExpandsCLIArgs(t *testing.T) {
 	assert.NotContains(t, log, "{{.CLI_ARGS}}")
 }
 
-func TestRunnerLogDoesNotExpandOtherVars(t *testing.T) {
-	// Other ${VAR} / {{.VAR}} references stay un-expanded in the log so we
-	// don't accidentally surface secrets, while CLI_ARGS is shown.
+func TestRunnerLogLeavesShellEnvReferencesForShell(t *testing.T) {
+	// Shell env references stay un-expanded in the log; template vars are
+	// expanded before execution and logging.
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,

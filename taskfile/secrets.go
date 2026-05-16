@@ -3,6 +3,7 @@ package taskfile
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 )
 
@@ -58,12 +59,22 @@ func resolveSecretURI(name, uri string) (map[string]string, error) {
 }
 
 // validateSecrets checks that every name referenced from any task.Secrets
-// list is defined under the top-level `secrets:` map, and that every URI
-// declared there uses a supported scheme. Catching this at load time gives
-// users a clear error instead of one surfacing only when the offending task
-// happens to run.
+// list is defined under the top-level `secrets:` map, that every URI declared
+// there uses a supported scheme, and that op:// references only appear in env
+// or secrets (never in vars).
 func validateSecrets(c *Config) error {
+	if err := validateVarsDoNotUseSecrets(c.Vars, "root vars"); err != nil {
+		return err
+	}
 	for taskName, task := range c.Tasks {
+		if err := validateVarsDoNotUseSecrets(task.Vars, fmt.Sprintf("task %q vars", taskName)); err != nil {
+			return err
+		}
+		for _, cmd := range task.Cmds {
+			if err := validateVarsDoNotUseSecrets(cmd.Vars, fmt.Sprintf("task %q call-site vars", taskName)); err != nil {
+				return err
+			}
+		}
 		for _, name := range task.Secrets {
 			if _, ok := c.Secrets[name]; !ok {
 				return fmt.Errorf("task %q references unknown secret %q; declare it under top-level `secrets:`", taskName, name)
@@ -73,6 +84,16 @@ func validateSecrets(c *Config) error {
 	for name, uri := range c.Secrets {
 		if !secretSchemeKnown(uri) {
 			return fmt.Errorf("secret %q has unknown backend in %q (supported: %s)", name, uri, strings.Join(supportedSecretSchemes, ", "))
+		}
+	}
+	return nil
+}
+
+func validateVarsDoNotUseSecrets(vars map[string]Var, where string) error {
+	for _, name := range slices.Sorted(maps.Keys(vars)) {
+		v := vars[name]
+		if strings.HasPrefix(v.Value, secretSchemeOp) || strings.HasPrefix(v.Sh, secretSchemeOp) {
+			return fmt.Errorf("%s: variable %q uses %q syntax; secrets are only supported in env or top-level `secrets:`", where, name, secretSchemeOp)
 		}
 	}
 	return nil

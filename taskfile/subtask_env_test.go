@@ -307,12 +307,10 @@ func TestRunPublicAPIDoesNotPropagateEnv(t *testing.T) {
 	assert.Empty(t, envValue((*execs)[0].Env, "LEAK_FROM_CALLER"))
 }
 
-func TestParentVarsAlsoFlowDownAsEnv(t *testing.T) {
-	// Vars get exported as env entries by buildEnv (existing behaviour);
-	// since parent's env propagates, parent's vars-as-env do too. Verifying
-	// here so a future change can't silently drop this. Vars are NOT
-	// substituted into the child's cmd template (that's a separate code
-	// path), but they DO show up in the env passed to the shell.
+func TestParentVarsDoNotFlowDownAsEnv(t *testing.T) {
+	// Vars and env are separate namespaces. A parent's `vars:` entries do not
+	// get exported to the shell environment and therefore do not propagate to
+	// sub-tasks as env entries.
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -331,5 +329,5 @@ func TestParentVarsAlsoFlowDownAsEnv(t *testing.T) {
 
 	require.NoError(t, r.Run("parent", ""))
 	require.Len(t, *execs, 1)
-	assert.Equal(t, "hello", envValue((*execs)[0].Env, "PARENT_VAR"))
+	assert.Empty(t, envValue((*execs)[0].Env, "PARENT_VAR"))
 }

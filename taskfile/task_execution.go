@@ -137,16 +137,19 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 
 	dir := r.taskDir(&task)
 
-	vars, err := r.resolveAllVars(resolved, &task, dir, extraVars)
+	vars, unusedVars, err := r.resolveAllVars(resolved, &task, dir, extraVars)
 	if err != nil {
 		return err
+	}
+	for _, name := range unusedVars {
+		r.logTask(colorYellow, resolved, fmt.Sprintf("warning: variable %q is declared but not used", name))
 	}
 
 	if err := checkRequires(resolved, &task, vars, r.builtinLookup); err != nil {
 		return err
 	}
 
-	env, err := r.buildEnv(&task, dir, vars, parentEnv)
+	env, err := r.buildEnv(&task, dir, parentEnv)
 	if err != nil {
 		return err
 	}
@@ -191,10 +194,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		}
 
 		if !silent {
-			// Log the original command template with CLI_ARGS substituted in,
-			// so the user sees what they actually passed without leaking other
-			// expanded variables (which may carry secrets).
-			r.logTask(colorGreen, taskName, expandCLIArgsOnly(cmd.Cmd, vars, cliArgs))
+			r.logTask(colorGreen, taskName, expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup))
 		}
 
 		if r.DryRun {

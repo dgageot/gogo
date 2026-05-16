@@ -158,13 +158,13 @@ func TestExpandVarsPreservesAwkPositional(t *testing.T) {
 		expandVars(`echo $@`, nil, "", nil),
 	)
 
-	// Normal identifier names still round-trip through `${KEY}` — unchanged.
+	// Shell references are left exactly as written for the shell to expand.
 	assert.Equal(t,
 		`echo ${UNKNOWN}`,
 		expandVars(`echo ${UNKNOWN}`, nil, "", nil),
 	)
 	assert.Equal(t,
-		`echo ${UNKNOWN}`,
+		`echo $UNKNOWN`,
 		expandVars(`echo $UNKNOWN`, nil, "", nil),
 	)
 }

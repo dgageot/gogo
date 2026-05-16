@@ -117,7 +117,7 @@ func TestExpandVarsResolvesBuiltinTemplate(t *testing.T) {
 	assert.Equal(t, "commit=abc1234", got)
 }
 
-func TestExpandVarsResolvesBuiltinShellSyntax(t *testing.T) {
+func TestExpandVarsLeavesShellSyntaxForShell(t *testing.T) {
 	builtin := func(name string) (string, bool) {
 		if name == "GIT_BRANCH" {
 			return "main", true
@@ -125,7 +125,7 @@ func TestExpandVarsResolvesBuiltinShellSyntax(t *testing.T) {
 		return "", false
 	}
 	got := expandVars("branch=${GIT_BRANCH}", nil, "", builtin)
-	assert.Equal(t, "branch=main", got)
+	assert.Equal(t, "branch=${GIT_BRANCH}", got)
 }
 
 func TestExpandVarsUserVarOverridesBuiltin(t *testing.T) {
@@ -159,16 +159,31 @@ func TestExpandVarsNilBuiltinIsNoop(t *testing.T) {
 	assert.Equal(t, "{{.GIT_COMMIT}}", got, "unknown templates left verbatim")
 }
 
-func TestResolveEnvValueConsultsBuiltin(t *testing.T) {
-	builtin := func(name string) (string, bool) {
-		if name == "GIT_TAG" {
-			return "v1.2.3", true
-		}
-		return "", false
+func TestTaskEnvDoesNotConsultBuiltinGitVars(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Cmds: []Cmd{{Cmd: "true"}},
+				Env:  map[string]string{"VERSION": "${GIT_TAG}"},
+			},
+		},
 	}
-	taskEnv := map[string]string{"VERSION": "${GIT_TAG}"}
-	got := resolveEnvValue("VERSION", taskEnv, nil, builtin)
-	assert.Equal(t, "v1.2.3", got)
+	sh, calls := fakeGit(map[string]string{
+		"git describe --tags --exact-match HEAD 2>/dev/null": "v9.9.9",
+	})
+	r := newTestRunner(t, tf, dir)
+	r.ShellRunner = sh
+
+	require.NoError(t, r.Run("build", ""))
+
+	for _, run := range sh.runsSnapshot() {
+		if run.Kind == ShellCommandTask {
+			assert.Contains(t, run.Env, "VERSION=${GIT_TAG}")
+		}
+	}
+	assert.Equal(t, int64(0), calls.Load())
 }
 
 func TestRunnerCmdSeesBuiltinGitVars(t *testing.T) {
@@ -198,10 +213,9 @@ func TestRunnerCmdSeesBuiltinGitVars(t *testing.T) {
 	assert.Equal(t, "echo cafef00d", taskRuns[0].Command)
 }
 
-func TestRunnerCmdShellSyntaxBuiltinExpansion(t *testing.T) {
-	// The ${GIT_BRANCH} form is resolved by gogo (via os.Expand in
-	// expandVars) before the command reaches the shell, so it works even
-	// when the actual shell environment doesn't carry GIT_BRANCH.
+func TestRunnerCmdShellSyntaxDoesNotExpandBuiltin(t *testing.T) {
+	// The ${GIT_BRANCH} form is an environment variable reference. It must not
+	// resolve through gogo's {{.GIT_*}} built-ins.
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -209,7 +223,7 @@ func TestRunnerCmdShellSyntaxBuiltinExpansion(t *testing.T) {
 			"info": {Cmds: []Cmd{{Cmd: "echo ${GIT_BRANCH}"}}},
 		},
 	}
-	sh, _ := fakeGit(map[string]string{"git rev-parse --abbrev-ref HEAD": "feature/x"})
+	sh, calls := fakeGit(map[string]string{"git rev-parse --abbrev-ref HEAD": "feature/x"})
 	r := newTestRunner(t, tf, dir)
 	r.ShellRunner = sh
 
@@ -217,12 +231,13 @@ func TestRunnerCmdShellSyntaxBuiltinExpansion(t *testing.T) {
 
 	for _, run := range sh.runsSnapshot() {
 		if run.Kind == ShellCommandTask {
-			assert.Equal(t, "echo feature/x", run.Command)
+			assert.Equal(t, "echo ${GIT_BRANCH}", run.Command)
 		}
 	}
+	assert.Equal(t, int64(0), calls.Load())
 }
 
-func TestRunnerEnvBlockSeesBuiltinGitVars(t *testing.T) {
+func TestRunnerEnvBlockDoesNotSeeBuiltinGitVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -233,7 +248,7 @@ func TestRunnerEnvBlockSeesBuiltinGitVars(t *testing.T) {
 			},
 		},
 	}
-	sh, _ := fakeGit(map[string]string{
+	sh, calls := fakeGit(map[string]string{
 		"git describe --tags --exact-match HEAD 2>/dev/null": "v9.9.9",
 	})
 	r := newTestRunner(t, tf, dir)
@@ -243,9 +258,10 @@ func TestRunnerEnvBlockSeesBuiltinGitVars(t *testing.T) {
 
 	for _, run := range sh.runsSnapshot() {
 		if run.Kind == ShellCommandTask {
-			assert.Contains(t, run.Env, "VERSION=v9.9.9")
+			assert.Contains(t, run.Env, "VERSION=${GIT_TAG}")
 		}
 	}
+	assert.Equal(t, int64(0), calls.Load())
 }
 
 func TestRunnerRequiresAcceptsBuiltinGitVar(t *testing.T) {

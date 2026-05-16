@@ -246,8 +246,10 @@ func TestExpandEnvTemplatesValueOnly(t *testing.T) {
 
 func TestParseEnvExpansionAppliesToValuesNotStructure(t *testing.T) {
 	// An env value containing YAML-structural characters (newline, ':', '-')
-	// must NOT be able to inject new tasks or fields. The substitution happens
-	// after YAML parsing, so the parser sees the original document.
+	// must NOT be able to inject new tasks or fields. Cmd strings are now
+	// expanded at run time, so we exercise a parse-time-expanded field
+	// (task.Dir) here — the substitution still happens after YAML parsing,
+	// so the parser sees the original document either way.
 	t.Setenv("GOGO_INJECT", "injected\n  evil:\n    cmd: rm -rf /")
 
 	dir := t.TempDir()
@@ -255,53 +257,53 @@ func TestParseEnvExpansionAppliesToValuesNotStructure(t *testing.T) {
 		"gogo.yaml": `version: "1"
 tasks:
   build:
-    cmd: echo {{.GOGO_INJECT}}
+    dir: "{{.GOGO_INJECT}}"
+    cmd: echo hi
 `,
 	})
 
 	tf, err := Parse(dir)
 	require.NoError(t, err)
 
-	// The malicious env value lands inside the cmd string verbatim — no
+	// The malicious env value lands inside the dir string verbatim — no
 	// 'evil' task is conjured into existence.
 	assert.NotContains(t, tf.Tasks, "evil")
 	require.Contains(t, tf.Tasks, "build")
-	require.Len(t, tf.Tasks["build"].Cmds, 1)
 	assert.Equal(t,
-		"echo injected\n  evil:\n    cmd: rm -rf /",
-		tf.Tasks["build"].Cmds[0].Cmd,
+		"injected\n  evil:\n    cmd: rm -rf /",
+		tf.Tasks["build"].Dir,
 	)
 }
 
 func TestParseEnvExpansionInVariousFields(t *testing.T) {
-	// Verify the documented "expand {{.VAR}} from env at parse time" behavior
-	// still works for the common user-configurable string fields.
-	t.Setenv("GOGO_TARGET", "prod")
+	// Verify that {{.VAR}} in fields that are *not* re-expanded at run time
+	// (task.Dir, task.Sources, task.Aliases, etc.) still gets the value
+	// from the process environment at parse time. Run-time-expanded fields
+	// (vars, env values, cmd strings) are intentionally left untouched at
+	// parse time so the run-time precedence (user vars > env) wins — see
+	// TestEnvTemplateDoesNotReferenceUserVarAfterParse for the regression that
+	// shaped this split.
 	t.Setenv("GOGO_DIR", "backend")
-	t.Setenv("GOGO_VERSION", "1.2.3")
+	t.Setenv("GOGO_GLOB", "*.go")
 
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"gogo.yaml": `version: "1"
-vars:
-  RELEASE: "v{{.GOGO_VERSION}}"
 tasks:
   build:
     dir: "{{.GOGO_DIR}}"
-    env:
-      TARGET: "{{.GOGO_TARGET}}"
-    cmd: echo {{.GOGO_TARGET}}
+    sources:
+      - "{{.GOGO_GLOB}}"
+    cmd: go build
 `,
 	})
 
 	tf, err := Parse(dir)
 	require.NoError(t, err)
 
-	assert.Equal(t, "v1.2.3", tf.Vars["RELEASE"].Value)
 	build := tf.Tasks["build"]
 	assert.Equal(t, "backend", build.Dir)
-	assert.Equal(t, "prod", build.Env["TARGET"])
-	assert.Equal(t, "echo prod", build.Cmds[0].Cmd)
+	assert.Equal(t, StringList{"*.go"}, build.Sources)
 }
 
 func TestParsePreconditions(t *testing.T) {
