@@ -14,7 +14,7 @@ day-to-day development. Use the `gogo` binary for all dev workflows — see
 | Run linters       | `gogo lint`        |
 | Format Go sources | `gogo format`      |
 | Watch + rebuild   | `gogo -w dev`      |
-| Cross-compile all | `gogo build-cross` |
+| Cross-compile all | `gogo cross`       |
 | Clean artifacts   | `gogo clean`       |
 
 CI (`.github/workflows/ci.yml`) runs tests, `golangci-lint`, and the
