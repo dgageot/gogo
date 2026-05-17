@@ -14,6 +14,16 @@ You ran gogo from a directory that has no `gogo.yaml` and no ancestor with one e
 
 **Fix:** create a `gogo.yaml` at the project root, or `cd` into a directory that has one above it.
 
+When no `gogo.yaml` is found gogo also looks for foreign task files in the
+same walk:
+
+- `Taskfile.yml` / `taskfile.yml` / `Taskfile.yaml` / `taskfile.yaml` → shells
+  out to [`task`](https://taskfile.dev).
+- `mise.toml` → shells out to [`mise run`](https://mise.jdx.dev).
+
+If the matching binary isn't on `PATH` the runner is silently skipped (so a
+stray Taskfile in a parent directory doesn't break unrelated invocations).
+
 ### `no gogo.yaml found in <dir>`
 
 Variant of the above when an explicit directory was checked.
