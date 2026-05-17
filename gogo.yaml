@@ -29,10 +29,9 @@ tasks:
     sources: [go, .golangci.yml]
 
   # Cross-compile for all platforms
-  build-cross:
+  cross:
     cmd: >
       docker buildx build
-      --target=cross
       --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
       .
 

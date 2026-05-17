@@ -44,9 +44,5 @@ RUN --mount=type=bind,from=osxcross,src=/osxsdk,target=/xx-sdk \
     xx-verify /binaries/gogo-$TARGETOS-$TARGETARCH$EXT
 EOT
 
-FROM scratch AS cross
+FROM scratch
 COPY --from=builder /binaries .
-
-FROM scratch AS local
-ARG TARGETOS TARGETARCH
-COPY --from=builder /binaries/gogo-$TARGETOS-$TARGETARCH* gogo
