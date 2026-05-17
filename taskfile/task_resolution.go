@@ -18,10 +18,21 @@ func (r *Runner) resolveTask(name string) (string, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return "", fmt.Errorf("task %q not found", name)
+		return "", notFoundError(name, r.suggestTasks(name))
 	default:
 		return "", fmt.Errorf("task %q is ambiguous (matches: %s)", name, strings.Join(matches, ", "))
 	}
+}
+
+// notFoundError formats the error reported when a task name can't be
+// resolved. When near-matches exist they're appended as a 'did you mean'
+// hint so a typo turns into a one-line fix instead of a hunt through
+// `gogo --list`.
+func notFoundError(name string, suggestions []string) error {
+	if len(suggestions) == 0 {
+		return fmt.Errorf("task %q not found", name)
+	}
+	return fmt.Errorf("task %q not found, did you mean: %s?", name, strings.Join(suggestions, ", "))
 }
 
 // resolveTaskName returns the canonical task name for input that matches a
