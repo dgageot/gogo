@@ -3,11 +3,9 @@ version: "1"
 sources:
   lint: [go, .golangci.yml]
 
-tasks:
-  # Build, lint, and test
-  default:
-    deps: [build, lint, test]
+default: dev
 
+tasks:
   # Build, lint, and test on source changes
   dev:
     deps: [build, lint, test]
