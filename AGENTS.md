@@ -17,9 +17,14 @@ day-to-day development. Use the `gogo` binary for all dev workflows — see
 | Cross-compile all | `gogo cross`       |
 | Clean artifacts   | `gogo clean`       |
 
-CI (`.github/workflows/ci.yml`) runs tests, `golangci-lint`, and the
-multi-platform Docker build. Releases (`release.yml`) are tag-driven and
-publish cross-built binaries via `gh release create`.
+CI (`.github/workflows/ci.yml`) runs four jobs: tests (`go test ./...`),
+`golangci-lint`, `govulncheck`, and the multi-platform Docker build. The
+`vulncheck` job also runs on a weekly cron so newly disclosed advisories
+surface even when the repo is quiet. Dependabot (`.github/dependabot.yml`)
+bumps Go modules, GitHub Actions SHAs, and Docker base images weekly — pair
+the Actions group with the `ghapin` skill when reviewing those PRs.
+Releases (`release.yml`) are tag-driven and publish cross-built binaries via
+`gh release create` plus build-provenance attestations.
 
 The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
 `-tests=true` under golangci-lint v2.
@@ -58,7 +63,9 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
 - **YAML unmarshalling**: when adding a field that should accept both a
   string and a struct, follow the `Cmd`/`Dep`/`Var`/`Precondition` pattern
   (try string first, then re-unmarshal into a `type plain X` to avoid
-  recursion).
+  recursion). For a *string-or-list* field (e.g. `sources`, `aliases`),
+  use the `StringList` named slice in `taskfile/types.go` instead of
+  `[]string` — its `UnmarshalYAML` already handles the single-string case.
 - **Logging**: never `fmt.Print` in library code. Use `Runner.logTask` or
   write to the injected `RunnerIO` / `App.Stdout|Stderr`.
 - **Comments on exported symbols**: required by `revive`; keep them short
@@ -97,25 +104,61 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
 ## Configuration
 
 - **`gogo.yaml`** — repo's own task file (the project eats its own dog food).
-  Edit when changing dev workflows.
+  Uses the built-in `go` source preset (see below) so every Go-aware task
+  shares one source list. Edit when changing dev workflows.
 - **`.golangci.yml`** — single source of truth for lint config; keep
   `gci.sections` in sync if the module path ever changes.
 - **`Dockerfile`** — multi-stage cross build using `tonistiigi/xx`
   (`xx-go build`) and `crazymax/osxcross` for darwin targets. CGO is on for
   darwin, off otherwise. Update `GO_VERSION` here when bumping `go.mod`.
-- **`.github/workflows/`** — `ci.yml` (test/lint/build) and `release.yml`
-  (tag-triggered cross build + GitHub release). Action SHAs are pinned;
-  use the `ghapin` skill when bumping them.
+- **`.github/workflows/`** — `ci.yml` (test/lint/vulncheck/build) and
+  `release.yml` (tag-triggered cross build + GitHub release with build
+  provenance attestations). Action SHAs are pinned; use the `ghapin` skill
+  when bumping them. `.github/dependabot.yml` opens grouped weekly PRs for
+  Go modules, Actions, and Docker base images.
 - **Generated/ignored** (`.gitignore`): `.gogo/` (checksum cache),
   `bin/`, `dist/`, `.zig-cache/`.
 - **No env vars** are required at runtime; gogo only consumes whatever the
   user puts in their own `gogo.yaml` / dotenv files.
+- **Source presets** — built-ins `go` and `go-vendored` live in
+  `taskfile/sources.go::builtinSourcePresets`. Users can override or extend
+  them via a top-level `sources:` map (`Config.Sources`); user entries win
+  on a name collision. Presets compose recursively (`go-vendored`
+  references `go`); cycles and unknown preset-shaped names are caught in
+  `expandSources`. Anything containing a glob metacharacter or path
+  separator is treated as a literal pattern, so `go.mod` / `*.go` work as
+  before.
+- **`flatten:`** (top-level or per-include) lists YAML files whose tasks
+  merge into the *parent's* namespace without a prefix — the agentic-platform
+  pattern for splitting one big task file across many. Tasks land at the
+  ancestor's namespace (root, or the include dir), `task.Dir` is resolved
+  against the ancestor (not the flatten file's dir), and "first defined
+  wins" so a parent file can override a flattened task by re-declaring it.
+  See `loadFlatten` and `TestFlattenedTaskRunsFromRootDir`.
+- **Foreign fallback** (`fallback.go`) — when no `gogo.yaml` is found, gogo
+  walks up looking for a `Taskfile.yml`, `mise.toml`, or `Makefile` whose
+  runner is on `PATH`, and shells out. Order is fixed by `foreignRunners`
+  and the `make` arm intentionally drops `default` and skips the `--`
+  separator (since `make` doesn't understand it). Tests stub the package-
+  level `fallbackLookPath` / `fallbackRun` hooks rather than the real exec.
+- **Internal tasks** — names whose local segment starts with `_`
+  (e.g. `_helper`, `cli:_fmt`) are excluded from `--list` and `--complete`
+  but still callable explicitly. Use `taskfile.IsInternalTask` for the
+  visibility check; `visibleTaskNames` in `main.go` is the only consumer.
 
 ## Common development patterns
 
 - **Adding a new top-level CLI flag**: add a tagged field to `args` in
   `main.go`, handle it in `App.Run` before `runner.Run` is reached, and
-  add a test in `app_test.go` using `newTestApp`.
+  add a test in `app_test.go` using `newTestApp`. The current flags are
+  `--list`, `--watch`, `--force`, `--dry`, `--completion`, and the hidden
+  `--complete` (used by the shell-completion scripts embedded in
+  `main.go`).
+- **Silencing a task's per-cmd log**: set `silent: true` on the task. It
+  suppresses the `[task] cmd` log line for *that task's own* cmds only —
+  sub-tasks invoked via `cmds: - task: X` continue to log unless they
+  also opt in (see `TestSilentDoesNotPropagateToCalledTasks`). The shell
+  command itself still runs and its stdout/stderr are unaffected.
 - **Adding a new task field**: add it to `Task` in `taskfile/types.go`,
   decide whether `UnmarshalYAML` needs string-shorthand support, thread
   it through `Runner.run` in the right phase (deps → vars → requires →
@@ -134,7 +177,10 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   resolve lazily through a recursive lookup in `resolveAllVars` (see
   `taskfile/vars.go`); they may reference each other and the built-in
   `GIT_*` family transitively, declaration order is irrelevant, and
-  cycles short-circuit to the empty string. **Vars are namespace-scoped**:
+  cycles short-circuit to the empty string. The built-in `TASK_FILE_DIR`
+  template var is seeded into every task's resolved-vars map and points
+  at the task's effective working directory (after `Runner.taskDir`).
+  **Vars are namespace-scoped**:
   a var declared in an included `gogo.yaml` lives in
   `Config.NamespaceVars[namespace]` (with its own working dir in
   `Config.NamespaceDirs[namespace]` for `sh:` resolution) and is visible
@@ -151,8 +197,9 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   rewritten to `${2}` (see `TestShVarPreservesAwkPositional`). Watch mode
   must call `ResetRan` between iterations — it also clears the gitVars
   cache so `{{.GIT_DIRTY}}` re-evaluates after each edit.
-- **Touching include logic**: cycles must be detected by absolute dir
-  (`includeStack`), nested namespaces are colon-joined
+- **Touching include logic**: cycles must be detected by absolute file
+  path (`loadStack`, which tracks both `gogo.yaml` files and `flatten:`
+  YAML files), nested namespaces are colon-joined
   (`parent:child:grandchild`), and dotenv files dedupe globally via
   `seenDotenv`. `Namespaces` map keys are absolute dirs and are used by
   namespace-aware task name resolution.
