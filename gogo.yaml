@@ -1,8 +1,5 @@
 version: "1"
 
-# Named source presets, referenced from each task's `sources:` field by name.
-# `go` is also a built-in preset (**/*.go + go.mod + go.sum); the entry below
-# extends it with the lint config so a .golangci.yml change re-runs `lint`.
 sources:
   lint: [go, .golangci.yml]
 
