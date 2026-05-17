@@ -1,8 +1,5 @@
 version: "1"
 
-sources:
-  lint: [go, .golangci.yml]
-
 default: dev
 
 tasks:
@@ -16,24 +13,20 @@ tasks:
     cmd: go build -trimpath -ldflags "-s -w" -o bin/gogo .
     sources: go
 
-  # Remove build artifacts
-  clean:
-    cmd: rm -rf bin
+  # Run tests
+  test:
+    cmd: go test -race -count=1 ./...
+    sources: go
 
   # Run linters
   lint:
     cmd: golangci-lint run
-    sources: lint
-
-  # Run tests
-  test:
-    cmd: go test ./...
-    sources: go
+    sources: [go, .golangci.yml]
 
   # Format Go source files
   format:
     cmd: goimports -w .
-    sources: "**/*.go"
+    sources: [go, .golangci.yml]
 
   # Cross-compile for all platforms
   build-cross:
@@ -46,3 +39,7 @@ tasks:
   # Install gogo on the path
   install:
     cmd: go install
+
+  # Remove build artifacts
+  clean:
+    cmd: rm -rf bin
