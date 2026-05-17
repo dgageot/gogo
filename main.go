@@ -34,16 +34,13 @@ func (args) Description() string {
 }
 
 // App is the gogo command-line application. External dependencies (args, I/O,
-// working-directory lookup, and the fallback exec hooks) are injected so Run
-// can be driven from tests without touching os.Args, process stdio, or the
-// real cwd / PATH.
+// and working-directory lookup) are injected so Run can be driven from tests
+// without touching os.Args, process stdio, or the real cwd.
 type App struct {
-	Args       []string               // command-line args, without program name
-	Stdout     io.Writer              // user-visible output (help, --list, completion scripts)
-	Stderr     io.Writer              // error messages
-	Getwd      func() (string, error) // working directory lookup
-	LookPath   func(string) (string, error)
-	RunCommand func(ctx context.Context, name string, args []string, dir string, stdout, stderr io.Writer) error
+	Args   []string               // command-line args, without program name
+	Stdout io.Writer              // user-visible output (help, --list, completion scripts)
+	Stderr io.Writer              // error messages
+	Getwd  func() (string, error) // working directory lookup
 }
 
 func main() {
@@ -84,11 +81,8 @@ func (a *App) Run(ctx context.Context) error {
 
 	dir, tf, err := a.loadConfig()
 	if err != nil {
-		if isNoTaskFile(err) {
-			handled, fbErr := a.tryFallback(ctx, parsed)
-			if handled {
-				return fbErr
-			}
+		if handled, fbErr := a.tryForeignFallback(ctx, parsed); handled {
+			return fbErr
 		}
 		return err
 	}

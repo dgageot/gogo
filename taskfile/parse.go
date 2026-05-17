@@ -12,11 +12,6 @@ import (
 
 const fileName = "gogo.yaml"
 
-// ErrNoTaskFile is returned by FindRootDir when no gogo.yaml is found while
-// walking up from the starting directory. Callers (notably the CLI) match it
-// with errors.Is to fall back to other task runners (`task`, `mise`, ...).
-var ErrNoTaskFile = errors.New("no gogo.yaml found")
-
 // validateTaskName rejects task names containing characters that could escape
 // the on-disk checksum directory or otherwise misbehave when joined into a
 // filesystem path. Namespace separators (':') and ordinary identifier
@@ -105,5 +100,5 @@ func FindRootDir(dir string) (string, error) {
 		dir = parent
 	}
 
-	return "", ErrNoTaskFile
+	return "", errors.New("no gogo.yaml found")
 }

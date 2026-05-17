@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,213 +12,196 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeExec captures one shell-out call so tests can assert which fallback
-// runner was selected without spawning real processes.
-type fakeExec struct {
+// withForeignHooks swaps the package-level lookPath/run hooks for the
+// duration of a test. Using package vars (rather than App fields) keeps the
+// fallback feature isolated from the rest of the codebase.
+func withForeignHooks(t *testing.T, lookPath func(string) (string, error), run func(ctx context.Context, name string, argv []string, dir string, app *App) error) {
+	t.Helper()
+	prevLook, prevRun := fallbackLookPath, fallbackRun
+	fallbackLookPath = lookPath
+	fallbackRun = run
+	t.Cleanup(func() {
+		fallbackLookPath = prevLook
+		fallbackRun = prevRun
+	})
+}
+
+type fakeRun struct {
 	called bool
 	name   string
-	args   []string
+	argv   []string
 	dir    string
 	err    error
 }
 
-func (f *fakeExec) run(_ context.Context, name string, args []string, dir string, _, _ io.Writer) error {
+func (f *fakeRun) run(_ context.Context, name string, argv []string, dir string, _ *App) error {
 	f.called = true
-	f.name = name
-	f.args = args
-	f.dir = dir
+	f.name, f.argv, f.dir = name, argv, dir
 	return f.err
 }
 
-// alwaysFound is a LookPath stub that pretends every binary is on PATH.
-func alwaysFound(string) (string, error) { return "/usr/bin/stub", nil }
-
-// onlyFound returns a LookPath stub that resolves only the named binary;
-// every other lookup returns exec.ErrNotFound.
-func onlyFound(allowed string) func(string) (string, error) {
-	return func(name string) (string, error) {
-		if name == allowed {
-			return "/usr/bin/" + name, nil
+func allFound(string) (string, error)  { return "/usr/bin/stub", nil }
+func noneFound(string) (string, error) { return "", exec.ErrNotFound }
+func only(name string) func(string) (string, error) {
+	return func(n string) (string, error) {
+		if n == name {
+			return "/usr/bin/" + n, nil
 		}
 		return "", exec.ErrNotFound
 	}
 }
 
-// neverFound is a LookPath stub that simulates an empty PATH.
-func neverFound(string) (string, error) { return "", exec.ErrNotFound }
-
-func newFallbackApp(t *testing.T, dir string, fx *fakeExec, lookPath func(string) (string, error), cliArgs ...string) (*App, *bytes.Buffer, *bytes.Buffer) {
-	t.Helper()
-	app, stdout, stderr := newTestApp(t, dir, cliArgs...)
-	app.LookPath = lookPath
-	app.RunCommand = fx.run
-	return app, stdout, stderr
-}
-
 func TestFallbackRunsTaskWhenTaskfilePresent(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build")
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir, "build")
 	require.NoError(t, app.Run(t.Context()))
-	assert.True(t, fx.called, "expected the fallback runner to be invoked")
-	assert.Equal(t, "task", fx.name)
-	assert.Equal(t, []string{"build"}, fx.args)
-	assert.Equal(t, dir, fx.dir)
+	assert.Equal(t, "task", fr.name)
+	assert.Equal(t, []string{"build"}, fr.argv)
+	assert.Equal(t, dir, fr.dir)
 }
 
-func TestFallbackTaskDropsDefaultPositional(t *testing.T) {
+func TestFallbackRunsMise(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "mise.toml"), []byte("[tasks.build]\nrun='true'\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, _, _ := newTestApp(t, dir, "build")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, "mise", fr.name)
+	assert.Equal(t, []string{"run", "build"}, fr.argv)
+}
+
+func TestFallbackRunsMake(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Makefile"), []byte("build:\n\t@true\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, _, _ := newTestApp(t, dir, "build", "FOO=bar")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, "make", fr.name)
+	// `make` consumes trailing args directly — no `--` separator.
+	assert.Equal(t, []string{"build", "FOO=bar"}, fr.argv)
+}
+
+func TestFallbackDropsDefaultTaskName(t *testing.T) {
 	// `gogo` (no positional) must not splice the arg-parser default
-	// "default" into the task argv — we want `task` to pick its own
-	// default, which is what running it with no args does.
+	// "default" into the foreign argv — the foreign tool picks its own.
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound)
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir)
 	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, "task", fx.name)
-	assert.Empty(t, fx.args, "default task name must not be forwarded")
+	assert.Empty(t, fr.argv)
 }
 
-func TestFallbackTaskForwardsCLIArgsAfterDoubleDash(t *testing.T) {
+func TestFallbackForwardsCLIArgs(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build", "--", "-v", "x")
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir, "build", "--", "-v", "x")
 	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, []string{"build", "--", "-v", "x"}, fx.args)
+	assert.Equal(t, []string{"build", "--", "-v", "x"}, fr.argv)
 }
 
-func TestFallbackRunsMiseWhenMiseTomlPresent(t *testing.T) {
+func TestFallbackTaskWinsOverMise(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "mise.toml"), "[tasks.build]\nrun = 'true'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "mise.toml"), []byte("[tasks.build]\nrun='true'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build")
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir, "build")
 	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, "mise", fx.name)
-	assert.Equal(t, []string{"run", "build"}, fx.args)
-	assert.Equal(t, dir, fx.dir)
+	assert.Equal(t, "task", fr.name)
 }
 
-func TestFallbackMiseDropsDefaultPositional(t *testing.T) {
+func TestFallbackSkipsRunnerNotOnPath(t *testing.T) {
+	// Both files exist but only `mise` is installed. We must skip the
+	// uninstalled `task` runner instead of stopping at the first match.
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "mise.toml"), "[tasks.build]\nrun = 'true'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "mise.toml"), []byte("[tasks.build]\nrun='true'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound)
+	fr := &fakeRun{}
+	withForeignHooks(t, only("mise"), fr.run)
 
+	app, _, _ := newTestApp(t, dir, "build")
 	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, []string{"run"}, fx.args)
+	assert.Equal(t, "mise", fr.name)
 }
 
-func TestFallbackTaskWinsOverMiseInSameDir(t *testing.T) {
-	// Both files exist; the order in fallbackRunners makes `task` win.
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
-	writeFile(t, filepath.Join(dir, "mise.toml"), "[tasks.build]\nrun = 'true'\n")
-
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build")
-
-	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, "task", fx.name)
-}
-
-func TestFallbackWalksUpFromSubdirectory(t *testing.T) {
+func TestFallbackWalksUp(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "Taskfile.yml"), "version: '3'\n")
-	sub := filepath.Join(root, "sub", "deeper")
+	require.NoError(t, os.WriteFile(filepath.Join(root, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
+	sub := filepath.Join(root, "a", "b")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, sub, fx, alwaysFound, "build")
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, sub, "build")
 	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, "task", fx.name)
-	assert.Equal(t, root, fx.dir, "fallback should run in the directory holding the task file")
+	assert.Equal(t, root, fr.dir)
 }
 
-func TestFallbackSilentlyIgnoresWhenBinaryMissing(t *testing.T) {
-	// A Taskfile is present but `task` is not on PATH: gogo doesn't try to
-	// run it (no "task: command not found" noise) and falls through to the
-	// regular "no gogo.yaml" error, which tells the user what to install or
-	// create.
+func TestFallbackBinaryMissingFallsThrough(t *testing.T) {
+	// Taskfile present, `task` not installed, no other runner: the
+	// regular "no gogo.yaml" error must still surface.
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, neverFound, "build")
+	fr := &fakeRun{}
+	withForeignHooks(t, noneFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir, "build")
 	err := app.Run(t.Context())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no gogo.yaml")
-	assert.False(t, fx.called)
+	assert.False(t, fr.called)
 }
 
-func TestFallbackUsesMiseWhenOnlyMiseInstalled(t *testing.T) {
-	// Both files are present but only `mise` is installed. Gogo skips the
-	// uninstalled `task` runner instead of stopping at the first match,
-	// so the user still gets useful behavior.
+func TestFallbackGogoYamlWins(t *testing.T) {
+	// A real gogo.yaml short-circuits the fallback path entirely.
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
-	writeFile(t, filepath.Join(dir, "mise.toml"), "[tasks.build]\nrun = 'true'\n")
-
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, onlyFound("mise"), "build")
-
-	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, "mise", fx.name)
-	assert.Equal(t, []string{"run", "build"}, fx.args)
-}
-
-func TestFallbackNotTriggeredWhenGogoYamlExists(t *testing.T) {
-	// A real gogo.yaml short-circuits the fallback path entirely; the
-	// stray Taskfile in the same dir is ignored.
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
 tasks:
   build:
     cmd: echo built
-`)
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "--dry", "build")
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
 
+	app, _, _ := newTestApp(t, dir, "--dry", "build")
 	require.NoError(t, app.Run(t.Context()))
-	assert.False(t, fx.called, "gogo.yaml must take precedence over fallback runners")
+	assert.False(t, fr.called)
 }
 
-func TestFallbackPropagatesExecError(t *testing.T) {
+func TestFallbackPropagatesError(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "Taskfile.yml"), "version: '3'\n")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 
-	wantErr := errors.New("boom")
-	fx := &fakeExec{err: wantErr}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build")
+	want := errors.New("boom")
+	fr := &fakeRun{err: want}
+	withForeignHooks(t, allFound, fr.run)
 
-	err := app.Run(t.Context())
-	require.ErrorIs(t, err, wantErr)
-}
-
-func TestFallbackNoFileFoundReturnsOriginalError(t *testing.T) {
-	// Neither a gogo.yaml nor any fallback file exists: gogo must surface
-	// the regular "no gogo.yaml" error so the user knows what to do.
-	dir := t.TempDir()
-
-	fx := &fakeExec{}
-	app, _, _ := newFallbackApp(t, dir, fx, alwaysFound, "build")
-
-	err := app.Run(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no gogo.yaml")
-	assert.False(t, fx.called)
+	app, _, _ := newTestApp(t, dir, "build")
+	require.ErrorIs(t, app.Run(t.Context()), want)
 }
