@@ -87,39 +87,30 @@ func (r *Runner) suggestTasks(name string) []string {
 
 // levenshtein returns the edit distance between a and b — the minimum number
 // of single-character insertions, deletions, or substitutions needed to turn
-// one into the other. The implementation uses two rolling rows so memory
-// stays O(min(len(a), len(b))) even for long task names.
+// one into the other. A single rolling row plus one scalar holding the
+// previous diagonal keeps memory at O(min(len(a), len(b))).
 func levenshtein(a, b string) int {
-	ra := []rune(a)
-	rb := []rune(b)
+	ra, rb := []rune(a), []rune(b)
 	if len(ra) < len(rb) {
 		ra, rb = rb, ra
 	}
-	if len(rb) == 0 {
-		return len(ra)
-	}
 
-	prev := make([]int, len(rb)+1)
-	curr := make([]int, len(rb)+1)
-	for j := range prev {
-		prev[j] = j
+	row := make([]int, len(rb)+1)
+	for j := range row {
+		row[j] = j
 	}
 
 	for i := 1; i <= len(ra); i++ {
-		curr[0] = i
+		diag := row[0] // dp[i-1][0] before we overwrite it
+		row[0] = i
 		for j := 1; j <= len(rb); j++ {
 			cost := 1
 			if ra[i-1] == rb[j-1] {
 				cost = 0
 			}
-			curr[j] = min(
-				prev[j]+1,      // deletion
-				curr[j-1]+1,    // insertion
-				prev[j-1]+cost, // substitution
-			)
+			diag, row[j] = row[j], min(row[j]+1, row[j-1]+1, diag+cost)
 		}
-		prev, curr = curr, prev
 	}
 
-	return prev[len(rb)]
+	return row[len(rb)]
 }
