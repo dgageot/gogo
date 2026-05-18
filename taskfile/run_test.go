@@ -1161,6 +1161,36 @@ func TestSourcesChecksumRerunsOnChange(t *testing.T) {
 	assert.Len(t, *execs, 2)
 }
 
+func TestSourcesChecksumWarnsWhenPersistFails(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
+
+	// Block writeChecksum: place a regular file where the .gogo dir would
+	// be created so os.MkdirAll fails. The task itself still runs and
+	// succeeds — we only care that the failure surfaces as a warning
+	// instead of being silently swallowed.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gogo"), nil, 0o644))
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: StringList{"*.go"},
+				Cmds:    []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	assert.Contains(t, stderr.String(), "failed to persist checksum")
+}
+
 func TestForceIgnoresSources(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})

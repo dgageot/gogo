@@ -172,7 +172,12 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 	}
 
 	if checksum != "" {
-		_ = writeChecksum(r.tf.Dir, resolved, checksum) // best-effort
+		if err := writeChecksum(r.tf.Dir, resolved, checksum); err != nil {
+			// Best-effort: a failed write means we'll re-run next time, but
+			// silently swallowing it left users wondering why a clean build
+			// kept rebuilding. Surface it as a warning instead.
+			r.logTask(colorYellow, resolved, fmt.Sprintf("warning: failed to persist checksum: %v", err))
+		}
 	}
 	return nil
 }
