@@ -79,7 +79,7 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 		cwd:         cwd,
 		BaseEnv:     baseEnvWithDotenv(tf.DotenvVars),
 		aliases:     aliases,
-		ShellRunner: defaultShellRunner{},
+		ShellRunner: newDefaultShellRunner(),
 		IO:          defaultRunnerIO(),
 	}
 	return r, nil

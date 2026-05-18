@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 // ShellCommandKind identifies why a shell command is being run.
@@ -36,10 +37,25 @@ type ShellRunner interface {
 	Output(req ShellCommand) ([]byte, error)
 }
 
-type defaultShellRunner struct{}
+type defaultShellRunner struct {
+	// opPath memoizes the result of looking up the 1Password CLI on PATH.
+	// A naive `exec.LookPath("op")` per shell invocation walks every PATH
+	// entry doing os.Stat, and a task with N cmds + op:// secrets repeated
+	// that lookup N times — plus surfaced the same multi-line install hint
+	// once per cmd on failure. Caching it once per Runner cuts both.
+	opPath func() (string, error)
+}
 
-func (defaultShellRunner) Run(req ShellCommand) error {
-	cmd, err := shellExecCommand(req)
+func newDefaultShellRunner() *defaultShellRunner {
+	return &defaultShellRunner{
+		opPath: sync.OnceValues(func() (string, error) {
+			return exec.LookPath("op")
+		}),
+	}
+}
+
+func (s *defaultShellRunner) Run(req ShellCommand) error {
+	cmd, err := s.shellExecCommand(req)
 	if err != nil {
 		return err
 	}
@@ -49,8 +65,8 @@ func (defaultShellRunner) Run(req ShellCommand) error {
 	return cmd.Run()
 }
 
-func (defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
-	cmd, err := shellExecCommand(req)
+func (s *defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
+	cmd, err := s.shellExecCommand(req)
 	if err != nil {
 		return nil, err
 	}
@@ -79,9 +95,9 @@ func withStderr(err error) error {
 	return fmt.Errorf("%w: %s", err, stderr)
 }
 
-func shellExecCommand(req ShellCommand) (*exec.Cmd, error) {
+func (s *defaultShellRunner) shellExecCommand(req ShellCommand) (*exec.Cmd, error) {
 	if req.UseOpRun {
-		if _, err := exec.LookPath("op"); err != nil {
+		if _, err := s.opPath(); err != nil {
 			return nil, fmt.Errorf("uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", err)
 		}
 		return configuredShellCommand(exec.Command("op", "run", "--", "/bin/sh", "-c", req.Command), req), nil
