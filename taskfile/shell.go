@@ -1,9 +1,11 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 )
 
 // ShellCommandKind identifies why a shell command is being run.
@@ -52,7 +54,29 @@ func (defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cmd.Output()
+	out, err := cmd.Output()
+	if err != nil {
+		return out, withStderr(err)
+	}
+	return out, nil
+}
+
+// withStderr enriches a command failure with the captured stderr. cmd.Output
+// populates *exec.ExitError.Stderr automatically when cmd.Stderr is nil, but
+// fmt.Errorf("%w", err) only renders ExitError.Error() ("exit status 1")
+// which strips that context. Re-wrapping puts stderr back into the message
+// so users debugging a broken `sh:` lookup or a missing git repo see what
+// the underlying tool actually said.
+func withStderr(err error) error {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		return err
+	}
+	stderr := strings.TrimSpace(string(ee.Stderr))
+	if stderr == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, stderr)
 }
 
 func shellExecCommand(req ShellCommand) (*exec.Cmd, error) {
