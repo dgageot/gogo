@@ -33,7 +33,11 @@ func sourcesChecksum(dir string, patterns []string) (string, error) {
 
 	h := sha256.New()
 	for _, f := range files {
-		d, err := fileDigest(f)
+		// Mix in the file's path *relative to dir*, with forward slashes,
+		// so identical trees produce identical checksums regardless of the
+		// absolute location on disk (developer laptop vs. CI workspace).
+		identity := relIdentity(dir, f)
+		d, err := fileDigest(f, identity)
 		if err != nil {
 			return "", err
 		}
@@ -110,6 +114,18 @@ func walkRecursive(dir, pattern string) []string {
 		return nil
 	})
 	return files
+}
+
+// relIdentity returns the path of f relative to dir, normalised to forward
+// slashes. If a relative path can't be computed (e.g. f is on a different
+// volume on Windows) the absolute path is returned as a safe fallback —
+// the checksum stays consistent on the same machine, just not portable.
+func relIdentity(dir, f string) string {
+	rel, err := filepath.Rel(dir, f)
+	if err != nil {
+		return filepath.ToSlash(f)
+	}
+	return filepath.ToSlash(rel)
 }
 
 // checksumPath returns the file path for a task's stored checksum.

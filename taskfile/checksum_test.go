@@ -11,6 +11,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSourcesChecksumPortableAcrossDirs(t *testing.T) {
+	// Identical trees in different absolute locations must produce the same
+	// checksum so .gogo/checksum/ can be cached/restored across machines.
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	assert.NotEqual(t, dirA, dirB)
+
+	content := map[string]string{
+		"main.go":    "package main",
+		"sub/lib.go": "package lib",
+		"go.mod":     "module test",
+	}
+	writeFiles(t, dirA, content)
+	writeFiles(t, dirB, content)
+
+	sumA, err := sourcesChecksum(dirA, []string{"**/*.go", "go.mod"})
+	require.NoError(t, err)
+	sumB, err := sourcesChecksum(dirB, []string{"**/*.go", "go.mod"})
+	require.NoError(t, err)
+
+	assert.Equal(t, sumA, sumB, "identical trees in different dirs must hash the same")
+}
+
 func TestSourcesChecksum(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
