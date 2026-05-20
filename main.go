@@ -51,7 +51,9 @@ func main() {
 		Getwd:  os.Getwd,
 	}
 	if err := app.Run(context.Background()); err != nil {
-		fmt.Fprintln(app.Stderr, err)
+		if !errors.Is(err, errSilent) {
+			fmt.Fprintln(app.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
@@ -112,11 +114,29 @@ func (a *App) Run(ctx context.Context) error {
 		if err != nil && sigCtx.Err() != nil {
 			return nil // graceful shutdown
 		}
-		return err
+		return a.handleRunError(tf, err)
 	}
 
-	return runner.Run(taskName, cliArgs)
+	return a.handleRunError(tf, runner.Run(taskName, cliArgs))
 }
+
+// handleRunError augments a TaskNotFoundError with the human-friendly task
+// listing so a typo prints — in one shot — both what the user *could* have
+// run and the closest match we know about. Other errors pass through
+// untouched so the existing error surface is unchanged.
+func (a *App) handleRunError(tf *taskfile.Config, err error) error {
+	var nfe *taskfile.TaskNotFoundError
+	if !errors.As(err, &nfe) {
+		return err
+	}
+	writeTaskListings(a.Stderr, gatherTaskListings(tf))
+	fmt.Fprintf(a.Stderr, "%stask: %s%s\n", ansiRed, nfe.Error(), ansiReset)
+	return errSilent
+}
+
+// errSilent signals that the app already printed the user-facing error
+// itself and main shouldn't print it again. The exit code stays non-zero.
+var errSilent = errors.New("")
 
 // defaultTaskName picks the task to run when the CLI position arg is the
 // arg-parser default ("default"). A top-level `default:` field in the task
@@ -240,6 +260,16 @@ func (a *App) printTaskNames() {
 	}
 }
 
+// listTasks renders the colorized, column-aligned task index for `--list`.
+func (a *App) listTasks() error {
+	_, tf, err := a.loadConfig()
+	if err != nil {
+		return err
+	}
+	writeTaskListings(a.Stdout, gatherTaskListings(tf))
+	return nil
+}
+
 const bashCompletion = `_gogo_completions() {
 	# Reconstruct the current word treating ':' as part of it.
 	# Bash includes ':' in COMP_WORDBREAKS, which would otherwise break
@@ -279,35 +309,68 @@ compdef _gogo gogo
 const fishCompletion = `complete -c gogo -f -a '(gogo --complete 2>/dev/null)'
 `
 
-func (a *App) listTasks() error {
-	_, tf, err := a.loadConfig()
-	if err != nil {
-		return err
-	}
+// ANSI escape codes used to colorize CLI output.
+const (
+	ansiReset = "\x1b[0m"
+	ansiGreen = "\x1b[32m"
+	ansiCyan  = "\x1b[36m"
+	ansiRed   = "\x1b[31m"
+)
 
-	type entry struct {
-		name string
-		desc string
-	}
+// taskListing is one row in the --list output, plus the metadata needed to
+// render and align it consistently with siblings.
+type taskListing struct {
+	name    string
+	desc    string
+	aliases string // pre-formatted "(aliases: a, b)" or empty
+}
 
-	var entries []entry
-	maxLen := 0
+// gatherTaskListings returns the rows that --list and the unknown-task hint
+// should print, in declaration-friendly alphabetical order. Tasks without a
+// description are intentionally omitted: we surface only what the author
+// chose to advertise.
+func gatherTaskListings(tf *taskfile.Config) []taskListing {
+	var entries []taskListing
 	for _, name := range visibleTaskNames(tf) {
 		task := tf.Tasks[name]
 		if task.Desc == "" {
 			continue
 		}
-		desc := task.Desc
+		row := taskListing{name: name, desc: task.Desc}
 		if len(task.Aliases) > 0 {
-			desc += " (aliases: " + strings.Join(task.Aliases, ", ") + ")"
+			row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
-		entries = append(entries, entry{name, desc})
-		maxLen = max(maxLen, len(name))
+		entries = append(entries, row)
+	}
+	return entries
+}
+
+// writeTaskListings prints rows in three aligned columns: a green
+// `* name:` cell, the description, and an optional cyan `(aliases: ...)`
+// cell. Widths are computed from the un-colored text so ANSI escapes don't
+// corrupt column alignment.
+func writeTaskListings(w io.Writer, entries []taskListing) {
+	if len(entries) == 0 {
+		return
+	}
+
+	nameWidth, descWidth := 0, 0
+	for _, e := range entries {
+		nameWidth = max(nameWidth, len(e.name)+1) // +1 for the trailing ':'
+		descWidth = max(descWidth, len(e.desc))
 	}
 
 	for _, e := range entries {
-		fmt.Fprintf(a.Stdout, "%-*s  %s\n", maxLen, e.name, e.desc)
+		nameCell := e.name + ":"
+		namePad := strings.Repeat(" ", nameWidth-len(nameCell))
+		if e.aliases == "" {
+			fmt.Fprintf(w, "* %s%s%s%s  %s\n", ansiGreen, nameCell, ansiReset, namePad, e.desc)
+			continue
+		}
+		descPad := strings.Repeat(" ", descWidth-len(e.desc))
+		fmt.Fprintf(w, "* %s%s%s%s  %s%s  %s%s%s\n",
+			ansiGreen, nameCell, ansiReset, namePad,
+			e.desc, descPad,
+			ansiCyan, e.aliases, ansiReset)
 	}
-
-	return nil
 }

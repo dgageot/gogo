@@ -127,6 +127,11 @@ tasks:
 	assert.Contains(t, out, "Run all the tests")
 	assert.Contains(t, out, "(aliases: t)")
 	assert.NotContains(t, out, "no_desc", "tasks without a description are omitted")
+
+	// Names render in green, aliases in cyan — the bullet plus ANSI escape
+	// is the simplest stable shape we can assert without coupling to widths.
+	assert.Contains(t, out, "* \x1b[32mbuild:\x1b[0m")
+	assert.Contains(t, out, "\x1b[36m(aliases: t)\x1b[0m")
 }
 
 func TestAppListHidesInternalTasks(t *testing.T) {
@@ -245,4 +250,54 @@ tasks:
 	err := app.Run(t.Context())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"missing"`)
+}
+
+func TestAppUnknownTaskPrintsListAndSuggestion(t *testing.T) {
+	// Mistyping a task name should give the user *both* the list of
+	// available tasks (so they can self-correct) and the closest match
+	// in red. The CLI returns a sentinel error so main doesn't print the
+	// message twice.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  # Install the binary
+  install:
+    cmd: go install
+  # Run tests
+  test:
+    cmd: go test
+`)
+
+	app, _, stderr := newTestApp(t, dir, "instll")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+
+	out := stderr.String()
+	assert.Contains(t, out, "install:", "task list should be printed")
+	assert.Contains(t, out, "Install the binary")
+	assert.Contains(t, out, "test:")
+	assert.Contains(t, out, "\x1b[31m", "suggestion line is colored red")
+	assert.Contains(t, out, `task: task "instll" not found, did you mean: install?`)
+}
+
+func TestAppUnknownTaskWithoutSuggestionStillPrintsList(t *testing.T) {
+	// Even when no near-match exists, the list of available tasks still
+	// prints so the user can pick one without re-running with --list.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  # Build it
+  build:
+    cmd: true
+`)
+
+	app, _, stderr := newTestApp(t, dir, "xyzzy")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+
+	out := stderr.String()
+	assert.Contains(t, out, "build:")
+	assert.Contains(t, out, "Build it")
+	assert.Contains(t, out, `task: task "xyzzy" not found`)
+	assert.NotContains(t, out, "did you mean")
 }

@@ -24,15 +24,31 @@ func (r *Runner) resolveTask(name string) (string, error) {
 	}
 }
 
+// TaskNotFoundError is returned when the user asks for a task name that
+// doesn't resolve. It's a typed error so callers (notably the CLI) can
+// react — for example, by printing the task list alongside the message —
+// without parsing the formatted text.
+type TaskNotFoundError struct {
+	Name        string   // the unresolved input as typed by the user
+	Suggestions []string // best-effort 'did you mean' hints (may be empty)
+}
+
+// Error renders the message historically produced by resolveTask. The exact
+// wording is part of the user-facing contract: tooling and tests grep for
+// 'not found' and 'did you mean'.
+func (e *TaskNotFoundError) Error() string {
+	if len(e.Suggestions) == 0 {
+		return fmt.Sprintf("task %q not found", e.Name)
+	}
+	return fmt.Sprintf("task %q not found, did you mean: %s?", e.Name, strings.Join(e.Suggestions, ", "))
+}
+
 // notFoundError formats the error reported when a task name can't be
 // resolved. When near-matches exist they're appended as a 'did you mean'
 // hint so a typo turns into a one-line fix instead of a hunt through
 // `gogo --list`.
 func notFoundError(name string, suggestions []string) error {
-	if len(suggestions) == 0 {
-		return fmt.Errorf("task %q not found", name)
-	}
-	return fmt.Errorf("task %q not found, did you mean: %s?", name, strings.Join(suggestions, ", "))
+	return &TaskNotFoundError{Name: name, Suggestions: suggestions}
 }
 
 // resolveTaskName returns the canonical task name for input that matches a
