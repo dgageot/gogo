@@ -759,14 +759,34 @@ flatten:
 }
 
 func TestParseRejectsUnsafeTaskNames(t *testing.T) {
-	// Names containing path separators or '..' could be used to escape the
-	// .gogo/checksum/ directory when joined with checksumPath.
+	// Task names appear in checksum file paths, log lines and shell
+	// completions. We allow only letters, digits, '-', '_' and ':'; anything
+	// else — path separators, control characters, terminal escapes, shell
+	// metacharacters — must be rejected at parse time.
 	cases := map[string]string{
-		"slash":      "foo/bar",
-		"backslash":  `foo\bar`,
-		"parent":     "..",
-		"traversal":  "../etc/passwd",
-		"dotdot-mid": "foo..bar",
+		"slash":          "foo/bar",
+		"backslash":      `foo\bar`,
+		"parent":         "..",
+		"traversal":      "../etc/passwd",
+		"dotdot-mid":     "foo..bar",
+		"space":          "foo bar",
+		"newline":        "foo\nbar",
+		"tab":            "foo\tbar",
+		"escape":         "foo\x1b[31mred",
+		"null":           "foo\x00bar",
+		"backtick":       "foo`whoami`",
+		"dollar":         "$(whoami)",
+		"semicolon":      "foo;rm",
+		"pipe":           "foo|rm",
+		"glob":           "foo*",
+		"question":       "foo?",
+		"quote":          `foo"bar`,
+		"singlequote":    "foo'bar",
+		"unicode":        "foo\u202ebar",
+		"leading-colon":  ":build",
+		"trailing-colon": "build:",
+		"double-colon":   "foo::bar",
+		"dot":            "foo.bar",
 	}
 	for label, name := range cases {
 		t.Run(label, func(t *testing.T) {
@@ -778,6 +798,31 @@ func TestParseRejectsUnsafeTaskNames(t *testing.T) {
 			_, err := Parse(dir)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "task name")
+		})
+	}
+}
+
+func TestParseAcceptsValidTaskNames(t *testing.T) {
+	names := []string{
+		"build",
+		"build-all",
+		"build_all",
+		"_internal",
+		"cli:build",
+		"cli:utils:fmt",
+		"go121",
+		"BuildIt",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{
+				"gogo.yaml": fmt.Sprintf("version: \"1\"\ntasks:\n  %q:\n    cmd: echo hi\n", name),
+			})
+
+			tf, err := Parse(dir)
+			require.NoError(t, err)
+			assert.Contains(t, tf.Tasks, name)
 		})
 	}
 }
