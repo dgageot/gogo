@@ -7,8 +7,13 @@ title: CLI Reference
 ## Usage
 
 ```
-gogo [options] [task] [-- args...]
+gogo [options] [task...] [-- args...]
 ```
+
+Multiple task names run in sequence. Each task is executed as if it were
+a separate `gogo` invocation — dependencies are *not* deduplicated across
+tasks, so `gogo clean install` runs `clean`, then `install` (including
+`install`'s own `clean` dep, if any).
 
 ## Options
 
@@ -25,8 +30,8 @@ gogo [options] [task] [-- args...]
 
 | Argument | Description |
 |----------|-------------|
-| `task` | Task to run (default: `default`) |
-| `args...` | Extra arguments passed as `{{ "{{" }}.CLI_ARGS}}` (after `--`) |
+| `task...` | One or more tasks to run in sequence (default: `default`) |
+| `args...` | Extra arguments passed as `{{ "{{" }}.CLI_ARGS}}` to every task (after `--`) |
 
 ## Examples
 
@@ -36,6 +41,9 @@ gogo
 
 # Run a specific task
 gogo build
+
+# Run several tasks in sequence
+gogo clean install
 
 # Run a namespaced task
 gogo backend:test

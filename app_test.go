@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -202,20 +203,21 @@ func TestAppPropagatesGetwdError(t *testing.T) {
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
-func TestDefaultTaskNameUsesTopLevelDefault(t *testing.T) {
+func TestDefaultTaskNamesUsesTopLevelDefault(t *testing.T) {
 	tf := &taskfile.Config{Default: "build"}
-	assert.Equal(t, "build", defaultTaskName("default", tf))
+	assert.Equal(t, []string{"build"}, defaultTaskNames(nil, tf))
 
-	// An explicit positional arg always wins over the top-level field, so
+	// Explicit positional args always win over the top-level field, so
 	// `gogo test` still runs `test` even when default: build is declared.
-	assert.Equal(t, "test", defaultTaskName("test", tf))
+	assert.Equal(t, []string{"test"}, defaultTaskNames([]string{"test"}, tf))
+	assert.Equal(t, []string{"clean", "install"}, defaultTaskNames([]string{"clean", "install"}, tf))
 }
 
-func TestDefaultTaskNameFallbackWhenUnset(t *testing.T) {
+func TestDefaultTaskNamesFallbackWhenUnset(t *testing.T) {
 	// Backward compatibility: with no top-level default the implicit
 	// "task literally named default" convention still works.
 	tf := &taskfile.Config{}
-	assert.Equal(t, "default", defaultTaskName("default", tf))
+	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf))
 }
 
 func TestAppRunsTopLevelDefaultTask(t *testing.T) {
@@ -233,6 +235,79 @@ tasks:
 	app, _, stderr := newTestApp(t, dir, "--dry")
 	require.NoError(t, app.Run(t.Context()))
 	assert.Contains(t, stderr.String(), "echo running-dev")
+}
+
+func TestAppRunsMultipleTasksInSequence(t *testing.T) {
+	// `gogo clean install` must run both, in order, even when one is a
+	// dep of the other — the user explicitly asked for `clean` to run
+	// before `install`'s own `clean` dep, so we don't dedupe across tasks.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  clean:
+    cmd: echo cleaning
+  install:
+    deps: [clean]
+    cmd: echo installing
+`)
+
+	app, _, stderr := newTestApp(t, dir, "--dry", "clean", "install")
+	require.NoError(t, app.Run(t.Context()))
+
+	log := stderr.String()
+	// Two `[clean] echo cleaning` lines: the explicit first task and the
+	// dep of `install`. `ResetRan` between iterations is what allows the
+	// second one to actually fire instead of being short-circuited.
+	assert.Equal(t, 2, strings.Count(log, "echo cleaning"), log)
+	assert.Equal(t, 1, strings.Count(log, "echo installing"), log)
+	assert.Less(t, strings.Index(log, "echo cleaning"), strings.Index(log, "echo installing"))
+}
+
+func TestAppMultipleTasksStopOnFirstError(t *testing.T) {
+	// If the first task fails, the second one must not run.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  fail:
+    cmd: false
+  ok:
+    cmd: echo should-not-run
+`)
+
+	app, _, stderr := newTestApp(t, dir, "fail", "ok")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.NotContains(t, stderr.String(), "should-not-run")
+}
+
+func TestAppForwardsCLIArgsAfterDoubleDash(t *testing.T) {
+	// Args after `--` go to every task in the sequence as `{{.CLI_ARGS}}`.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  test:
+    cmd: go test {{.CLI_ARGS}}
+`)
+
+	app, _, stderr := newTestApp(t, dir, "--dry", "test", "--", "-v", "-run", "TestX")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "go test '-v' '-run' 'TestX'")
+}
+
+func TestAppWatchRejectsMultipleTasks(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  a:
+    cmd: true
+  b:
+    cmd: true
+`)
+
+	app, _, _ := newTestApp(t, dir, "--watch", "a", "b")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--watch")
 }
 
 func TestAppRejectsUnknownDefault(t *testing.T) {

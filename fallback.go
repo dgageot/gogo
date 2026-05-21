@@ -36,20 +36,20 @@ var (
 var foreignRunners = []struct {
 	bin   string
 	files []string
-	build func(task string, cliArgs []string) []string
+	build func(tasks, cliArgs []string) []string
 }{
 	{
 		bin:   "task",
 		files: []string{"Taskfile.yml", "taskfile.yml", "Taskfile.yaml", "taskfile.yaml"},
-		build: func(task string, cliArgs []string) []string {
-			return foreignArgs(nil, task, cliArgs)
+		build: func(tasks, cliArgs []string) []string {
+			return foreignArgs(nil, tasks, cliArgs)
 		},
 	},
 	{
 		bin:   "mise",
 		files: []string{"mise.toml"},
-		build: func(task string, cliArgs []string) []string {
-			return foreignArgs([]string{"run"}, task, cliArgs)
+		build: func(tasks, cliArgs []string) []string {
+			return foreignArgs([]string{"run"}, tasks, cliArgs)
 		},
 	},
 	{
@@ -58,24 +58,18 @@ var foreignRunners = []struct {
 		// or `VAR=value` overrides, which is the conventional invocation.
 		bin:   "make",
 		files: []string{"Makefile", "makefile", "GNUmakefile"},
-		build: func(task string, cliArgs []string) []string {
-			var argv []string
-			if task != "" && task != "default" {
-				argv = append(argv, task)
-			}
-			return append(argv, cliArgs...)
+		build: func(tasks, cliArgs []string) []string {
+			return append(append([]string{}, tasks...), cliArgs...)
 		},
 	},
 }
 
-// foreignArgs assembles the argv passed to the foreign tool. The arg-parser
-// default of "default" is dropped so `gogo` (no positional) maps to a
-// no-positional invocation, letting the underlying tool pick its own default.
-func foreignArgs(prefix []string, task string, cliArgs []string) []string {
+// foreignArgs assembles the argv passed to the foreign tool. Multiple task
+// names are forwarded as-is; the foreign runner's own multi-task semantics
+// take over from there.
+func foreignArgs(prefix, tasks, cliArgs []string) []string {
 	argv := append([]string{}, prefix...)
-	if task != "" && task != "default" {
-		argv = append(argv, task)
-	}
+	argv = append(argv, tasks...)
 	if len(cliArgs) > 0 {
 		argv = append(argv, "--")
 		argv = append(argv, cliArgs...)
@@ -106,7 +100,7 @@ func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error
 			}
 			for _, name := range r.files {
 				if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-					argv := r.build(parsed.Task, parsed.CLIArgs)
+					argv := r.build(parsed.Tasks, parsed.CLIArgs)
 					return true, fallbackRun(ctx, r.bin, argv, dir, a)
 				}
 			}

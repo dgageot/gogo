@@ -25,8 +25,8 @@ type args struct {
 	DryRun     bool     `arg:"-n,--dry" help:"print commands without executing them"`
 	Completion string   `arg:"--completion" help:"print shell completion script (bash|zsh|fish)"`
 	Complete   bool     `arg:"--complete,hidden"`
-	Task       string   `arg:"positional" default:"default" help:"task to run"`
-	CLIArgs    []string `arg:"positional" help:"arguments passed to the task (after --)"`
+	Tasks      []string `arg:"positional" help:"tasks to run in sequence"`
+	CLIArgs    []string `help:"arguments passed to the task(s) (after --)"`
 }
 
 func (args) Description() string {
@@ -99,9 +99,12 @@ func (a *App) Run(ctx context.Context) error {
 	runner.DryRun = parsed.DryRun
 	runner.Force = parsed.Force
 
-	taskName := defaultTaskName(parsed.Task, tf)
+	taskNames := defaultTaskNames(parsed.Tasks, tf)
 
 	if parsed.Watch {
+		if len(taskNames) != 1 {
+			return errors.New("--watch requires exactly one task")
+		}
 		sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
@@ -110,14 +113,26 @@ func (a *App) Run(ctx context.Context) error {
 			return err
 		}
 
-		err = runner.Watch(sigCtx, taskName, cliArgs, interval)
+		err = runner.Watch(sigCtx, taskNames[0], cliArgs, interval)
 		if err != nil && sigCtx.Err() != nil {
 			return nil // graceful shutdown
 		}
 		return a.handleRunError(tf, err)
 	}
 
-	return a.handleRunError(tf, runner.Run(taskName, cliArgs))
+	// Run each task in sequence as if it were a separate gogo invocation.
+	// ResetRan between iterations so dependencies re-run for the next task —
+	// `gogo clean install` must run `clean` then `install` (and its `clean`
+	// dep again, if any), not collapse them via memoization.
+	for i, name := range taskNames {
+		if i > 0 {
+			runner.ResetRan()
+		}
+		if err := a.handleRunError(tf, runner.Run(name, cliArgs)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // handleRunError augments a TaskNotFoundError with the human-friendly task
@@ -138,15 +153,18 @@ func (a *App) handleRunError(tf *taskfile.Config, err error) error {
 // itself and main shouldn't print it again. The exit code stays non-zero.
 var errSilent = errors.New("")
 
-// defaultTaskName picks the task to run when the CLI position arg is the
-// arg-parser default ("default"). A top-level `default:` field in the task
-// file wins over the implicit "task literally named default" convention,
-// which lets users skip the `default:` trampoline entirely.
-func defaultTaskName(parsed string, tf *taskfile.Config) string {
-	if parsed == "default" && tf.Default != "" {
-		return tf.Default
+// defaultTaskNames picks the tasks to run when no positional args were
+// given. A top-level `default:` field in the task file wins over the
+// implicit "task literally named default" convention, which lets users
+// skip the `default:` trampoline entirely.
+func defaultTaskNames(parsed []string, tf *taskfile.Config) []string {
+	if len(parsed) > 0 {
+		return parsed
 	}
-	return parsed
+	if tf.Default != "" {
+		return []string{tf.Default}
+	}
+	return []string{"default"}
 }
 
 // shellJoin quotes each CLI argument so it survives splicing into a
@@ -183,14 +201,22 @@ func watchInterval(raw string) (time.Duration, error) {
 }
 
 // parseArgs parses command-line arguments. Returns nil if help/version was shown.
+//
+// We pre-split args at the first standalone `--` so multiple positional task
+// names work: `gogo clean install` runs both, while `gogo test -- -v` still
+// forwards `-v` as `{{.CLI_ARGS}}`. go-arg's own `--` handling can't do this
+// because it would absorb everything after `--` into the same positional
+// slice as the task names.
 func (a *App) parseArgs() (*args, error) {
+	head, tail := splitAtDoubleDash(a.Args)
+
 	var parsed args
 	p, err := arg.NewParser(arg.Config{Program: "gogo"}, &parsed)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := p.Parse(a.Args); err != nil {
+	if err := p.Parse(head); err != nil {
 		switch {
 		case errors.Is(err, arg.ErrHelp):
 			p.WriteHelp(a.Stdout)
@@ -202,7 +228,19 @@ func (a *App) parseArgs() (*args, error) {
 		}
 	}
 
+	parsed.CLIArgs = tail
 	return &parsed, nil
+}
+
+// splitAtDoubleDash splits args at the first standalone `--`. The separator
+// itself is dropped. If `--` is absent, tail is nil.
+func splitAtDoubleDash(args []string) (head, tail []string) {
+	for i, a := range args {
+		if a == "--" {
+			return args[:i], args[i+1:]
+		}
+	}
+	return args, nil
 }
 
 func (a *App) loadConfig() (string, *taskfile.Config, error) {
