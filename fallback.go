@@ -77,38 +77,34 @@ func foreignArgs(prefix, tasks, cliArgs []string) []string {
 	return argv
 }
 
-// tryForeignFallback walks up from cwd looking for a foreign task file whose
-// runner is on PATH. Returns (handled=true, err) when one is invoked; a
-// (false, nil) return means the caller should surface the original error.
+// tryForeignFallback looks in the current working directory only for a
+// foreign task file whose runner is on PATH. Returns (handled=true, err)
+// when one is invoked; a (false, nil) return means the caller should
+// surface the original error.
 //
-// "Silently ignored if not on PATH" means: if a Taskfile is found but `task`
-// isn't installed, we don't try to run it — we keep walking and may pick up
-// a sibling/parent runner instead.
+// We deliberately do NOT walk up: running gogo from inside an untrusted
+// checkout (or a temp dir under one) must not silently execute an
+// ancestor's Taskfile/Makefile/mise.toml.
+//
+// "Silently ignored if not on PATH" means: if a Taskfile is found but
+// `task` isn't installed, we don't try to run it — we may still pick up a
+// sibling runner (e.g. mise.toml) in the same directory.
 func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error) {
-	// Tightly coupled to the only error message FindRootDir produces; if
-	// that ever changes the test suite will catch it.
-	cwd, err := a.Getwd()
+	dir, err := a.Getwd()
 	if err != nil {
 		return false, nil
 	}
 
-	dir := cwd
-	for {
-		for _, r := range foreignRunners {
-			if _, err := fallbackLookPath(r.bin); err != nil {
-				continue
-			}
-			for _, name := range r.files {
-				if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-					argv := r.build(parsed.Tasks, parsed.CLIArgs)
-					return true, fallbackRun(ctx, r.bin, argv, dir, a)
-				}
+	for _, r := range foreignRunners {
+		if _, err := fallbackLookPath(r.bin); err != nil {
+			continue
+		}
+		for _, name := range r.files {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				argv := r.build(parsed.Tasks, parsed.CLIArgs)
+				return true, fallbackRun(ctx, r.bin, argv, dir, a)
 			}
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return false, nil
-		}
-		dir = parent
 	}
+	return false, nil
 }
