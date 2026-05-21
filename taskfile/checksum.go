@@ -3,6 +3,7 @@ package taskfile
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -150,13 +151,31 @@ func readStoredChecksum(fileDir, taskName string) string {
 	return string(data)
 }
 
-// writeChecksum stores the checksum for a task.
+// writeChecksum stores the checksum for a task. The write is hardened
+// against local symlink attacks: we remove any pre-existing entry (without
+// following symlinks) and then re-create the file with O_CREATE|O_EXCL so
+// a pre-placed symlink in .gogo/checksum/ can't redirect the write
+// elsewhere on disk — if an attacker wins the race and recreates a
+// symlink between the Remove and the OpenFile, the OpenFile call fails.
 func writeChecksum(fileDir, taskName, checksum string) error {
 	p := checksumPath(fileDir, taskName)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(p, []byte(checksum), 0o644)
+	// os.Remove does not follow symlinks, so we only ever delete the entry
+	// itself, never its target.
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(checksum); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // outputsNewerThanSources checks if all generated files exist and are newer
