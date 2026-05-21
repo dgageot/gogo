@@ -26,7 +26,10 @@ type args struct {
 	Completion string   `arg:"--completion" help:"print shell completion script (bash|zsh|fish)"`
 	Complete   bool     `arg:"--complete,hidden"`
 	Tasks      []string `arg:"positional" help:"tasks to run in sequence"`
-	CLIArgs    []string `help:"arguments passed to the task(s) (after --)"`
+	// CLIArgs is populated by parseArgs from the tail after `--`; it must
+	// not be exposed as a flag (`arg:"-"`) or go-arg would advertise a
+	// stray `--cliargs` option that would be silently overwritten.
+	CLIArgs []string `arg:"-"`
 }
 
 func (args) Description() string {

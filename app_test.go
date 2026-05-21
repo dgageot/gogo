@@ -220,6 +220,23 @@ func TestDefaultTaskNamesFallbackWhenUnset(t *testing.T) {
 	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf))
 }
 
+func TestAppHelpDoesNotExposeCLIArgsFlag(t *testing.T) {
+	// Regression: CLIArgs is populated by parseArgs from the tail after
+	// `--`; it must not be advertised as a `--cliargs` flag.
+	app, stdout, _ := newTestApp(t, "", "--help")
+	require.NoError(t, app.Run(t.Context()))
+	assert.NotContains(t, stdout.String(), "--cliargs")
+}
+
+func TestAppRejectsCLIArgsFlag(t *testing.T) {
+	// Regression: `--cliargs` must not be a recognised flag — args after
+	// `--` are the only way to feed CLI_ARGS.
+	app, _, _ := newTestApp(t, "", "--cliargs", "foo")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--cliargs")
+}
+
 func TestAppRunsTopLevelDefaultTask(t *testing.T) {
 	// End-to-end: `gogo` (no positional arg) runs the task named by the
 	// top-level `default:` field instead of falling back to the implicit
