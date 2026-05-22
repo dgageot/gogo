@@ -12,19 +12,29 @@ import (
 
 const fileName = "gogo.yaml"
 
-// validateTaskName rejects task names containing characters that could escape
-// the on-disk checksum directory or otherwise misbehave when joined into a
-// filesystem path. Namespace separators (':') and ordinary identifier
-// characters are allowed; '/', '\\' and '..' are not.
+// validateTaskName enforces a strict whitelist of characters allowed in task
+// names. Names appear in checksum file paths, log lines, and shell
+// completions; allowing arbitrary characters lets a malicious task file
+// inject control characters, terminal escapes, path components, or shell
+// metacharacters into those contexts.
+//
+// Allowed: ASCII letters, digits, '-', '_', and ':' (the namespace separator).
 func validateTaskName(name string) error {
 	if name == "" {
 		return errors.New("task name must not be empty")
 	}
-	if strings.ContainsAny(name, `/\`) {
-		return fmt.Errorf("task name %q must not contain '/' or '\\'", name)
+	for _, r := range name {
+		switch {
+		case 'a' <= r && r <= 'z':
+		case 'A' <= r && r <= 'Z':
+		case '0' <= r && r <= '9':
+		case r == '-' || r == '_' || r == ':':
+		default:
+			return fmt.Errorf("task name %q contains disallowed character %q (allowed: letters, digits, '-', '_', ':')", name, r)
+		}
 	}
-	if strings.Contains(name, "..") {
-		return fmt.Errorf("task name %q must not contain '..'", name)
+	if strings.HasPrefix(name, ":") || strings.HasSuffix(name, ":") || strings.Contains(name, "::") {
+		return fmt.Errorf("task name %q must not start with, end with, or contain consecutive ':'", name)
 	}
 	return nil
 }
