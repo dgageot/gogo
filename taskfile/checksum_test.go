@@ -169,6 +169,35 @@ func TestChecksumPathNoCollision(t *testing.T) {
 	assert.Equal(t, "underscore", readStoredChecksum(dir, "a_b"))
 }
 
+func TestWriteChecksumDoesNotFollowSymlink(t *testing.T) {
+	// A pre-placed symlink in .gogo/checksum/ must not redirect the write
+	// to another file on disk: an attacker with write access to .gogo/
+	// could otherwise have gogo overwrite arbitrary files when the user
+	// next runs a task.
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.txt")
+	require.NoError(t, os.WriteFile(target, []byte("original"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".gogo", "checksum"), 0o755))
+	link := filepath.Join(dir, ".gogo", "checksum", "build")
+	require.NoError(t, os.Symlink(target, link))
+
+	require.NoError(t, writeChecksum(dir, "build", "new-checksum"))
+
+	// The symlink target must remain untouched.
+	data, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(data), "symlink target must not be overwritten")
+
+	// And the cache file must contain the new value.
+	assert.Equal(t, "new-checksum", readStoredChecksum(dir, "build"))
+
+	// The cache entry must be a regular file, not a symlink anymore.
+	info, err := os.Lstat(link)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode()&os.ModeSymlink, "checksum entry must not be a symlink")
+}
+
 func TestOutputsNewerThanSources(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "main.go")
