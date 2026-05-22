@@ -47,8 +47,20 @@ func setEnv(env []string, key, value string) []string {
 
 // baseEnvWithDotenv returns os.Environ() augmented with dotenv vars that
 // are not already defined in the process environment (OS env wins).
+//
+// op://-prefixed values inherited from the OS environment are stripped: a
+// user who can set the parent process's env must not be able to force
+// every task through `op run` (which would trigger 1Password credential
+// prompts on the local user). Legitimate op:// references must come from
+// the task file's own `env:`, `dotenv:`, or top-level `secrets:` blocks.
 func baseEnvWithDotenv(dotenv map[string]string) []string {
-	env := os.Environ()
+	var env []string
+	for _, e := range os.Environ() {
+		if _, v, ok := strings.Cut(e, "="); ok && strings.HasPrefix(v, "op://") {
+			continue
+		}
+		env = append(env, e)
+	}
 	for _, k := range slices.Sorted(maps.Keys(dotenv)) {
 		if _, exists := os.LookupEnv(k); !exists {
 			env = append(env, envPair(k, dotenv[k]))

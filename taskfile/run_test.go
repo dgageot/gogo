@@ -1510,6 +1510,46 @@ func TestHasOpSecrets(t *testing.T) {
 	assert.True(t, hasOpSecrets([]string{"FOO=bar", "TOKEN=op://vault/item/field"}))
 }
 
+func TestBaseEnvDropsOpFromOSEnv(t *testing.T) {
+	// An attacker who can set OS env must not be able to force every task
+	// through `op run` by exporting FOO=op://...; the base env must filter
+	// op:// values that came in through os.Environ().
+	t.Setenv("GOGO_INJECT_OP", "op://vault/item/field")
+	t.Setenv("GOGO_INJECT_PLAIN", "plain-value")
+
+	env := baseEnvWithDotenv(nil)
+
+	assert.Equal(t, "plain-value", envValue(env, "GOGO_INJECT_PLAIN"))
+	assert.Empty(t, envValue(env, "GOGO_INJECT_OP"), "op:// from OS env must not leak into the base env")
+	assert.False(t, hasOpSecrets(env), "OS-env op:// must not trigger op-run wrapping")
+}
+
+func TestOpFromOSEnvDoesNotTriggerOpRun(t *testing.T) {
+	// End-to-end equivalent of the unit test above: a task with no op://
+	// references in its own definition must not be wrapped in op run just
+	// because the parent shell exported one.
+	t.Setenv("GOGO_PARENT_INJECT", "op://vault/item/field")
+
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {Cmds: []Cmd{{Cmd: "go build"}}},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner, err := NewRunner(tf, dir)
+	require.NoError(t, err)
+	runner.ShellRunner = &fakeShellRunner{}
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+
+	require.Len(t, *execs, 1)
+	assert.False(t, (*execs)[0].UseOpRun, "OS-env op:// must not wrap exec in op run")
+}
+
 func TestOpSecretsInDotenvTriggerOpRun(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{".env.task": "TOKEN=op://vault/item/field\n"})
