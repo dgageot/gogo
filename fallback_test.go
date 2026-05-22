@@ -146,7 +146,10 @@ func TestFallbackSkipsRunnerNotOnPath(t *testing.T) {
 	assert.Equal(t, "mise", fr.name)
 }
 
-func TestFallbackWalksUp(t *testing.T) {
+func TestFallbackDoesNotWalkUp(t *testing.T) {
+	// A Taskfile in an ancestor directory must not be picked up: running
+	// gogo inside an untrusted checkout must never execute someone else's
+	// Taskfile/Makefile/mise.toml from a parent dir.
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
 	sub := filepath.Join(root, "a", "b")
@@ -156,8 +159,10 @@ func TestFallbackWalksUp(t *testing.T) {
 	withForeignHooks(t, allFound, fr.run)
 
 	app, _, _ := newTestApp(t, sub, "build")
-	require.NoError(t, app.Run(t.Context()))
-	assert.Equal(t, root, fr.dir)
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no gogo.yaml")
+	assert.False(t, fr.called, "must not invoke a foreign runner from a parent dir")
 }
 
 func TestFallbackBinaryMissingFallsThrough(t *testing.T) {
