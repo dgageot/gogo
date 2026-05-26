@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -100,9 +101,39 @@ func (s *defaultShellRunner) shellExecCommand(req ShellCommand) (*exec.Cmd, erro
 		if _, err := s.opPath(); err != nil {
 			return nil, fmt.Errorf("uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", err)
 		}
-		return configuredShellCommand(exec.Command("op", "run", "--", "/bin/sh", "-c", req.Command), req), nil
+		return configuredShellCommand(exec.Command("op", opRunArgs(req)...), req), nil
 	}
 	return configuredShellCommand(exec.Command("/bin/sh", "-c", req.Command), req), nil
+}
+
+// opRunArgs builds the argv passed to `op run`. When the task's stdout and
+// stderr are both attached to a terminal we add `--no-masking` so op leaves
+// the streams alone — by default op pipes them through itself to mask
+// secret values, which strips the TTY and breaks any TUI the command might
+// launch (docker agent eval, fzf, less, vim, …). In non-interactive runs
+// (CI, redirected output) we keep masking so accidental secret leaks into
+// logs are still concealed.
+func opRunArgs(req ShellCommand) []string {
+	args := []string{"run"}
+	if isTerminal(req.Stdout) && isTerminal(req.Stderr) {
+		args = append(args, "--no-masking")
+	}
+	return append(args, "--", "/bin/sh", "-c", req.Command)
+}
+
+// isTerminal reports whether w is a *os.File backed by a character device,
+// i.e. a terminal. Anything else (a pipe, buffer, regular file, or nil)
+// returns false.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok || f == nil {
+		return false
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func configuredShellCommand(cmd *exec.Cmd, req ShellCommand) *exec.Cmd {

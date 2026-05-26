@@ -211,6 +211,11 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   check to before env composition. The new top-level `secrets:` block in
   `taskfile/secrets.go` runs as the *last* layer of `buildEnv`, so a
   `secrets: [X]` reference still feeds the existing `op://` detection.
+  When the task's stdout *and* stderr are both terminals, gogo passes
+  `--no-masking` to `op run` (`opRunArgs` in `taskfile/shell.go`) so
+  interactive TUIs keep their TTY — op's default masking pipes the
+  streams through itself and breaks anything more elaborate than line
+  output. Non-interactive runs (CI, redirected output) keep masking on.
   New backends plug in by adding a `case strings.HasPrefix(uri, ...)`
   branch in `resolveSecretURI` and a scheme constant in
   `supportedSecretSchemes`.

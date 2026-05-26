@@ -72,3 +72,13 @@ secret "X" has unknown backend in "vault://somewhere/else" (supported: op://)
 ## Requirements
 
 The `op` CLI must be installed and available on PATH. Install it from <https://developer.1password.com/docs/cli/get-started/>.
+
+## Interactive TUIs
+
+By default `op run` masks secret values found in the wrapped command's
+output. To do that it pipes stdout/stderr through itself, which strips the
+TTY and breaks any interactive program (e.g. `docker agent eval`, `fzf`,
+`less`, `vim`). To keep interactive use working, gogo passes `--no-masking`
+to `op run` when both stdout and stderr are attached to a terminal. In
+non-interactive runs (CI, output redirected to a file or pipe) the default
+masking is left on, so secret leaks in logs are still concealed.
