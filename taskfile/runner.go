@@ -85,12 +85,19 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 	return r, nil
 }
 
-// builtinLookup returns the value of a gogo-provided variable (currently the
-// {{.GIT_*}} family). The gitVars resolver is constructed on first call so
-// tests that swap r.ShellRunner after NewRunner still see git invocations
-// routed through their fake runner — binding earlier would capture the real
-// shell runner in the lazy closures.
+// builtinLookup returns the value of a gogo-provided variable (currently
+// {{.HOME}} and the {{.GIT_*}} family). The gitVars resolver is constructed
+// on first call so tests that swap r.ShellRunner after NewRunner still see
+// git invocations routed through their fake runner — binding earlier would
+// capture the real shell runner in the lazy closures.
 func (r *Runner) builtinLookup(name string) (string, bool) {
+	if name == "HOME" {
+		// os.UserHomeDir resolves $HOME on Unix and USERPROFILE on Windows,
+		// falling back to the user database if those are unset. An error
+		// resolves to the empty string — same convention as the GIT_* family.
+		home, _ := os.UserHomeDir()
+		return home, true
+	}
 	r.gitOnce.Do(func() {
 		r.gitVars = newGitVars(r.tf.Dir, r.ShellRunner)
 	})

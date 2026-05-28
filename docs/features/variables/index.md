@@ -80,6 +80,7 @@ Cycles — `A: "{{ "{{" }}.B}}"`, `B: "{{ "{{" }}.A}}"` — short-circuit to the
 | Variable | Description |
 |----------|-------------|
 | `TASK_FILE_DIR` | The working directory for the task (defaults to the task file directory) |
+| `HOME` | The current user's home directory (`os.UserHomeDir`) |
 | `CLI_ARGS` | Extra arguments passed after `--` |
 | `GIT_COMMIT` | Full SHA at `HEAD` (empty outside a git repo) |
 | `GIT_SHORT_COMMIT` | 7-char SHA at `HEAD` (empty outside a git repo) |
