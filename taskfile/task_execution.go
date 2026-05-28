@@ -198,15 +198,19 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			continue
 		}
 
-		if !silent {
-			r.logTask(colorGreen, taskName, expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup))
-		}
-
+		// Expand once and reuse for both the log line and execution so the two
+		// can never drift apart (and we don't resolve built-in vars twice).
 		if r.DryRun {
+			if !silent {
+				r.logTask(colorGreen, taskName, expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup))
+			}
 			continue
 		}
 
 		expanded := expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup)
+		if !silent {
+			r.logTask(colorGreen, taskName, expanded)
+		}
 		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
 			return err
 		}
