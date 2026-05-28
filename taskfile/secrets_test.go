@@ -106,6 +106,31 @@ tasks:
 	assert.Contains(t, err.Error(), "only supported in env")
 }
 
+func TestLoadWithIncludesRejectsOpSyntaxInNamespacedVars(t *testing.T) {
+	// A var declared in an included gogo.yaml lands in NamespaceVars, not
+	// the root Vars map. It must still be rejected: vars never flow through
+	// op run, so an op:// URI there would leak verbatim into commands.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes: [cli]
+`,
+		"cli/gogo.yaml": `version: "1"
+vars:
+  TOKEN: op://vault/item/field
+tasks:
+  build:
+    cmd: true
+`,
+	})
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `namespace "cli" vars`)
+	assert.Contains(t, err.Error(), `variable "TOKEN"`)
+	assert.Contains(t, err.Error(), "only supported in env")
+}
+
 func TestSecretsOpPassThroughTriggersOpRun(t *testing.T) {
 	// op:// is pass-through: the URI itself becomes the env value and
 	// hasOpSecrets triggers the op-run wrapper at exec time.

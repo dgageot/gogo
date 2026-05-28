@@ -66,6 +66,14 @@ func validateSecrets(c *Config) error {
 	if err := validateVarsDoNotUseSecrets(c.Vars, "root vars"); err != nil {
 		return err
 	}
+	// Vars declared in an included gogo.yaml land in NamespaceVars, not
+	// c.Vars; they must obey the same "no op:// in vars" rule or a secret
+	// URI would leak verbatim into commands (vars never flow through op run).
+	for _, ns := range slices.Sorted(maps.Keys(c.NamespaceVars)) {
+		if err := validateVarsDoNotUseSecrets(c.NamespaceVars[ns], fmt.Sprintf("namespace %q vars", ns)); err != nil {
+			return err
+		}
+	}
 	for taskName, task := range c.Tasks {
 		if err := validateVarsDoNotUseSecrets(task.Vars, fmt.Sprintf("task %q vars", taskName)); err != nil {
 			return err
