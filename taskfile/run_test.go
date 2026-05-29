@@ -1928,6 +1928,68 @@ func TestPreconditionSeesTaskEnv(t *testing.T) {
 	assert.Len(t, *execs, 1)
 }
 
+func TestPreconditionWrapsInOpRunWhenEnvHasSecret(t *testing.T) {
+	// Preconditions must see the same environment as the task's commands:
+	// when the built env carries an op:// secret, the precondition shell
+	// command is wrapped in op run too, so reads of the secret resolve
+	// rather than seeing the literal op:// URI.
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Env: map[string]string{"TOKEN": "op://vault/item/field"},
+				Preconditions: []Precondition{
+					{Sh: `test -n "$TOKEN"`},
+				},
+				Cmds: []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 2)
+	assert.Equal(t, ShellCommandPrecondition, runs[0].Kind)
+	assert.True(t, runs[0].UseOpRun, "precondition must wrap in op run when env carries op:// secrets")
+}
+
+func TestPreconditionDoesNotWrapInOpRunWithoutSecret(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				Env: map[string]string{"TOKEN": "plain"},
+				Preconditions: []Precondition{
+					{Sh: `test -n "$TOKEN"`},
+				},
+				Cmds: []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+	captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 2)
+	assert.Equal(t, ShellCommandPrecondition, runs[0].Kind)
+	assert.False(t, runs[0].UseOpRun, "no op:// secret means no op run wrapper")
+}
+
 func TestPreconditionPasses(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{

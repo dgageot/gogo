@@ -55,10 +55,14 @@ func checkRequires(taskName string, task *Task, vars map[string]string, builtin 
 }
 
 // checkPreconditions runs all precondition shell commands for a task.
-// Preconditions see the same environment as the task's commands.
-// If any command fails, it returns an error with the precondition's message
-// or a default message.
+// Preconditions see the same environment as the task's commands, including
+// op:// secret resolution: when the built env carries op:// references we
+// wrap the precondition in `op run` too, so a check that reads a secret
+// (e.g. `test -n "$TOKEN"`) sees the resolved value rather than the literal
+// op:// URI. If any command fails, it returns an error with the
+// precondition's message or a default message.
 func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env []string) error {
+	useOpRun := hasOpSecrets(env)
 	for _, pre := range task.Preconditions {
 		if err := r.ShellRunner.Run(ShellCommand{
 			Kind:     ShellCommandPrecondition,
@@ -66,6 +70,7 @@ func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env
 			Command:  pre.Sh,
 			Dir:      dir,
 			Env:      env,
+			UseOpRun: useOpRun,
 		}); err != nil {
 			if pre.Msg != "" {
 				return fmt.Errorf("task %q: %s", taskName, pre.Msg)
