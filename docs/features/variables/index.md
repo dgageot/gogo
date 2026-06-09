@@ -272,12 +272,15 @@ The environment handed to `/bin/sh` is built up in layers, each one overriding t
 1. **`BaseEnv`** — the OS environment plus global `dotenv:` files
 2. **Inherited parent env** — only on sub-task calls (`cmds: - task: X`); deps don't inherit
 3. **Task `dotenv:`** — never overrides `BaseEnv` (i.e. global dotenv and OS env always win)
-4. **Task `vars:`** — promoted into env so commands can read them with `$NAME`
-5. **Task `env:`** — with cross-references resolved (see [Cross-References Between Env Entries](#cross-references-between-env-entries))
-6. **Task `secrets:`** — **highest precedence**; declaring a secret overrides any same-named placeholder in `env:`
+4. **Task `env:`** — with cross-references resolved (see [Cross-References Between Env Entries](#cross-references-between-env-entries))
+5. **Task `secrets:`** — **highest precedence**; declaring a secret overrides any same-named placeholder in `env:`
+
+Note that task `vars:` are **not** part of this list: vars and env are separate
+namespaces. A `vars:` entry is available to `{{ "{{" }}.VAR}}` templating but is
+never exported to the shell, so `$NAME` in a command only sees the layers above.
 
 A few non-obvious consequences:
 
 - A task `dotenv:` that names a key already set in the global dotenv (or in the user's shell) is silently ignored — see [Dotenv › Resolution Rules](../dotenv/#resolution-rules).
-- Sub-tasks called from `cmds:` see the parent's resolved env (vars + dotenv + `env:` block). Same task name called from two parents with different env runs twice, because gogo bypasses task-level memoization when extra context is in play. See [Parent-to-child Env Propagation](#parent-to-child-env-propagation).
+- Sub-tasks called from `cmds:` see the parent's resolved env (dotenv + `env:` block — not `vars:`). Same task name called from two parents with different env runs twice, because gogo bypasses task-level memoization when extra context is in play. See [Parent-to-child Env Propagation](#parent-to-child-env-propagation).
 - A task that declares both `env: { OPENAI_API_KEY: dummy }` and `secrets: [OPENAI_API_KEY]` gets the secret value at run time. Use this pattern to keep a clear placeholder for local dev while still resolving the real value in CI.

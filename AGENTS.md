@@ -136,8 +136,10 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   wins" so a parent file can override a flattened task by re-declaring it.
   See `loadFlatten` and `TestFlattenedTaskRunsFromRootDir`.
 - **Foreign fallback** (`fallback.go`) — when no `gogo.yaml` is found, gogo
-  walks up looking for a `Taskfile.yml`, `mise.toml`, or `Makefile` whose
-  runner is on `PATH`, and shells out. Order is fixed by `foreignRunners`
+  looks in the current directory only (no walking up — an untrusted
+  checkout's ancestors must never be executed; see
+  `TestFallbackDoesNotWalkUp`) for a `Taskfile.yml`, `mise.toml`, or
+  `Makefile` whose runner is on `PATH`, and shells out. Order is fixed by `foreignRunners`
   and the `make` arm intentionally drops `default` and skips the `--`
   separator (since `make` doesn't understand it). Tests stub the package-
   level `fallbackLookPath` / `fallbackRun` hooks rather than the real exec.
@@ -166,8 +168,10 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `taskfile.Config` test in `run_test.go` plus a `Parse`-based test in
   `parse_test.go` if YAML shape matters.
 - **Touching env/var resolution**: respect the existing precedence
-  (`BaseEnv` < parent task env < task dotenv < task vars < task env) and the
-  rule that *task dotenv never overrides global dotenv or OS env* (see
+  (`BaseEnv` < parent task env < task dotenv < task env < secrets) and the
+  rule that vars and env are separate namespaces — task `vars:` are NOT
+  exported to the shell environment (see `TestParentVarsDoNotFlowDownAsEnv`) —
+  and the rule that *task dotenv never overrides global dotenv or OS env* (see
   `TestTaskDotenvDoesNotOverrideGlobalDotenv`). Sub-task calls
   (`cmds: - task: X`) propagate the parent's resolved env via
   `Runner.runSubTask` — deps do NOT (they're prerequisites, not sequenced
