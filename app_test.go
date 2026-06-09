@@ -131,7 +131,7 @@ tasks:
 
 	// Names render in green, aliases in cyan — the bullet plus ANSI escape
 	// is the simplest stable shape we can assert without coupling to widths.
-	assert.Contains(t, out, "* \x1b[32mbuild:\x1b[0m")
+	assert.Contains(t, out, "* \x1b[32mbuild\x1b[0m")
 	assert.Contains(t, out, "\x1b[36m(aliases: t)\x1b[0m")
 }
 
@@ -365,9 +365,9 @@ tasks:
 	require.Error(t, err)
 
 	out := stderr.String()
-	assert.Contains(t, out, "install:", "task list should be printed")
+	assert.Contains(t, out, "install", "task list should be printed")
 	assert.Contains(t, out, "Install the binary")
-	assert.Contains(t, out, "test:")
+	assert.Contains(t, out, "test")
 	assert.Contains(t, out, "\x1b[31m", "suggestion line is colored red")
 	assert.Contains(t, out, `task: task "instll" not found, did you mean: install?`)
 }
@@ -388,7 +388,7 @@ tasks:
 	require.Error(t, err)
 
 	out := stderr.String()
-	assert.Contains(t, out, "build:")
+	assert.Contains(t, out, "build")
 	assert.Contains(t, out, "Build it")
 	assert.Contains(t, out, `task: task "xyzzy" not found`)
 	assert.NotContains(t, out, "did you mean")

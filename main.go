@@ -387,7 +387,7 @@ func gatherTaskListings(tf *taskfile.Config) []taskListing {
 }
 
 // writeTaskListings prints rows in three aligned columns: a green
-// `* name:` cell, the description, and an optional cyan `(aliases: ...)`
+// `* name` cell, the description, and an optional cyan `(aliases: ...)`
 // cell. Widths are computed from the un-colored text so ANSI escapes don't
 // corrupt column alignment.
 func writeTaskListings(w io.Writer, entries []taskListing) {
@@ -397,20 +397,19 @@ func writeTaskListings(w io.Writer, entries []taskListing) {
 
 	nameWidth, descWidth := 0, 0
 	for _, e := range entries {
-		nameWidth = max(nameWidth, len(e.name)+1) // +1 for the trailing ':'
+		nameWidth = max(nameWidth, len(e.name))
 		descWidth = max(descWidth, len(e.desc))
 	}
 
 	for _, e := range entries {
-		nameCell := e.name + ":"
-		namePad := strings.Repeat(" ", nameWidth-len(nameCell))
+		namePad := strings.Repeat(" ", nameWidth-len(e.name))
 		if e.aliases == "" {
-			fmt.Fprintf(w, "* %s%s%s%s  %s\n", ansiGreen, nameCell, ansiReset, namePad, e.desc)
+			fmt.Fprintf(w, "* %s%s%s%s  %s\n", ansiGreen, e.name, ansiReset, namePad, e.desc)
 			continue
 		}
 		descPad := strings.Repeat(" ", descWidth-len(e.desc))
 		fmt.Fprintf(w, "* %s%s%s%s  %s%s  %s%s%s\n",
-			ansiGreen, nameCell, ansiReset, namePad,
+			ansiGreen, e.name, ansiReset, namePad,
 			e.desc, descPad,
 			ansiCyan, e.aliases, ansiReset)
 	}
