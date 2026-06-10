@@ -135,6 +135,24 @@ tasks:
 	assert.Contains(t, out, "\x1b[36m(aliases: t)\x1b[0m")
 }
 
+func TestAppListShowsOnlyFirstDescriptionLine(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  # Build the project
+  # using the local Go toolchain
+  build:
+    cmd: go build
+`)
+
+	app, stdout, _ := newTestApp(t, dir, "--list")
+
+	require.NoError(t, app.Run(t.Context()))
+	out := stdout.String()
+	assert.Contains(t, out, "Build the project")
+	assert.NotContains(t, out, "using the local Go toolchain")
+}
+
 func TestAppListHidesInternalTasks(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"

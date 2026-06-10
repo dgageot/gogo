@@ -56,7 +56,9 @@ func findTasksMapping(mapping *ast.MappingNode) *ast.MappingNode {
 	return nil
 }
 
-// extractCommentText returns the text from comments above a YAML mapping value.
+// extractCommentText returns the text from comments above a YAML mapping
+// value. Comment lines are kept separate (newline-joined) so consumers like
+// `--list` can choose to show only the first line.
 func extractCommentText(node *ast.MappingValueNode) string {
 	comment := node.GetComment()
 	if comment == nil {
@@ -67,7 +69,7 @@ func extractCommentText(node *ast.MappingValueNode) string {
 	for _, c := range comment.Comments {
 		if text := strings.TrimSpace(strings.TrimPrefix(c.Token.Value, "#")); text != "" {
 			if b.Len() > 0 {
-				b.WriteByte(' ')
+				b.WriteByte('\n')
 			}
 			b.WriteString(text)
 		}

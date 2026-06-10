@@ -378,6 +378,26 @@ tasks:
 	assert.Empty(t, tf.Tasks["deploy"].Desc)
 }
 
+func TestApplyTaskCommentsKeepsLinesSeparate(t *testing.T) {
+	yamlData := []byte(`version: "1"
+tasks:
+  # Build the project
+  # with extra details that should stay on their own line
+  build:
+    cmd: go build
+`)
+
+	tf := &Config{
+		Tasks: map[string]Task{
+			"build": {Cmds: []Cmd{{Cmd: "go build"}}},
+		},
+	}
+
+	applyTaskComments(tf, yamlData)
+
+	assert.Equal(t, "Build the project\nwith extra details that should stay on their own line", tf.Tasks["build"].Desc)
+}
+
 func TestLoadWithIncludesKeepsExternalTaskReferencesUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{

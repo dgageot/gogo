@@ -369,15 +369,18 @@ type taskListing struct {
 // gatherTaskListings returns the rows that --list and the unknown-task hint
 // should print, in declaration-friendly alphabetical order. Tasks without a
 // description are intentionally omitted: we surface only what the author
-// chose to advertise.
+// chose to advertise. Multi-line descriptions are truncated to their first
+// line so each task stays on a single, aligned row.
 func gatherTaskListings(tf *taskfile.Config) []taskListing {
 	var entries []taskListing
 	for _, name := range visibleTaskNames(tf) {
 		task := tf.Tasks[name]
-		if task.Desc == "" {
+		desc, _, _ := strings.Cut(task.Desc, "\n")
+		desc = strings.TrimSpace(desc)
+		if desc == "" {
 			continue
 		}
-		row := taskListing{name: name, desc: task.Desc}
+		row := taskListing{name: name, desc: desc}
 		if len(task.Aliases) > 0 {
 			row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
