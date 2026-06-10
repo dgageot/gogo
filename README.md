@@ -58,6 +58,7 @@ gogo -n build
 A quick tour. Each item links to the canonical docs page.
 
 - **Incremental builds** — SHA-256 source checksums or `generates:` timestamp comparison ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/))
+- **Status checks** — `status:` commands probe the desired end state and skip the task when it already exists
 - **Source presets** — reuse named glob lists; built-in `go` / `go-vendored`, or define your own ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/#presets))
 - **Watch mode** — polls sources at a configurable `interval:` and re-runs ([Watch Mode](https://dgageot.github.io/gogo/features/watch-mode/))
 - **Concurrent dependencies** with deduplication ([Dependencies](https://dgageot.github.io/gogo/features/dependencies/))

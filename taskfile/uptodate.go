@@ -34,3 +34,26 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool,
 
 	return checksum == readStoredChecksum(r.tf.Dir, taskName), checksum, nil
 }
+
+// statusUpToDate reports whether every `status:` command exits 0, meaning
+// the task's desired end state already exists and it can be skipped. The
+// first failing command short-circuits: one "not done" answer is enough.
+// Status commands see the task's full env — including op:// secret
+// resolution — exactly like preconditions, so probes can read the same
+// credentials the task itself would use.
+func (r *Runner) statusUpToDate(taskName string, task *Task, dir string, env []string) bool {
+	useOpRun := hasOpSecrets(env)
+	for _, sh := range task.Status {
+		if err := r.ShellRunner.Run(ShellCommand{
+			Kind:     ShellCommandStatus,
+			TaskName: taskName,
+			Command:  sh,
+			Dir:      dir,
+			Env:      env,
+			UseOpRun: useOpRun,
+		}); err != nil {
+			return false
+		}
+	}
+	return true
+}

@@ -37,6 +37,7 @@ Each task supports the following fields:
 | `secrets` | list or string | Names referencing entries in the top-level `secrets:` map (see [Secrets](../secrets/)) |
 | `sources` | list or string | Glob patterns for incremental builds and watch mode. A bare name resolves to a [source preset](../sources-checksums/#presets) (e.g. `sources: go`) |
 | `generates` | list | Output file patterns for timestamp-based incremental builds |
+| `status` | list or string | Shell commands probing the task's end state; all exiting 0 marks it up to date (see [Sources & Checksums](../sources-checksums/#status-mode-status)) |
 | `aliases` | list | Alternative names for the task |
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |

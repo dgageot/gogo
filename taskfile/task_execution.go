@@ -176,6 +176,13 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 	if err != nil {
 		return err
 	}
+	// `status:` probes the desired end state. With no sources it decides
+	// alone; with sources both must agree, so either signal forces a run.
+	// It's only consulted when it can still flip the answer — changed
+	// sources already force a run, no point shelling out on top.
+	if !r.Force && len(task.Status) > 0 && (len(task.Sources) == 0 || upToDate) {
+		upToDate = r.statusUpToDate(resolved, &task, dir, env)
+	}
 	if upToDate {
 		r.logTask(colorYellow, resolved, "up to date")
 		return nil

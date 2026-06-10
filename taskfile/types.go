@@ -30,6 +30,7 @@ type Task struct {
 	Secrets       StringList        `yaml:"secrets"` // names referencing entries in Config.Secrets
 	Sources       StringList        `yaml:"sources"`
 	Generates     StringList        `yaml:"generates"`
+	Status        StringList        `yaml:"status"` // shell commands; when all exit 0 the task is up to date
 	Aliases       StringList        `yaml:"aliases"`
 	Platforms     StringList        `yaml:"platforms"`
 	Requires      Requires          `yaml:"requires"`

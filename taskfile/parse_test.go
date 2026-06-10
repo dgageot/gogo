@@ -389,6 +389,27 @@ tasks:
 	assert.Empty(t, tf.Tasks["build"].Prompt)
 }
 
+func TestParseStatusField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  create-bucket:
+    status:
+      - aws s3api head-bucket --bucket artifacts
+      - which aws
+    cmd: aws s3 mb s3://artifacts
+  install:
+    status: which golangci-lint
+    cmd: go install golangci-lint
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, StringList{"aws s3api head-bucket --bucket artifacts", "which aws"}, tf.Tasks["create-bucket"].Status)
+	assert.Equal(t, StringList{"which golangci-lint"}, tf.Tasks["install"].Status, "single string form")
+}
+
 func TestParseSilentField(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

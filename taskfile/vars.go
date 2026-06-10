@@ -58,6 +58,7 @@ func expandTaskTemplates(t *Task) {
 	t.Dir = expandEnvTemplates(t.Dir)
 	expandStringSlice(t.Sources)
 	expandStringSlice(t.Generates)
+	expandStringSlice(t.Status)
 	expandStringSlice(t.Aliases)
 	expandStringSlice(t.Platforms)
 	expandStringSlice(t.Dotenv)
