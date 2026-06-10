@@ -97,16 +97,18 @@ func (sl *StringList) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
-// Cmd represents a command in a task. It can be a simple string or a task reference.
+// Cmd represents a command in a task. It can be a simple string, a task
+// reference, or a deferred cleanup command.
 type Cmd struct {
-	Cmd  string         `yaml:"cmd"`
-	Task string         `yaml:"task"`
-	Vars map[string]Var `yaml:"vars"`
+	Cmd   string         `yaml:"cmd"`
+	Task  string         `yaml:"task"`
+	Defer string         `yaml:"defer"` // shell command run after the task's cmds, even on failure
+	Vars  map[string]Var `yaml:"vars"`
 }
 
-// isSet returns true if the Cmd has a command or task reference.
+// isSet returns true if the Cmd has a command, task reference, or deferred command.
 func (c *Cmd) isSet() bool {
-	return c.Cmd != "" || c.Task != ""
+	return c.Cmd != "" || c.Task != "" || c.Defer != ""
 }
 
 // UnmarshalYAML allows Cmd to be either a string or a map.

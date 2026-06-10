@@ -230,6 +230,9 @@ func referencedVars(task *Task) []string {
 		for _, name := range templateNames(cmd.Cmd) {
 			refs[name] = struct{}{}
 		}
+		for _, name := range templateNames(cmd.Defer) {
+			refs[name] = struct{}{}
+		}
 		for _, v := range cmd.Vars {
 			for _, name := range templateNames(v.Value) {
 				refs[name] = struct{}{}

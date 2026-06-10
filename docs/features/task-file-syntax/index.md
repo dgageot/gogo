@@ -117,6 +117,31 @@ tasks:
 
 The child's own `env` block (or a per-call `vars:` override) wins per key. See [Variables](../variables/#parent-to-child-env-propagation) for the full precedence rules.
 
+## Deferred Cleanup
+
+A command entry can use `defer:` instead of `cmd:` to register a cleanup command. Deferred commands run after the task's other commands finish — **even when one of them fails** — making them the right place for teardown:
+
+```yaml
+tasks:
+  test:
+    cmds:
+      - docker compose up -d
+      - defer: docker compose down
+      - go test ./...
+```
+
+Here `docker compose down` runs whether `go test` passes or fails.
+
+Deferred commands follow Go's `defer` semantics:
+
+- They run in **reverse registration order** (last registered, first run).
+- Only defers registered **before** a failure run — a `defer:` listed after a failing command never registered, so it is skipped.
+- A deferred command's own failure is logged as a warning but does **not** fail the task: cleanup must not mask the task's real result, and later defers still run.
+- Variables (`{{ "{{" }}.VAR}}`) are expanded in deferred commands like in regular ones.
+- Under `--dry`, deferred commands are printed but not executed.
+
+`defer:` only accepts a shell command string — `defer: { task: cleanup }` is not supported.
+
 ## Task Descriptions
 
 Comments above a task key are used as the task description, shown by `gogo -l`:
