@@ -34,6 +34,7 @@ type Task struct {
 	Platforms     StringList        `yaml:"platforms"`
 	Requires      Requires          `yaml:"requires"`
 	Preconditions []Precondition    `yaml:"preconditions"`
+	Prompt        string            `yaml:"prompt"` // confirmation message shown before the task runs
 	Silent        bool              `yaml:"silent"` // when true, suppress the per-cmd "[task] cmd" log line
 	Desc          string            `yaml:"-"`      // set from YAML comments, not from a field
 }

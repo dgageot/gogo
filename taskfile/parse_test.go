@@ -371,6 +371,24 @@ tasks:
 	assert.False(t, task.Cmds[1].IgnoreError, "ignore_error defaults to false")
 }
 
+func TestParsePromptField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    cmd: echo deploying
+  build:
+    cmd: go build
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Deploy to production?", tf.Tasks["deploy"].Prompt)
+	assert.Empty(t, tf.Tasks["build"].Prompt)
+}
+
 func TestParseSilentField(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

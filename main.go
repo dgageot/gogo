@@ -23,6 +23,7 @@ type args struct {
 	Watch      bool     `arg:"-w,--watch" help:"watch sources and re-run on changes"`
 	Force      bool     `arg:"-f,--force" help:"ignore sources and generates (always run)"`
 	DryRun     bool     `arg:"-n,--dry" help:"print commands without executing them"`
+	Yes        bool     `arg:"-y,--yes" help:"auto-confirm task prompts"`
 	Completion string   `arg:"--completion" help:"print shell completion script (bash|zsh|fish)"`
 	Complete   bool     `arg:"--complete,hidden"`
 	Tasks      []string `arg:"positional" help:"tasks to run in sequence"`
@@ -41,6 +42,7 @@ func (args) Description() string {
 // without touching os.Args, process stdio, or the real cwd.
 type App struct {
 	Args   []string               // command-line args, without program name
+	Stdin  io.Reader              // interactive input (task prompts); nil means no input
 	Stdout io.Writer              // user-visible output (help, --list, completion scripts)
 	Stderr io.Writer              // error messages
 	Getwd  func() (string, error) // working directory lookup
@@ -49,6 +51,7 @@ type App struct {
 func main() {
 	app := &App{
 		Args:   os.Args[1:],
+		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Getwd:  os.Getwd,
@@ -97,10 +100,16 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Stdin is wired only when provided so embedders that leave it nil keep
+	// the runner's default (the process stdin).
+	if a.Stdin != nil {
+		runner.IO.Stdin = a.Stdin
+	}
 	runner.IO.Stdout = a.Stdout
 	runner.IO.Stderr = a.Stderr
 	runner.DryRun = parsed.DryRun
 	runner.Force = parsed.Force
+	runner.AssumeYes = parsed.Yes
 
 	taskNames := defaultTaskNames(parsed.Tasks, tf)
 

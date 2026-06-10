@@ -41,6 +41,7 @@ Each task supports the following fields:
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |
 | `preconditions` | list | Shell commands that must succeed before the task runs |
+| `prompt` | string | Confirmation question shown before the task runs; declining aborts (see [Prompts](#prompts)) |
 | `silent` | bool | When `true`, suppress the `[task] cmd` log line for each command |
 
 ## Default Task
@@ -156,6 +157,32 @@ tasks:
 ```
 
 `ignore_error` is scoped to the individual command — a later command without it still fails the task. It only applies to shell commands: it is not honored on `task:` sub-calls (a failing child task always propagates) or on `defer:` entries (whose failures are already ignored).
+
+## Prompts
+
+Guard destructive tasks with a `prompt:` — a confirmation question asked before the task (and its dependencies) runs:
+
+```yaml
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    deps: [build]
+    cmd: ./deploy.sh
+```
+
+```
+$ gogo deploy
+[deploy] Deploy to production? [y/N]:
+```
+
+Only `y` or `yes` (case-insensitive) confirms. Anything else — including pressing Enter, EOF, or a closed stdin — declines and aborts with `task "deploy": prompt declined`, leaving the system untouched: dependencies haven't run either.
+
+Two cases skip the question:
+
+- `gogo --yes` (or `-y`) auto-confirms every prompt, keeping guarded tasks scriptable in CI.
+- `gogo --dry` skips it because nothing will execute anyway.
+
+The prompt is asked before variables and environment are resolved, so the message is shown literally — `{{ "{{" }}.VAR}}` references are not expanded.
 
 ## Task Descriptions
 

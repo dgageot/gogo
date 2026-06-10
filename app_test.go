@@ -103,6 +103,38 @@ func TestAppCompletionUnsupportedShell(t *testing.T) {
 	assert.EqualError(t, err, "unsupported shell: pwsh (valid: bash, zsh, fish)")
 }
 
+func TestAppYesFlagAutoConfirmsPrompt(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    cmd: true
+`)
+
+	app, _, stderr := newTestApp(t, dir, "--yes", "deploy")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.NotContains(t, stderr.String(), "[y/N]")
+}
+
+func TestAppPromptReadsStdin(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    cmd: true
+`)
+
+	app, _, stderr := newTestApp(t, dir, "deploy")
+	app.Stdin = strings.NewReader("n\n")
+
+	err := app.Run(t.Context())
+	require.ErrorContains(t, err, `task "deploy": prompt declined`)
+	assert.Contains(t, stderr.String(), "Deploy to production? [y/N]:")
+}
+
 func TestAppListShowsDescriptionsAndAliases(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"

@@ -67,6 +67,7 @@ A quick tour. Each item links to the canonical docs page.
 - **Preconditions & requires** to guard tasks before they run ([Preconditions](https://dgageot.github.io/gogo/features/preconditions/))
 - **Deferred cleanup** — `defer:` cmds run after the task, in reverse order, even on failure
 - **Error tolerance** — `ignore_error: true` lets a task continue past a failing cmd
+- **Prompts** — `prompt:` asks for confirmation before destructive tasks; `--yes` auto-confirms
 - **Platform filtering** to restrict tasks to specific OS/arch
 - **Includes & flatten** to split task files across subdirectories ([Includes](https://dgageot.github.io/gogo/features/includes/))
 - **Dry run** mode (`gogo -n`) to preview the plan ([CLI Reference](https://dgageot.github.io/gogo/features/cli/))

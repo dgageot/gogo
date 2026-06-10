@@ -137,6 +137,14 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 		return nil
 	}
 
+	// Prompt before anything runs — deps included — so declining leaves the
+	// system untouched.
+	if task.Prompt != "" {
+		if err := r.confirmPrompt(resolved, task.Prompt); err != nil {
+			return err
+		}
+	}
+
 	if err := r.runDeps(task.Deps); err != nil {
 		return err
 	}
