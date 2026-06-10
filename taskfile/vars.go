@@ -58,6 +58,7 @@ func expandTaskTemplates(t *Task) {
 	t.Dir = expandEnvTemplates(t.Dir)
 	expandStringSlice(t.Sources)
 	expandStringSlice(t.Generates)
+	expandStringSlice(t.Status)
 	expandStringSlice(t.Aliases)
 	expandStringSlice(t.Platforms)
 	expandStringSlice(t.Dotenv)
@@ -228,6 +229,9 @@ func referencedVars(task *Task) []string {
 	}
 	for _, cmd := range task.Cmds {
 		for _, name := range templateNames(cmd.Cmd) {
+			refs[name] = struct{}{}
+		}
+		for _, name := range templateNames(cmd.Defer) {
 			refs[name] = struct{}{}
 		}
 		for _, v := range cmd.Vars {

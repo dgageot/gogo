@@ -16,6 +16,7 @@ type ShellCommandKind string
 const (
 	ShellCommandTask         ShellCommandKind = "task"
 	ShellCommandPrecondition ShellCommandKind = "precondition"
+	ShellCommandStatus       ShellCommandKind = "status"
 	ShellCommandVar          ShellCommandKind = "var"
 )
 

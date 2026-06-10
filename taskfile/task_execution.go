@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -136,6 +137,14 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 		return nil
 	}
 
+	// Prompt before anything runs — deps included — so declining leaves the
+	// system untouched.
+	if task.Prompt != "" {
+		if err := r.confirmPrompt(resolved, task.Prompt); err != nil {
+			return err
+		}
+	}
+
 	if err := r.runDeps(task.Deps); err != nil {
 		return err
 	}
@@ -167,6 +176,13 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 	if err != nil {
 		return err
 	}
+	// `status:` probes the desired end state. With no sources it decides
+	// alone; with sources both must agree, so either signal forces a run.
+	// It's only consulted when it can still flip the answer — changed
+	// sources already force a run, no point shelling out on top.
+	if !r.Force && len(task.Status) > 0 && (len(task.Sources) == 0 || upToDate) {
+		upToDate = r.statusUpToDate(resolved, &task, dir, env)
+	}
 	if upToDate {
 		r.logTask(colorYellow, resolved, "up to date")
 		return nil
@@ -189,9 +205,21 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 
 // runCmds executes a list of commands in sequence. When silent is true, the
 // per-cmd "[task] cmd" log line is suppressed; the command itself still runs
-// and its own stdout/stderr are unaffected.
+// and its own stdout/stderr are unaffected. Deferred commands (`defer:`)
+// registered before a failure still run after the task's body, in reverse
+// registration order — they exist for cleanup, so a failed cmd must not skip
+// them.
 func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool) error {
+	var deferred []string
+	defer func() {
+		r.runDeferred(taskName, deferred, dir, env, useOpRun, silent)
+	}()
+
 	for _, cmd := range cmds {
+		if cmd.Defer != "" {
+			deferred = append(deferred, expandVars(cmd.Defer, vars, cliArgs, r.builtinLookup))
+			continue
+		}
 		if cmd.Task != "" {
 			// `task: X` sub-calls inherit the parent's resolved env so a
 			// task-level `env:` block flows down without the user having to
@@ -217,10 +245,32 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			r.logTask(colorGreen, taskName, expanded)
 		}
 		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
+			if cmd.IgnoreError {
+				r.logTask(colorYellow, taskName, fmt.Sprintf("warning: command failed (ignored): %v", err))
+				continue
+			}
 			return err
 		}
 	}
 	return nil
+}
+
+// runDeferred executes deferred commands in reverse registration order,
+// mirroring Go's defer semantics. A deferred command failure is logged as a
+// warning rather than returned: cleanup must not mask the task's own result,
+// and later defers must still run.
+func (r *Runner) runDeferred(taskName string, cmds []string, dir string, env []string, useOpRun, silent bool) {
+	for _, cmd := range slices.Backward(cmds) {
+		if !silent {
+			r.logTask(colorGreen, taskName, cmd)
+		}
+		if r.DryRun {
+			continue
+		}
+		if err := r.runShellTaskCommand(taskName, cmd, dir, env, useOpRun); err != nil {
+			r.logTask(colorYellow, taskName, fmt.Sprintf("warning: deferred command failed: %v", err))
+		}
+	}
 }
 
 // runDeps executes task dependencies concurrently.

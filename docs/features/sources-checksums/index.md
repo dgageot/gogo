@@ -39,6 +39,39 @@ tasks:
 
 This avoids checksum storage and matches traditional `make`-style incremental builds.
 
+## Status Mode (`status:`)
+
+When file fingerprints can't answer "is this already done?", give the task `status:` commands — shell probes of the desired end state. The task is skipped when **every** status command exits 0:
+
+```yaml
+tasks:
+  create-bucket:
+    status:
+      - aws s3api head-bucket --bucket my-app-artifacts
+    cmd: aws s3 mb s3://my-app-artifacts
+
+  install-tools:
+    status:
+      - which golangci-lint
+      - which goimports
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - go install golang.org/x/tools/cmd/goimports@latest
+```
+
+This suits idempotent operations — creating cloud resources, installing tools, running database migrations — where the world, not a file tree, holds the answer.
+
+Semantics:
+
+- A single command can be written as a plain string: `status: which aws`.
+- The first failing command short-circuits — one "not done" answer is enough to run the task.
+- **With `sources:` too, both must agree**: changed sources force a run regardless of status (the probes aren't even run), and a failing status forces a run even when sources are unchanged.
+- `--force` bypasses status checks like every other up-to-date mechanism.
+- Status commands run with the task's full environment, including [`op://` secret](../secrets/) resolution — same as preconditions.
+- Under `--dry`, status probes still run (they're read-only checks) so the printed plan reflects what a real run would skip.
+
+Not to be confused with [preconditions](../preconditions/), which invert the meaning: a failing precondition **aborts with an error** ("you may not run"), while a failing status command simply means the task needs to run.
+
 ## Glob Patterns
 
 Non-recursive patterns are matched with Go's [`filepath.Glob`](https://pkg.go.dev/path/filepath#Glob), which supports `*`, `?`, and `[…]` character classes within a single path segment:

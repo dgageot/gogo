@@ -41,6 +41,7 @@ type Runner struct {
 	aliases     map[string]string // alias -> task name
 	DryRun      bool              // if true, print commands without executing them
 	Force       bool              // if true, ignore sources and generates (always run)
+	AssumeYes   bool              // if true, task prompts are auto-confirmed (--yes)
 	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
 	IO          RunnerIO          // process streams used for logs and command stdio
 	runs        sync.Map          // resolved task name -> *taskRun

@@ -23,6 +23,7 @@ tasks, so `gogo clean install` runs `clean`, then `install` (including
 | `-w`, `--watch` | Watch sources and re-run on changes |
 | `-f`, `--force` | Ignore `sources` / `generates` and always run the task |
 | `-n`, `--dry` | Print commands without executing them |
+| `-y`, `--yes` | Auto-confirm task prompts (see [Prompts](../task-file-syntax/#prompts)) |
 | `--completion <shell>` | Print a shell completion script (`bash`, `zsh`, or `fish`) |
 | `--help` | Show help |
 

@@ -329,6 +329,87 @@ tasks:
 	assert.Empty(t, task.Preconditions[1].Msg)
 }
 
+func TestParseDeferCmd(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  test:
+    cmds:
+      - docker compose up -d
+      - defer: docker compose down
+      - go test ./...
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	task := tf.Tasks["test"]
+	require.Len(t, task.Cmds, 3)
+	assert.Equal(t, "docker compose up -d", task.Cmds[0].Cmd)
+	assert.Equal(t, "docker compose down", task.Cmds[1].Defer)
+	assert.Equal(t, "go test ./...", task.Cmds[2].Cmd)
+}
+
+func TestParseIgnoreError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  clean:
+    cmds:
+      - cmd: rm bin/app
+        ignore_error: true
+      - echo done
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	task := tf.Tasks["clean"]
+	require.Len(t, task.Cmds, 2)
+	assert.Equal(t, "rm bin/app", task.Cmds[0].Cmd)
+	assert.True(t, task.Cmds[0].IgnoreError)
+	assert.False(t, task.Cmds[1].IgnoreError, "ignore_error defaults to false")
+}
+
+func TestParsePromptField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    cmd: echo deploying
+  build:
+    cmd: go build
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Deploy to production?", tf.Tasks["deploy"].Prompt)
+	assert.Empty(t, tf.Tasks["build"].Prompt)
+}
+
+func TestParseStatusField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  create-bucket:
+    status:
+      - aws s3api head-bucket --bucket artifacts
+      - which aws
+    cmd: aws s3 mb s3://artifacts
+  install:
+    status: which golangci-lint
+    cmd: go install golangci-lint
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, StringList{"aws s3api head-bucket --bucket artifacts", "which aws"}, tf.Tasks["create-bucket"].Status)
+	assert.Equal(t, StringList{"which golangci-lint"}, tf.Tasks["install"].Status, "single string form")
+}
+
 func TestParseSilentField(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

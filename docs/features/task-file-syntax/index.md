@@ -37,10 +37,12 @@ Each task supports the following fields:
 | `secrets` | list or string | Names referencing entries in the top-level `secrets:` map (see [Secrets](../secrets/)) |
 | `sources` | list or string | Glob patterns for incremental builds and watch mode. A bare name resolves to a [source preset](../sources-checksums/#presets) (e.g. `sources: go`) |
 | `generates` | list | Output file patterns for timestamp-based incremental builds |
+| `status` | list or string | Shell commands probing the task's end state; all exiting 0 marks it up to date (see [Sources & Checksums](../sources-checksums/#status-mode-status)) |
 | `aliases` | list | Alternative names for the task |
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |
 | `preconditions` | list | Shell commands that must succeed before the task runs |
+| `prompt` | string | Confirmation question shown before the task runs; declining aborts (see [Prompts](#prompts)) |
 | `silent` | bool | When `true`, suppress the `[task] cmd` log line for each command |
 
 ## Default Task
@@ -116,6 +118,72 @@ tasks:
 ```
 
 The child's own `env` block (or a per-call `vars:` override) wins per key. See [Variables](../variables/#parent-to-child-env-propagation) for the full precedence rules.
+
+## Deferred Cleanup
+
+A command entry can use `defer:` instead of `cmd:` to register a cleanup command. Deferred commands run after the task's other commands finish — **even when one of them fails** — making them the right place for teardown:
+
+```yaml
+tasks:
+  test:
+    cmds:
+      - docker compose up -d
+      - defer: docker compose down
+      - go test ./...
+```
+
+Here `docker compose down` runs whether `go test` passes or fails.
+
+Deferred commands follow Go's `defer` semantics:
+
+- They run in **reverse registration order** (last registered, first run).
+- Only defers registered **before** a failure run — a `defer:` listed after a failing command never registered, so it is skipped.
+- A deferred command's own failure is logged as a warning but does **not** fail the task: cleanup must not mask the task's real result, and later defers still run.
+- Variables (`{{ "{{" }}.VAR}}`) are expanded in deferred commands like in regular ones.
+- Under `--dry`, deferred commands are printed but not executed.
+
+`defer:` only accepts a shell command string — `defer: { task: cleanup }` is not supported.
+
+## Ignoring Command Failures
+
+By default, a failing command aborts the task. Set `ignore_error: true` on a command to log the failure as a warning and continue with the next command:
+
+```yaml
+tasks:
+  clean:
+    cmds:
+      - cmd: rm bin/app        # may not exist — that's fine
+        ignore_error: true
+      - echo cleaned
+```
+
+`ignore_error` is scoped to the individual command — a later command without it still fails the task. It only applies to shell commands: it is not honored on `task:` sub-calls (a failing child task always propagates) or on `defer:` entries (whose failures are already ignored).
+
+## Prompts
+
+Guard destructive tasks with a `prompt:` — a confirmation question asked before the task (and its dependencies) runs:
+
+```yaml
+tasks:
+  deploy:
+    prompt: Deploy to production?
+    deps: [build]
+    cmd: ./deploy.sh
+```
+
+```
+$ gogo deploy
+[deploy] Deploy to production? [y/N]:
+```
+
+Only `y` or `yes` (case-insensitive) confirms. Anything else — including pressing Enter, EOF, or a closed stdin — declines and aborts with `task "deploy": prompt declined`, leaving the system untouched: dependencies haven't run either.
+
+Two cases skip the question:
+
+- `gogo --yes` (or `-y`) auto-confirms every prompt, keeping guarded tasks scriptable in CI.
+- `gogo --dry` skips it because nothing will execute anyway.
+
+The prompt is asked before variables and environment are resolved, so the message is shown literally — `{{ "{{" }}.VAR}}` references are not expanded.
 
 ## Task Descriptions
 

@@ -58,6 +58,7 @@ gogo -n build
 A quick tour. Each item links to the canonical docs page.
 
 - **Incremental builds** — SHA-256 source checksums or `generates:` timestamp comparison ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/))
+- **Status checks** — `status:` commands probe the desired end state and skip the task when it already exists
 - **Source presets** — reuse named glob lists; built-in `go` / `go-vendored`, or define your own ([Sources & Checksums](https://dgageot.github.io/gogo/features/sources-checksums/#presets))
 - **Watch mode** — polls sources at a configurable `interval:` and re-runs ([Watch Mode](https://dgageot.github.io/gogo/features/watch-mode/))
 - **Concurrent dependencies** with deduplication ([Dependencies](https://dgageot.github.io/gogo/features/dependencies/))
@@ -65,6 +66,9 @@ A quick tour. Each item links to the canonical docs page.
 - **Dotenv** — global and per-task, with deterministic precedence ([Dotenv](https://dgageot.github.io/gogo/features/dotenv/))
 - **1Password secrets** via `op://` references and a top-level `secrets:` block ([Secrets](https://dgageot.github.io/gogo/features/secrets/))
 - **Preconditions & requires** to guard tasks before they run ([Preconditions](https://dgageot.github.io/gogo/features/preconditions/))
+- **Deferred cleanup** — `defer:` cmds run after the task, in reverse order, even on failure
+- **Error tolerance** — `ignore_error: true` lets a task continue past a failing cmd
+- **Prompts** — `prompt:` asks for confirmation before destructive tasks; `--yes` auto-confirms
 - **Platform filtering** to restrict tasks to specific OS/arch
 - **Includes & flatten** to split task files across subdirectories ([Includes](https://dgageot.github.io/gogo/features/includes/))
 - **Dry run** mode (`gogo -n`) to preview the plan ([CLI Reference](https://dgageot.github.io/gogo/features/cli/))
