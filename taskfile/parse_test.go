@@ -350,6 +350,27 @@ tasks:
 	assert.Equal(t, "go test ./...", task.Cmds[2].Cmd)
 }
 
+func TestParseIgnoreError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  clean:
+    cmds:
+      - cmd: rm bin/app
+        ignore_error: true
+      - echo done
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	task := tf.Tasks["clean"]
+	require.Len(t, task.Cmds, 2)
+	assert.Equal(t, "rm bin/app", task.Cmds[0].Cmd)
+	assert.True(t, task.Cmds[0].IgnoreError)
+	assert.False(t, task.Cmds[1].IgnoreError, "ignore_error defaults to false")
+}
+
 func TestParseSilentField(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

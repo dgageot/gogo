@@ -100,10 +100,11 @@ func (sl *StringList) UnmarshalYAML(unmarshal func(any) error) error {
 // Cmd represents a command in a task. It can be a simple string, a task
 // reference, or a deferred cleanup command.
 type Cmd struct {
-	Cmd   string         `yaml:"cmd"`
-	Task  string         `yaml:"task"`
-	Defer string         `yaml:"defer"` // shell command run after the task's cmds, even on failure
-	Vars  map[string]Var `yaml:"vars"`
+	Cmd         string         `yaml:"cmd"`
+	Task        string         `yaml:"task"`
+	Defer       string         `yaml:"defer"`        // shell command run after the task's cmds, even on failure
+	IgnoreError bool           `yaml:"ignore_error"` // when true, a failure of this cmd doesn't stop the task (shell cmds only; not honored on task: or defer: entries)
+	Vars        map[string]Var `yaml:"vars"`
 }
 
 // isSet returns true if the Cmd has a command, task reference, or deferred command.

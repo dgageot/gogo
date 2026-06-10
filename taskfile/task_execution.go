@@ -230,6 +230,10 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			r.logTask(colorGreen, taskName, expanded)
 		}
 		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
+			if cmd.IgnoreError {
+				r.logTask(colorYellow, taskName, fmt.Sprintf("warning: command failed (ignored): %v", err))
+				continue
+			}
 			return err
 		}
 	}

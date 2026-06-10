@@ -142,6 +142,21 @@ Deferred commands follow Go's `defer` semantics:
 
 `defer:` only accepts a shell command string — `defer: { task: cleanup }` is not supported.
 
+## Ignoring Command Failures
+
+By default, a failing command aborts the task. Set `ignore_error: true` on a command to log the failure as a warning and continue with the next command:
+
+```yaml
+tasks:
+  clean:
+    cmds:
+      - cmd: rm bin/app        # may not exist — that's fine
+        ignore_error: true
+      - echo cleaned
+```
+
+`ignore_error` is scoped to the individual command — a later command without it still fails the task. It only applies to shell commands: it is not honored on `task:` sub-calls (a failing child task always propagates) or on `defer:` entries (whose failures are already ignored).
+
 ## Task Descriptions
 
 Comments above a task key are used as the task description, shown by `gogo -l`:
