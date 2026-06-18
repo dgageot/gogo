@@ -104,6 +104,9 @@ func (l *includeLoader) load() (*Config, error) {
 	if err := validateDefaultTask(l.root); err != nil {
 		return nil, err
 	}
+	if err := validateNamespaceDefaults(l.root); err != nil {
+		return nil, err
+	}
 	if err := validateSecrets(l.root); err != nil {
 		return nil, err
 	}
@@ -121,6 +124,16 @@ func validateDefaultTask(c *Config) error {
 		return nil
 	}
 	return fmt.Errorf("top-level default: %q does not reference any defined task", c.Default)
+}
+
+func validateNamespaceDefaults(c *Config) error {
+	for namespace, defaultTask := range c.NamespaceDefaults {
+		if _, ok := c.Tasks[defaultTask]; ok {
+			continue
+		}
+		return fmt.Errorf("include %q default: %q does not reference any defined task", namespace, defaultTask)
+	}
+	return nil
 }
 
 type includeRequest struct {

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -69,10 +70,14 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 	aliases := make(map[string]string)
 	for _, name := range slices.Sorted(maps.Keys(tf.Tasks)) {
 		for _, alias := range tf.Tasks[name].Aliases {
-			if existing, ok := aliases[alias]; ok {
-				return nil, fmt.Errorf("alias %q is defined by both %q and %q", alias, existing, name)
+			if err := addAlias(aliases, alias, name); err != nil {
+				return nil, err
 			}
-			aliases[alias] = name
+			if ns := taskNamespace(name); ns != "" && !strings.Contains(alias, ":") {
+				if err := addAlias(aliases, ns+":"+alias, name); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
@@ -85,6 +90,14 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 		IO:          defaultRunnerIO(),
 	}
 	return r, nil
+}
+
+func addAlias(aliases map[string]string, alias, taskName string) error {
+	if existing, ok := aliases[alias]; ok {
+		return fmt.Errorf("alias %q is defined by both %q and %q", alias, existing, taskName)
+	}
+	aliases[alias] = taskName
+	return nil
 }
 
 // builtinLookup returns the value of a gogo-provided variable (currently

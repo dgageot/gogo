@@ -143,8 +143,9 @@ func (r *Runner) nameCandidates(name string) []string {
 	base := filepath.Base(r.tf.Dir)
 	ns, hasNS := r.cwdNamespace()
 	var out []string
+	strippedSelfPrefix := false
 	for cur := name; ; {
-		if hasNS && r.PreferCwdNamespace && !strings.Contains(cur, ":") {
+		if hasNS && r.PreferCwdNamespace && !strippedSelfPrefix && !strings.Contains(cur, ":") {
 			out = append(out, ns+":"+cur, cur)
 		} else {
 			out = append(out, cur)
@@ -156,6 +157,7 @@ func (r *Runner) nameCandidates(name string) []string {
 		if !hasColon || prefix != base {
 			return out
 		}
+		strippedSelfPrefix = true
 		cur = suffix
 	}
 }

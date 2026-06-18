@@ -516,6 +516,52 @@ tasks:
 	assert.NotContains(t, stderr.String(), "echo root-build")
 }
 
+func TestAppCanRunRootTaskWithSelfPrefixFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	rootName := filepath.Base(dir)
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", rootName+":build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[build]")
+	assert.Contains(t, stderr.String(), "echo root-build")
+	assert.NotContains(t, stderr.String(), "echo p2-build")
+}
+
+func TestAppPrefersIncludedProjectAliasFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  b:
+    cmd: echo root-b
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    aliases: [b]
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "b")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
+	assert.NotContains(t, stderr.String(), "echo root-b")
+}
+
 func TestAppUsesIncludedProjectDefaultFromIncludedSubProject(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
@@ -533,6 +579,26 @@ tasks:
 	require.NoError(t, app.Run(t.Context()))
 	assert.Contains(t, stderr.String(), "[p2:build]")
 	assert.Contains(t, stderr.String(), "echo p2-build")
+}
+
+func TestAppRejectsMissingIncludedProjectDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+default: missing
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, _ := newTestApp(t, dir, "--list")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `include "p2" default:`)
+	assert.Contains(t, err.Error(), `p2:missing`)
 }
 
 func TestAppReportsInvalidIncludingAncestor(t *testing.T) {
