@@ -136,12 +136,12 @@ func taskFileDirs(dir string) []string {
 }
 
 func configDirectlyIncludesDir(configDir, dir string) bool {
-	tf, err := Parse(configDir)
+	includes, err := parseIncludesOnly(configDir)
 	if err != nil {
 		return false
 	}
 	dir = filepath.Clean(dir)
-	for _, includeName := range tf.Includes {
+	for _, includeName := range includes {
 		if validateIncludeName(includeName) != nil {
 			continue
 		}
@@ -154,4 +154,23 @@ func configDirectlyIncludesDir(configDir, dir string) bool {
 		}
 	}
 	return false
+}
+
+func parseIncludesOnly(dir string) ([]string, error) {
+	path := findFile(dir)
+	if path == "" {
+		return nil, fmt.Errorf("no gogo.yaml found in %s", dir)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	var tf struct {
+		Includes []string `yaml:"includes"`
+	}
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	expandStringSlice(tf.Includes)
+	return tf.Includes, nil
 }

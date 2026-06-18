@@ -52,6 +52,15 @@ cd backend
 gogo build      # resolves to backend:build
 ```
 
+If `backend/` and `frontend/` each have their own `gogo.yaml` and the parent task file includes both, gogo still uses the parent include root when run from either sub-project. That makes sibling namespaces available from every included project:
+
+```sh
+cd backend
+gogo frontend:test
+```
+
+This promotion only happens for the nearest ancestor task file that directly includes the current project, so unrelated higher-level `gogo.yaml` files are ignored.
+
 ## Dotenv Deduplication
 
 Each included task file can define its own `dotenv` files. If multiple includes reference the same `.env` file (by absolute path), it's loaded only once.

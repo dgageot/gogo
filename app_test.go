@@ -494,6 +494,27 @@ tasks:
 	assert.Contains(t, stderr.String(), "echo workspace-p1-build")
 }
 
+func TestAppReportsInvalidIncludingAncestor(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  bad/name:
+    cmd: echo invalid
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, _ := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "build")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `bad/name`)
+}
+
 func TestAppDoesNotUseAncestorThatDoesNotIncludeCurrentProject(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
