@@ -91,6 +91,17 @@ cd backend
 gogo build      # resolves to backend:build
 ```
 
+If `backend/` and `frontend/` each have their own `gogo.yaml` and the parent task file includes both, gogo still uses the parent include root when run from either sub-project. That makes sibling namespaces available from every included project:
+
+```sh
+cd backend
+gogo frontend:test
+```
+
+This promotion only happens for the nearest ancestor task file that directly includes the current project, so unrelated higher-level `gogo.yaml` files are ignored. Parent variables are available just as they are when invoking the namespaced task from the root.
+
+Local task names and aliases take precedence over root tasks. Bare `gogo` uses the included project's own default (or lists tasks if it has none), not the parent's default. To select a root task explicitly, prefix it with the root directory's name.
+
 ## Wildcard Patterns
 
 A `...` wildcard runs a same-named task across every namespace (Bazel-style):

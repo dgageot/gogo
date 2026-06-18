@@ -115,6 +115,16 @@ func (r *Runner) Run(name, cliArgs string) error {
 
 // RunContext executes tasks and cancels their shell commands with ctx.
 func (r *Runner) RunContext(ctx context.Context, name, cliArgs string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !isTaskPattern(name) {
+		resolved, err := r.resolveInvocation(name)
+		if err != nil {
+			return err
+		}
+		name = resolved
+	}
 	err := r.runNamed(ctx, name, cliArgs, nil)
 	if ctx.Err() != nil {
 		return ctx.Err()

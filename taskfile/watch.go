@@ -90,7 +90,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		return fmt.Errorf("patterns like %q are not supported with --watch", name)
 	}
 
-	resolved, err := r.resolveTask(name)
+	resolved, err := r.resolveInvocation(name)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		return fmt.Errorf("computing sources checksum: %w", err)
 	}
 
-	if err := r.RunContext(ctx, resolved, cliArgs); err != nil {
+	if err := r.runNamed(ctx, resolved, cliArgs, nil); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -138,7 +138,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		// Reset dedup state so tasks can re-run
 		r.ResetRan()
 
-		if err := r.RunContext(ctx, resolved, cliArgs); err != nil {
+		if err := r.runNamed(ctx, resolved, cliArgs, nil); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}

@@ -97,11 +97,12 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 
-	// With no requested task or configured default, a literal `default` task
-	// keeps the original convention. Otherwise, bare gogo is a successful
-	// shorthand for --list.
-	if len(parsed.Tasks) == 0 && tf.Default == "" {
-		if _, ok := tf.Tasks["default"]; !ok {
+	cwdNamespace, hasCwdNamespace := taskfile.NamespaceForDir(tf, dir)
+	taskNames := defaultTaskNames(parsed.Tasks, tf, cwdNamespace)
+
+	// Bare invocation keeps the current project's default or lists tasks.
+	if len(parsed.Tasks) == 0 {
+		if _, ok := tf.Tasks[taskNames[0]]; !ok {
 			writeTaskListings(a.Stdout, gatherTaskListings(tf))
 			return nil
 		}
@@ -123,7 +124,7 @@ func (a *App) Run(ctx context.Context) error {
 	runner.Force = parsed.Force
 	runner.AssumeYes = parsed.Yes
 
-	taskNames := defaultTaskNames(parsed.Tasks, tf)
+	runner.PreferCwdNamespace = hasCwdNamespace
 
 	if parsed.Watch {
 		if len(taskNames) != 1 {
@@ -185,12 +186,17 @@ func (a *App) handleRunError(tf *taskfile.Config, err error) error {
 var errSilent = errors.New("")
 
 // defaultTaskNames picks the tasks to run when no positional args were
-// given. A top-level `default:` field in the task file wins over the
-// implicit "task literally named default" convention, which lets users
-// skip the `default:` trampoline entirely.
-func defaultTaskNames(parsed []string, tf *taskfile.Config) []string {
+// given. The current project's declared default wins over its literal
+// "default" task, including when running from an included project.
+func defaultTaskNames(parsed []string, tf *taskfile.Config, cwdNamespace string) []string {
 	if len(parsed) > 0 {
 		return parsed
+	}
+	if cwdNamespace != "" {
+		if name := tf.NamespaceDefaults[cwdNamespace]; name != "" {
+			return []string{name}
+		}
+		return []string{cwdNamespace + ":default"}
 	}
 	if tf.Default != "" {
 		return []string{tf.Default}

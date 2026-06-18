@@ -95,23 +95,85 @@ func findFile(dir string) string {
 	return ""
 }
 
-// FindRootDir walks up from dir to find the nearest directory containing a gogo.yaml.
+// FindRootDir walks up from dir to find the task-file root to use.
+//
+// A standalone nested gogo.yaml remains the root for commands run below it.
+// However, when its nearest task-file ancestor directly includes that nested
+// project, the ancestor is the project root: loading it makes sibling include
+// namespaces available from any included sub-project without climbing into
+// unrelated higher-level task files.
 func FindRootDir(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
 
+	candidates := taskFileDirs(dir)
+	if len(candidates) == 0 {
+		return "", ErrNoTaskFile
+	}
+
+	nearest := candidates[0]
+	for i := 1; i < len(candidates); i++ {
+		candidate := candidates[i]
+		if configDirectlyIncludesDir(candidate, nearest) {
+			return candidate, nil
+		}
+	}
+
+	return nearest, nil
+}
+
+func taskFileDirs(dir string) []string {
+	var dirs []string
 	for {
 		if findFile(dir) != "" {
-			return dir, nil
+			dirs = append(dirs, dir)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			break
+			return dirs
 		}
 		dir = parent
 	}
+}
 
-	return "", ErrNoTaskFile
+func configDirectlyIncludesDir(configDir, dir string) bool {
+	includes, err := parseIncludesOnly(configDir)
+	if err != nil {
+		return false
+	}
+	dir = filepath.Clean(dir)
+	for _, includeName := range includes {
+		if validateIncludeName(includeName) != nil {
+			continue
+		}
+		includeDir, err := filepath.Abs(filepath.Join(configDir, includeName))
+		if err != nil {
+			continue
+		}
+		if filepath.Clean(includeDir) == dir {
+			return true
+		}
+	}
+	return false
+}
+
+func parseIncludesOnly(dir string) ([]string, error) {
+	path := findFile(dir)
+	if path == "" {
+		return nil, fmt.Errorf("no gogo.yaml found in %s", dir)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	var tf struct {
+		Includes []string `yaml:"includes"`
+	}
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	expandStringSlice(tf.Includes)
+	return tf.Includes, nil
 }

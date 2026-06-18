@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -11,13 +12,17 @@ import (
 // or a unique segment-wise prefix — to a task name. Ambiguous prefixes are
 // rejected so the wrong task is never silently invoked.
 func (r *Runner) resolveTask(name string) (string, error) {
-	if resolved, ok := r.resolveTaskName(name); ok {
+	return r.resolveTaskInScope(name, "")
+}
+
+func (r *Runner) resolveTaskInScope(name, scope string) (string, error) {
+	if resolved, ok := r.resolveTaskName(name); ok && strings.HasPrefix(resolved, scope) {
 		return resolved, nil
 	}
-	if resolved, ok := r.resolveNamespaceDefault(name); ok {
+	if resolved, ok := r.resolveNamespaceDefault(name); ok && strings.HasPrefix(resolved, scope) {
 		return resolved, nil
 	}
-	switch matches := r.prefixMatches(name); len(matches) {
+	switch matches := r.prefixMatches(name, scope); len(matches) {
 	case 1:
 		return matches[0], nil
 	case 0:
@@ -25,6 +30,21 @@ func (r *Runner) resolveTask(name string) (string, error) {
 	default:
 		return "", fmt.Errorf("task %q is ambiguous (matches: %s)", name, strings.Join(matches, ", "))
 	}
+}
+
+// resolveInvocation prefers local tasks only for CLI input, never task references.
+func (r *Runner) resolveInvocation(name string) (string, error) {
+	ns, hasNS := r.cwdNamespace()
+	prefix, _, qualified := strings.Cut(name, ":")
+	_, explicitNamespace := r.tf.NamespaceDirs[prefix]
+	explicitRoot := qualified && prefix == filepath.Base(r.tf.Dir)
+	if r.PreferCwdNamespace && hasNS && !explicitRoot && (!qualified || !explicitNamespace) {
+		resolved, err := r.resolveTaskInScope(ns+":"+name, ns+":")
+		if _, notFound := errors.AsType[*TaskNotFoundError](err); !notFound {
+			return resolved, err
+		}
+	}
+	return r.resolveTask(name)
 }
 
 // TaskNotFoundError is returned when the user asks for a task name that
@@ -92,7 +112,8 @@ func (r *Runner) resolveNamespaceDefault(name string) (string, bool) {
 // rules carry over. Internal tasks ('_'-prefixed local segment) are skipped
 // so prefix matching never lands on a private helper, and an empty input
 // (or any empty segment) matches nothing.
-func (r *Runner) prefixMatches(name string) []string {
+// The scope keeps an injected cwd namespace exact while matching input prefixes.
+func (r *Runner) prefixMatches(name, scope string) []string {
 	if name == "" {
 		return nil
 	}
@@ -104,7 +125,7 @@ func (r *Runner) prefixMatches(name string) []string {
 		seen := make(map[string]bool)
 		var out []string
 		for taskName := range r.tf.Tasks {
-			if IsInternalTask(taskName) {
+			if IsInternalTask(taskName) || !strings.HasPrefix(taskName, scope) {
 				continue
 			}
 			if segmentPrefixMatch(taskName, candSegs) {
@@ -115,7 +136,7 @@ func (r *Runner) prefixMatches(name string) []string {
 			}
 		}
 		for alias, taskName := range r.aliases {
-			if IsInternalTask(taskName) {
+			if IsInternalTask(taskName) || !strings.HasPrefix(alias, scope) {
 				continue
 			}
 			if segmentPrefixMatch(alias, candSegs) {
@@ -172,21 +193,25 @@ func (r *Runner) nameCandidates(name string) []string {
 	}
 }
 
-// cwdNamespace returns the most specific namespace whose directory contains
-// the runner's current working directory. Used to let users invoke tasks by
-// their short name when cwd sits under an included task file.
-func (r *Runner) cwdNamespace() (string, bool) {
+// NamespaceForDir returns the most specific namespace whose directory contains
+// dir. Used to let users invoke tasks by their short name when cwd sits under
+// an included task file.
+func NamespaceForDir(tf *Config, dir string) (string, bool) {
 	var bestDir, bestNS string
-	for dir, ns := range r.tf.Namespaces {
-		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
+	for namespaceDir, ns := range tf.Namespaces {
+		if !strings.HasPrefix(dir+string(filepath.Separator), namespaceDir+string(filepath.Separator)) {
 			continue
 		}
-		if len(dir) > len(bestDir) {
-			bestDir = dir
+		if len(namespaceDir) > len(bestDir) {
+			bestDir = namespaceDir
 			bestNS = ns
 		}
 	}
 	return bestNS, bestNS != ""
+}
+
+func (r *Runner) cwdNamespace() (string, bool) {
+	return NamespaceForDir(r.tf, r.cwd)
 }
 
 // isTaskPattern reports whether name is a `...:` wildcard pattern

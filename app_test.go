@@ -278,19 +278,19 @@ func TestAppPropagatesGetwdError(t *testing.T) {
 
 func TestDefaultTaskNamesUsesTopLevelDefault(t *testing.T) {
 	tf := &taskfile.Config{Default: "build"}
-	assert.Equal(t, []string{"build"}, defaultTaskNames(nil, tf))
+	assert.Equal(t, []string{"build"}, defaultTaskNames(nil, tf, ""))
 
 	// Explicit positional args always win over the top-level field, so
 	// `gogo test` still runs `test` even when default: build is declared.
-	assert.Equal(t, []string{"test"}, defaultTaskNames([]string{"test"}, tf))
-	assert.Equal(t, []string{"clean", "install"}, defaultTaskNames([]string{"clean", "install"}, tf))
+	assert.Equal(t, []string{"test"}, defaultTaskNames([]string{"test"}, tf, ""))
+	assert.Equal(t, []string{"clean", "install"}, defaultTaskNames([]string{"clean", "install"}, tf, ""))
 }
 
 func TestDefaultTaskNamesFallbackWhenUnset(t *testing.T) {
 	// Backward compatibility: with no top-level default the implicit
 	// "task literally named default" convention still works.
 	tf := &taskfile.Config{}
-	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf))
+	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf, ""))
 }
 
 func TestAppHelpDoesNotExposeCLIArgsFlag(t *testing.T) {
@@ -559,4 +559,363 @@ tasks:
 	assert.Contains(t, out, "build")
 	assert.Contains(t, out, "frontend:dev")
 	assert.Contains(t, out, `task: task "nonexistent" not found`)
+}
+
+func TestAppRunsSiblingIncludedTaskFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p1, p2]
+`)
+	writeFile(t, filepath.Join(dir, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p1-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "p1:build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p1:build]")
+	assert.Contains(t, stderr.String(), "echo p1-build")
+}
+
+func TestAppDoesNotClimbPastNearestIncludingAncestor(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "workspace")
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [workspace]
+`)
+	writeFile(t, filepath.Join(workspace, "gogo.yaml"), `version: "1"
+includes: [p1, p2]
+`)
+	writeFile(t, filepath.Join(workspace, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo workspace-p1-build
+`)
+	writeFile(t, filepath.Join(workspace, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo workspace-p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(workspace, "p2"), "--dry", "p1:build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p1:build]")
+	assert.Contains(t, stderr.String(), "echo workspace-p1-build")
+}
+
+func TestAppPrefersIncludedProjectTaskFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
+	assert.NotContains(t, stderr.String(), "echo root-build")
+}
+
+func TestAppCanRunRootTaskWithSelfPrefixFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	rootName := filepath.Base(dir)
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", rootName+":build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[build]")
+	assert.Contains(t, stderr.String(), "echo root-build")
+	assert.NotContains(t, stderr.String(), "echo p2-build")
+}
+
+func TestAppPrefersIncludedProjectAliasFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  b:
+    cmd: echo root-b
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    aliases: [b]
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "b")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
+	assert.NotContains(t, stderr.String(), "echo root-b")
+}
+
+func TestAppUsesIncludedProjectDefaultFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+default: build
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
+}
+
+func TestAppRejectsMissingIncludedProjectDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+default: missing
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, _ := newTestApp(t, dir, "--list")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `namespace "p2" default:`)
+	assert.Contains(t, err.Error(), `"missing"`)
+}
+
+func TestAppReportsInvalidIncludingAncestor(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  bad/name:
+    cmd: echo invalid
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, _ := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "build")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `bad/name`)
+}
+
+func TestAppDoesNotUseAncestorThatDoesNotIncludeCurrentProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p1]
+`)
+	writeFile(t, filepath.Join(dir, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p1-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "p1:build")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, stderr.String(), `task "p1:build" not found`)
+}
+
+func TestAppResolvesRootVarsFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+vars:
+  PROD_SERVER: https://prod.example.test
+includes: [proxy]
+`)
+	writeFile(t, filepath.Join(dir, "proxy", "gogo.yaml"), `version: "1"
+tasks:
+  deployed-prod:
+    cmd: curl -is "{{.PROD_SERVER}}"/proxy
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "proxy"), "--dry", "deployed-prod")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), `curl -is "https://prod.example.test"/proxy`)
+	assert.NotContains(t, stderr.String(), "{{.PROD_SERVER}}")
+}
+
+func TestAppIncludedLiteralDefaultBeatsRootDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [child]
+default: build
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "child", "gogo.yaml"), `version: "1"
+tasks:
+  default:
+    cmd: echo child-default
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "child"), "--dry")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "echo child-default")
+	assert.NotContains(t, stderr.String(), "echo root-build")
+}
+
+func TestAppIncludedProjectWithoutDefaultListsInsteadOfRunningRootDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [child]
+default: build
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "child", "gogo.yaml"), `version: "1"
+tasks:
+  # Build the child
+  build:
+    cmd: echo child-build
+`)
+
+	app, stdout, stderr := newTestApp(t, filepath.Join(dir, "child"), "--dry")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stdout.String(), "child:build")
+	assert.Empty(t, stderr.String())
+}
+
+func TestAppIncludedProjectKeepsTaskReferencesAtRoot(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [child, sibling]
+tasks:
+  build:
+    cmd: echo root-build
+  test:
+    aliases: check
+    cmd: echo root-test
+  all:
+    deps: [build]
+    cmds:
+      - task: check
+`)
+	writeFile(t, filepath.Join(dir, "child", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo child-build
+  check:
+    cmd: echo child-check
+`)
+	writeFile(t, filepath.Join(dir, "sibling", "gogo.yaml"), `version: "1"
+tasks:
+  all:
+    deps: [build]
+    cmds:
+      - task: check
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "child"), "--dry", "all", "sibling:all")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, 2, strings.Count(stderr.String(), "echo root-build"))
+	assert.Equal(t, 2, strings.Count(stderr.String(), "echo root-test"))
+	assert.NotContains(t, stderr.String(), "echo child-build")
+	assert.NotContains(t, stderr.String(), "echo child-check")
+}
+
+func TestAppPrefersIncludedColonTaskAndAlias(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [child]
+tasks:
+  lint:custom:
+    aliases: lint:extra
+    cmd: echo root-lint
+`)
+	writeFile(t, filepath.Join(dir, "child", "gogo.yaml"), `version: "1"
+tasks:
+  lint:custom:
+    aliases: lint:extra
+    cmd: echo child-lint
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "child"), "--dry", "lint:custom", "lint:extra", "lint:c")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, 3, strings.Count(stderr.String(), "echo child-lint"))
+	assert.NotContains(t, stderr.String(), "echo root-lint")
+}
+
+func TestAppLocalPrefixDoesNotMatchSiblingNamespace(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [app, app-extra]
+tasks:
+  deploy:
+    cmd: echo root-deploy
+`)
+	writeFile(t, filepath.Join(dir, "app", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    aliases: compile
+    cmd: echo app-build
+`)
+	writeFile(t, filepath.Join(dir, "app-extra", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    aliases: compile
+    cmd: echo sibling-build
+  deploy:
+    cmd: echo sibling-deploy
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "app"), "--dry", "b", "c", "deploy")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, 2, strings.Count(stderr.String(), "echo app-build"))
+	assert.Contains(t, stderr.String(), "echo root-deploy")
+	assert.NotContains(t, stderr.String(), "echo sibling-")
 }

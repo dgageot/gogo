@@ -263,3 +263,33 @@ func TestWatchDetectsAbsoluteRecursiveSources(t *testing.T) {
 	require.ErrorIs(t, r.Watch(ctx, "build", "", 10*time.Millisecond), context.Canceled)
 	assert.Equal(t, 2, calls)
 }
+
+func TestWatchPreservesExplicitRootTaskFromIncludedProject(t *testing.T) {
+	dir := t.TempDir()
+	childDir := filepath.Join(dir, "child")
+	writeFiles(t, dir, map[string]string{"input.txt": "original", "child/.keep": ""})
+	runner := newTestRunner(t, &Config{
+		Dir:           dir,
+		Namespaces:    map[string]string{childDir: "child"},
+		NamespaceDirs: map[string]string{"child": childDir},
+		Tasks: map[string]Task{
+			"build":       {Sources: StringList{"input.txt"}, Cmds: []Cmd{{Cmd: "root-build"}}},
+			"child:build": {Dir: childDir, Sources: StringList{"missing.txt"}, Cmds: []Cmd{{Cmd: "child-build"}}},
+		},
+	}, childDir)
+	runner.PreferCwdNamespace = true
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	var tasks []string
+	runner.ShellRunner = &fakeShellRunner{runFunc: func(cmd ShellCommand) error {
+		tasks = append(tasks, cmd.TaskName)
+		if len(tasks) == 1 {
+			return os.WriteFile(filepath.Join(dir, "input.txt"), []byte("edited during build"), 0o644)
+		}
+		cancel()
+		return nil
+	}}
+
+	require.ErrorIs(t, runner.Watch(ctx, filepath.Base(dir)+":build", "", minWatchInterval), context.Canceled)
+	assert.Equal(t, []string{"build", "build"}, tasks)
+}
