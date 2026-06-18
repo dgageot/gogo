@@ -2,21 +2,22 @@ package taskfile
 
 // Config represents a parsed gogo.yaml.
 type Config struct {
-	Version       string                    `yaml:"version"`
-	Includes      []string                  `yaml:"includes"`
-	Flatten       []string                  `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
-	Dotenv        []string                  `yaml:"dotenv"`
-	Default       string                    `yaml:"default"` // task to run when none is given on the CLI; replaces the convention of declaring a `default` task
-	Vars          map[string]Var            `yaml:"vars"`    // vars declared at the root (namespace "")
-	Sources       map[string]StringList     `yaml:"sources"` // named source presets, referenced from task.Sources by name
-	Secrets       map[string]string         `yaml:"secrets"` // named secret URIs (op://, aws-creds://, ...), referenced from task.Secrets
-	Tasks         map[string]Task           `yaml:"tasks"`
-	Dir           string                    `yaml:"-"`
-	Interval      string                    `yaml:"interval"`
-	Namespaces    map[string]string         `yaml:"-"` // dir -> namespace
-	NamespaceDirs map[string]string         `yaml:"-"` // namespace -> dir (where each include's gogo.yaml lives, used to resolve `sh:` vars in their own working dir)
-	NamespaceVars map[string]map[string]Var `yaml:"-"` // namespace -> vars declared at that namespace; not visible to sibling namespaces
-	DotenvVars    map[string]string         `yaml:"-"` // resolved dotenv variables
+	Version           string                    `yaml:"version"`
+	Includes          []string                  `yaml:"includes"`
+	Flatten           []string                  `yaml:"flatten"` // YAML files whose tasks merge into this config without a namespace
+	Dotenv            []string                  `yaml:"dotenv"`
+	Default           string                    `yaml:"default"` // task to run when none is given on the CLI; replaces the convention of declaring a `default` task
+	Vars              map[string]Var            `yaml:"vars"`    // vars declared at the root (namespace "")
+	Sources           map[string]StringList     `yaml:"sources"` // named source presets, referenced from task.Sources by name
+	Secrets           map[string]string         `yaml:"secrets"` // named secret URIs (op://, aws-creds://, ...), referenced from task.Secrets
+	Tasks             map[string]Task           `yaml:"tasks"`
+	Dir               string                    `yaml:"-"`
+	Interval          string                    `yaml:"interval"`
+	Namespaces        map[string]string         `yaml:"-"` // dir -> namespace
+	NamespaceDirs     map[string]string         `yaml:"-"` // namespace -> dir (where each include's gogo.yaml lives, used to resolve `sh:` vars in their own working dir)
+	NamespaceVars     map[string]map[string]Var `yaml:"-"` // namespace -> vars declared at that namespace; not visible to sibling namespaces
+	NamespaceDefaults map[string]string         `yaml:"-"` // namespace -> resolved default task for that include
+	DotenvVars        map[string]string         `yaml:"-"` // resolved dotenv variables
 }
 
 // Task represents a single task definition.

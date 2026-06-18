@@ -35,18 +35,19 @@ func defaultRunnerIO() RunnerIO {
 
 // Runner executes tasks from a loaded task file.
 type Runner struct {
-	tf          *Config
-	cwd         string
-	BaseEnv     []string          // base process environment (defaults to os.Environ() + dotenv)
-	aliases     map[string]string // alias -> task name
-	DryRun      bool              // if true, print commands without executing them
-	Force       bool              // if true, ignore sources and generates (always run)
-	AssumeYes   bool              // if true, task prompts are auto-confirmed (--yes)
-	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
-	IO          RunnerIO          // process streams used for logs and command stdio
-	runs        sync.Map          // resolved task name -> *taskRun
-	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
-	gitOnce     sync.Once         // guards gitVars construction
+	tf                 *Config
+	cwd                string
+	BaseEnv            []string          // base process environment (defaults to os.Environ() + dotenv)
+	aliases            map[string]string // alias -> task name
+	DryRun             bool              // if true, print commands without executing them
+	Force              bool              // if true, ignore sources and generates (always run)
+	AssumeYes          bool              // if true, task prompts are auto-confirmed (--yes)
+	PreferCwdNamespace bool              // if true, bare task names resolve in the cwd namespace before root tasks
+	ShellRunner        ShellRunner       // replaceable shell executor (defaults to real exec)
+	IO                 RunnerIO          // process streams used for logs and command stdio
+	runs               sync.Map          // resolved task name -> *taskRun
+	gitVars            *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
+	gitOnce            sync.Once         // guards gitVars construction
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;

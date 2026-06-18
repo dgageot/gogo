@@ -255,19 +255,19 @@ func TestAppPropagatesGetwdError(t *testing.T) {
 
 func TestDefaultTaskNamesUsesTopLevelDefault(t *testing.T) {
 	tf := &taskfile.Config{Default: "build"}
-	assert.Equal(t, []string{"build"}, defaultTaskNames(nil, tf))
+	assert.Equal(t, []string{"build"}, defaultTaskNames(nil, tf, ""))
 
 	// Explicit positional args always win over the top-level field, so
 	// `gogo test` still runs `test` even when default: build is declared.
-	assert.Equal(t, []string{"test"}, defaultTaskNames([]string{"test"}, tf))
-	assert.Equal(t, []string{"clean", "install"}, defaultTaskNames([]string{"clean", "install"}, tf))
+	assert.Equal(t, []string{"test"}, defaultTaskNames([]string{"test"}, tf, ""))
+	assert.Equal(t, []string{"clean", "install"}, defaultTaskNames([]string{"clean", "install"}, tf, ""))
 }
 
 func TestDefaultTaskNamesFallbackWhenUnset(t *testing.T) {
 	// Backward compatibility: with no top-level default the implicit
 	// "task literally named default" convention still works.
 	tf := &taskfile.Config{}
-	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf))
+	assert.Equal(t, []string{"default"}, defaultTaskNames(nil, tf, ""))
 }
 
 func TestAppHelpDoesNotExposeCLIArgsFlag(t *testing.T) {
@@ -492,6 +492,47 @@ tasks:
 	require.NoError(t, app.Run(t.Context()))
 	assert.Contains(t, stderr.String(), "[p1:build]")
 	assert.Contains(t, stderr.String(), "echo workspace-p1-build")
+}
+
+func TestAppPrefersIncludedProjectTaskFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+tasks:
+  build:
+    cmd: echo root-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
+	assert.NotContains(t, stderr.String(), "echo root-build")
+}
+
+func TestAppUsesIncludedProjectDefaultFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p2]
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+default: build
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p2:build]")
+	assert.Contains(t, stderr.String(), "echo p2-build")
 }
 
 func TestAppReportsInvalidIncludingAncestor(t *testing.T) {

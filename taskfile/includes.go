@@ -73,6 +73,7 @@ func (l *includeLoader) load() (*Config, error) {
 	l.root.Namespaces = make(map[string]string)
 	l.root.NamespaceDirs = make(map[string]string)
 	l.root.NamespaceVars = make(map[string]map[string]Var)
+	l.root.NamespaceDefaults = make(map[string]string)
 
 	// Process flatten files first (their tasks merge into the root namespace).
 	// Order vs. includes doesn't matter for correctness because both honor
@@ -170,6 +171,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 	}
 
 	l.mergeVars(included.Namespace, included.Dir, included.Vars)
+	l.mergeDefault(included.Namespace, included.Default)
 	l.mergeSourcePresets(included.Sources)
 	l.mergeSecrets(included.Secrets)
 	return l.mergeTasks(included)
@@ -353,6 +355,18 @@ func (l *includeLoader) mergeVars(namespace, dir string, vars map[string]Var) {
 		if _, exists := scoped[k]; !exists {
 			scoped[k] = v
 		}
+	}
+}
+
+func (l *includeLoader) mergeDefault(namespace, defaultTask string) {
+	if namespace == "" || defaultTask == "" {
+		return
+	}
+	if l.root.NamespaceDefaults == nil {
+		l.root.NamespaceDefaults = make(map[string]string)
+	}
+	if _, exists := l.root.NamespaceDefaults[namespace]; !exists {
+		l.root.NamespaceDefaults[namespace] = namespaceJoin(namespace, defaultTask)
 	}
 }
 

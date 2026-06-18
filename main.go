@@ -111,7 +111,10 @@ func (a *App) Run(ctx context.Context) error {
 	runner.Force = parsed.Force
 	runner.AssumeYes = parsed.Yes
 
-	taskNames := defaultTaskNames(parsed.Tasks, tf)
+	cwdNamespace, hasCwdNamespace := taskfile.NamespaceForDir(tf, dir)
+	runner.PreferCwdNamespace = hasCwdNamespace
+
+	taskNames := defaultTaskNames(parsed.Tasks, tf, cwdNamespace)
 
 	if parsed.Watch {
 		if len(taskNames) != 1 {
@@ -169,9 +172,14 @@ var errSilent = errors.New("")
 // given. A top-level `default:` field in the task file wins over the
 // implicit "task literally named default" convention, which lets users
 // skip the `default:` trampoline entirely.
-func defaultTaskNames(parsed []string, tf *taskfile.Config) []string {
+func defaultTaskNames(parsed []string, tf *taskfile.Config, cwdNamespace string) []string {
 	if len(parsed) > 0 {
 		return parsed
+	}
+	if cwdNamespace != "" {
+		if name := tf.NamespaceDefaults[cwdNamespace]; name != "" {
+			return []string{name}
+		}
 	}
 	if tf.Default != "" {
 		return []string{tf.Default}

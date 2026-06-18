@@ -135,18 +135,22 @@ func segmentPrefixMatch(taskName string, candSegs []string) bool {
 }
 
 // nameCandidates lists the interpretations of name, in priority order, that
-// resolution should try. The literal name comes first; then — when cwd sits
-// inside an included namespace — the cwd-namespaced form; then, recursively,
-// the name with a self-prefix stripped (matching the task file root's
-// basename). Both exact and prefix matching walk this same list.
+// resolution should try. The root/literal name normally comes first. When the
+// CLI promoted an included project to its parent include root, bare names from
+// inside that project prefer the cwd namespace so `gogo build` still behaves
+// like it did when the sub-project ran standalone.
 func (r *Runner) nameCandidates(name string) []string {
 	base := filepath.Base(r.tf.Dir)
 	ns, hasNS := r.cwdNamespace()
 	var out []string
 	for cur := name; ; {
-		out = append(out, cur)
-		if hasNS {
-			out = append(out, ns+":"+cur)
+		if hasNS && r.PreferCwdNamespace && !strings.Contains(cur, ":") {
+			out = append(out, ns+":"+cur, cur)
+		} else {
+			out = append(out, cur)
+			if hasNS {
+				out = append(out, ns+":"+cur)
+			}
 		}
 		prefix, suffix, hasColon := strings.Cut(cur, ":")
 		if !hasColon || prefix != base {
@@ -156,21 +160,25 @@ func (r *Runner) nameCandidates(name string) []string {
 	}
 }
 
-// cwdNamespace returns the most specific namespace whose directory contains
-// the runner's current working directory. Used to let users invoke tasks by
-// their short name when cwd sits under an included task file.
-func (r *Runner) cwdNamespace() (string, bool) {
+// NamespaceForDir returns the most specific namespace whose directory contains
+// dir. Used to let users invoke tasks by their short name when cwd sits under
+// an included task file.
+func NamespaceForDir(tf *Config, dir string) (string, bool) {
 	var bestDir, bestNS string
-	for dir, ns := range r.tf.Namespaces {
-		if !strings.HasPrefix(r.cwd+string(filepath.Separator), dir+string(filepath.Separator)) {
+	for namespaceDir, ns := range tf.Namespaces {
+		if !strings.HasPrefix(dir+string(filepath.Separator), namespaceDir+string(filepath.Separator)) {
 			continue
 		}
-		if len(dir) > len(bestDir) {
-			bestDir = dir
+		if len(namespaceDir) > len(bestDir) {
+			bestDir = namespaceDir
 			bestNS = ns
 		}
 	}
 	return bestNS, bestNS != ""
+}
+
+func (r *Runner) cwdNamespace() (string, bool) {
+	return NamespaceForDir(r.tf, r.cwd)
 }
 
 // IsInternalTask reports whether a task name is internal (its local segment
