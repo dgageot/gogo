@@ -443,3 +443,76 @@ tasks:
 	assert.Contains(t, out, `task: task "xyzzy" not found`)
 	assert.NotContains(t, out, "did you mean")
 }
+
+func TestAppRunsSiblingIncludedTaskFromIncludedSubProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p1, p2]
+`)
+	writeFile(t, filepath.Join(dir, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p1-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "p1:build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p1:build]")
+	assert.Contains(t, stderr.String(), "echo p1-build")
+}
+
+func TestAppDoesNotClimbPastNearestIncludingAncestor(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "workspace")
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [workspace]
+`)
+	writeFile(t, filepath.Join(workspace, "gogo.yaml"), `version: "1"
+includes: [p1, p2]
+`)
+	writeFile(t, filepath.Join(workspace, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo workspace-p1-build
+`)
+	writeFile(t, filepath.Join(workspace, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo workspace-p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(workspace, "p2"), "--dry", "p1:build")
+
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stderr.String(), "[p1:build]")
+	assert.Contains(t, stderr.String(), "echo workspace-p1-build")
+}
+
+func TestAppDoesNotUseAncestorThatDoesNotIncludeCurrentProject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [p1]
+`)
+	writeFile(t, filepath.Join(dir, "p1", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p1-build
+`)
+	writeFile(t, filepath.Join(dir, "p2", "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    cmd: echo p2-build
+`)
+
+	app, _, stderr := newTestApp(t, filepath.Join(dir, "p2"), "--dry", "p1:build")
+
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, stderr.String(), `task "p1:build" not found`)
+}
