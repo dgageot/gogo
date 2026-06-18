@@ -62,8 +62,48 @@ tasks:
 
 	task, ok = tf.Tasks["cli:github"]
 	require.True(t, ok)
-	assert.Equal(t, StringList{"gh"}, task.Aliases)
+	// Aliases are namespaced like the task name so two included files can
+	// reuse the same bare alias without colliding.
+	assert.Equal(t, StringList{"cli:gh"}, task.Aliases)
 	assert.Equal(t, "GitHub helper", task.Desc)
+}
+
+func TestLoadWithIncludesNamespacesAliases(t *testing.T) {
+	// Two sibling includes can reuse the same bare alias: each alias is
+	// namespaced like its task, so `up` becomes `proxy:up` / `stats:up`
+	// instead of colliding in the runner's global alias map.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - proxy
+  - stats
+`,
+		"proxy/gogo.yaml": `version: "1"
+tasks:
+  serve:
+    aliases: up
+    cmd: serve proxy
+`,
+		"stats/gogo.yaml": `version: "1"
+tasks:
+  serve:
+    aliases: up
+    cmd: serve stats
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, StringList{"proxy:up"}, tf.Tasks["proxy:serve"].Aliases)
+	assert.Equal(t, StringList{"stats:up"}, tf.Tasks["stats:serve"].Aliases)
+
+	// The collision that used to fail NewRunner is gone.
+	runner, err := NewRunner(tf, dir)
+	require.NoError(t, err)
+	assert.Equal(t, "proxy:serve", runner.aliases["proxy:up"])
+	assert.Equal(t, "stats:serve", runner.aliases["stats:up"])
 }
 
 func TestLoadWithIncludesNested(t *testing.T) {

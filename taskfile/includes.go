@@ -439,6 +439,16 @@ func makeTaskDirAbsolute(task *Task, fileDir string) {
 }
 
 func namespaceLocalReferences(task *Task, included *includedConfig) {
+	// Aliases are namespaced like the task name so two included files can
+	// each declare the same bare alias (e.g. `up`) without colliding in the
+	// runner's global alias map.
+	if len(task.Aliases) > 0 {
+		aliases := make(StringList, len(task.Aliases))
+		for i, alias := range task.Aliases {
+			aliases[i] = included.Namespace + ":" + alias
+		}
+		task.Aliases = aliases
+	}
 	for i, dep := range task.Deps {
 		if hasTask(included.Tasks, dep.Task) {
 			task.Deps[i].Task = included.Namespace + ":" + dep.Task
