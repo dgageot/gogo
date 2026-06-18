@@ -27,6 +27,7 @@ var (
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
+
 		return nil
 	}
 )
