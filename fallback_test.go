@@ -199,6 +199,72 @@ tasks:
 	assert.False(t, fr.called)
 }
 
+func TestFallbackListRunsTaskWhenTaskfilePresent(t *testing.T) {
+	// `gogo --list` with a Taskfile but no gogo.yaml delegates to
+	// `task --list` so users get one listing UX across both tools.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, _, _ := newTestApp(t, dir, "--list")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, "task", fr.name)
+	assert.Equal(t, []string{"--list"}, fr.argv)
+	assert.Equal(t, dir, fr.dir)
+}
+
+func TestFallbackListRunsMise(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "mise.toml"), []byte("[tasks.build]\nrun='true'\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, _, _ := newTestApp(t, dir, "--list")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Equal(t, "mise", fr.name)
+	assert.Equal(t, []string{"tasks", "ls"}, fr.argv)
+}
+
+func TestFallbackListSkipsMakefile(t *testing.T) {
+	// `make` has no native task listing, so `gogo --list` must surface
+	// the original "no gogo.yaml" error rather than shelling out.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Makefile"), []byte("build:\n\t@true\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, _, _ := newTestApp(t, dir, "--list")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no gogo.yaml")
+	assert.False(t, fr.called)
+}
+
+func TestFallbackListGogoYamlWins(t *testing.T) {
+	// A real gogo.yaml is listed by gogo itself even when a Taskfile
+	// sits alongside it.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  # Build the project
+  build:
+    cmd: go build
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))
+
+	fr := &fakeRun{}
+	withForeignHooks(t, allFound, fr.run)
+
+	app, stdout, _ := newTestApp(t, dir, "--list")
+	require.NoError(t, app.Run(t.Context()))
+	assert.False(t, fr.called)
+	assert.Contains(t, stdout.String(), "Build the project")
+}
+
 func TestFallbackPropagatesError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'\n"), 0o644))

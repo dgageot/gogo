@@ -33,11 +33,13 @@ var (
 )
 
 // foreignRunners lists, in priority order, the foreign task files we know
-// how to delegate to.
+// how to delegate to. `listArgs` is the runner's native `--list`
+// invocation; leave it nil when the runner has no equivalent.
 var foreignRunners = []struct {
-	bin   string
-	files []string
-	build func(tasks, cliArgs []string) []string
+	bin      string
+	files    []string
+	build    func(tasks, cliArgs []string) []string
+	listArgs []string
 }{
 	{
 		bin:   "task",
@@ -45,6 +47,7 @@ var foreignRunners = []struct {
 		build: func(tasks, cliArgs []string) []string {
 			return foreignArgs(nil, tasks, cliArgs)
 		},
+		listArgs: []string{"--list"},
 	},
 	{
 		bin:   "mise",
@@ -52,6 +55,7 @@ var foreignRunners = []struct {
 		build: func(tasks, cliArgs []string) []string {
 			return foreignArgs([]string{"run"}, tasks, cliArgs)
 		},
+		listArgs: []string{"tasks", "ls"},
 	},
 	{
 		// `make` doesn't understand a `--` separator, so trailing args are
@@ -104,6 +108,31 @@ func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error
 			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
 				argv := r.build(parsed.Tasks, parsed.CLIArgs)
 				return true, fallbackRun(ctx, r.bin, argv, dir, a)
+			}
+		}
+	}
+	return false, nil
+}
+
+// tryForeignListFallback delegates `--list` to a colocated foreign task
+// file's runner. Same cwd-only stance as tryForeignFallback; runners
+// without a native listing command (listArgs == nil) are skipped.
+func (a *App) tryForeignListFallback(ctx context.Context) (bool, error) {
+	dir, err := a.Getwd()
+	if err != nil {
+		return false, nil
+	}
+
+	for _, r := range foreignRunners {
+		if r.listArgs == nil {
+			continue
+		}
+		if _, err := fallbackLookPath(r.bin); err != nil {
+			continue
+		}
+		for _, name := range r.files {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return true, fallbackRun(ctx, r.bin, r.listArgs, dir, a)
 			}
 		}
 	}

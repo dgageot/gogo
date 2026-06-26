@@ -84,7 +84,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	if parsed.List {
-		return a.listTasks()
+		return a.listTasks(ctx)
 	}
 
 	dir, tf, err := a.loadConfig()
@@ -311,9 +311,15 @@ func (a *App) printTaskNames() {
 }
 
 // listTasks renders the colorized, column-aligned task index for `--list`.
-func (a *App) listTasks() error {
+// When no gogo.yaml is found, listing is delegated to a colocated foreign
+// task file's runner (e.g. `task --list`) so users don't have to learn a
+// second listing flag per tool.
+func (a *App) listTasks(ctx context.Context) error {
 	_, tf, err := a.loadConfig()
 	if err != nil {
+		if handled, fbErr := a.tryForeignListFallback(ctx); handled {
+			return fbErr
+		}
 		return err
 	}
 	writeTaskListings(a.Stdout, gatherTaskListings(tf))
