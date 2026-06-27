@@ -7,5 +7,7 @@ import "github.com/dgageot/rubocop-go/cop"
 
 // All returns every gogo cop, in a stable order.
 func All() []cop.Cop {
-	return []cop.Cop{}
+	return []cop.Cop{
+		NewShellViaRunner(),
+	}
 }
