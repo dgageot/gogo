@@ -16,5 +16,6 @@ func All() []cop.Cop {
 		NewCloneStashedEnv(),
 		NewTestifyHelpers(),
 		NewSecretSchemeInSync(),
+		NewResetRanClearsGitCache(),
 	}
 }
