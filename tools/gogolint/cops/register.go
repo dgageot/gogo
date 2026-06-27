@@ -14,5 +14,6 @@ func All() []cop.Cop {
 		NewShellCommandKindRequired(),
 		NewNoPrintInLibrary(),
 		NewCloneStashedEnv(),
+		NewTestifyHelpers(),
 	}
 }
