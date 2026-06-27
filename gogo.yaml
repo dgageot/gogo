@@ -20,8 +20,17 @@ tasks:
 
   # Run linters
   lint:
+    deps: [lint:custom]
     cmd: golangci-lint run
     sources: [go, .golangci.yml]
+
+  # Run gogo's project-specific cops (rubocop-go). Lives in its own nested
+  # module under tools/gogolint so rubocop-go's x/tools dependency stays out
+  # of gogo's own go.mod (and off govulncheck's radar).
+  lint:custom:
+    dir: tools/gogolint
+    cmd: go run . ../..
+    sources: [go, tools/gogolint/**/*.go]
 
   # Format Go source files
   format:
