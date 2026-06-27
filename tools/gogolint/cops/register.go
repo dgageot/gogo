@@ -12,5 +12,6 @@ func All() []cop.Cop {
 		NewSortedMapIteration(),
 		NewWrapErrors(),
 		NewShellCommandKindRequired(),
+		NewNoPrintInLibrary(),
 	}
 }
