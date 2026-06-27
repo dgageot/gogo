@@ -13,5 +13,6 @@ func All() []cop.Cop {
 		NewWrapErrors(),
 		NewShellCommandKindRequired(),
 		NewNoPrintInLibrary(),
+		NewCloneStashedEnv(),
 	}
 }
