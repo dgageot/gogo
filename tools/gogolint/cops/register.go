@@ -9,5 +9,6 @@ import "github.com/dgageot/rubocop-go/cop"
 func All() []cop.Cop {
 	return []cop.Cop{
 		NewShellViaRunner(),
+		NewSortedMapIteration(),
 	}
 }
