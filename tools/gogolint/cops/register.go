@@ -10,5 +10,6 @@ func All() []cop.Cop {
 	return []cop.Cop{
 		NewShellViaRunner(),
 		NewSortedMapIteration(),
+		NewWrapErrors(),
 	}
 }
