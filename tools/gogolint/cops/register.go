@@ -15,5 +15,6 @@ func All() []cop.Cop {
 		NewNoPrintInLibrary(),
 		NewCloneStashedEnv(),
 		NewTestifyHelpers(),
+		NewSecretSchemeInSync(),
 	}
 }
