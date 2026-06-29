@@ -141,7 +141,10 @@ The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
   `TestFallbackDoesNotWalkUp`) for a `Taskfile.yml`, `mise.toml`, or
   `Makefile` whose runner is on `PATH`, and shells out. Order is fixed by `foreignRunners`
   and the `make` arm intentionally drops `default` and skips the `--`
-  separator (since `make` doesn't understand it). Tests stub the package-
+  separator (since `make` doesn't understand it). `--list` follows the
+  same path via `tryForeignListFallback`, delegating to the runner's
+  native listing (`task --list`, `mise tasks ls`); runners without a
+  native listing (e.g. `make`) are skipped. Tests stub the package-
   level `fallbackLookPath` / `fallbackRun` hooks rather than the real exec.
 - **Internal tasks** — names whose local segment starts with `_`
   (e.g. `_helper`, `cli:_fmt`) are excluded from `--list` and `--complete`
