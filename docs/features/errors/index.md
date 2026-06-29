@@ -166,6 +166,8 @@ The task name (or alias) doesn't resolve. Things to check, in order:
 2. Forgotten namespace prefix when calling from outside the include's directory (`backend:build`, not `build`).
 3. The task is defined in a file gogo never loaded — usually a missing `includes:` or `flatten:` entry.
 
+When the unqualified name you typed matches the local segment of one or more namespaced tasks — e.g. `gogo dev` in a parent that only defines `frontend:dev` and `backend:dev` — gogo lists just those candidates instead of the whole index, so you can pick the sub-project you meant. If nothing matches, the full task list is printed as before.
+
 ## See also
 
 - [CLI Reference](../cli/) — `--dry` and `--force` semantics for reproducing failures without side effects.

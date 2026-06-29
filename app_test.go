@@ -443,3 +443,67 @@ tasks:
 	assert.Contains(t, out, `task: task "xyzzy" not found`)
 	assert.NotContains(t, out, "did you mean")
 }
+
+func TestAppUnknownTaskListsNamespacedMatches(t *testing.T) {
+	// `gogo dev` in a parent of several sub-projects: no root `dev` exists,
+	// but `frontend:dev` and `backend:dev` do. We narrow the listing to just
+	// those candidates rather than dumping every task in the index.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [frontend, backend]
+tasks:
+  # Build everything
+  build:
+    cmd: true
+`)
+	writeFile(t, filepath.Join(dir, "frontend", "gogo.yaml"), `version: "1"
+tasks:
+  # Run the frontend dev server
+  dev:
+    cmd: true
+`)
+	writeFile(t, filepath.Join(dir, "backend", "gogo.yaml"), `version: "1"
+tasks:
+  # Run the backend dev server
+  dev:
+    cmd: true
+`)
+
+	app, _, stderr := newTestApp(t, dir, "dev")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+
+	out := stderr.String()
+	assert.Contains(t, out, "frontend:dev")
+	assert.Contains(t, out, "backend:dev")
+	assert.NotContains(t, out, "build", "unrelated tasks are filtered out")
+	assert.Contains(t, out, `task: task "dev" not found`)
+}
+
+func TestAppUnknownTaskWithNoNamespacedMatchPrintsFullList(t *testing.T) {
+	// When no sub-project provides the requested task, behavior is unchanged:
+	// the full task list is printed.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+includes: [frontend]
+tasks:
+  # Build everything
+  build:
+    cmd: true
+`)
+	writeFile(t, filepath.Join(dir, "frontend", "gogo.yaml"), `version: "1"
+tasks:
+  # Run the frontend dev server
+  dev:
+    cmd: true
+`)
+
+	app, _, stderr := newTestApp(t, dir, "nonexistent")
+	err := app.Run(t.Context())
+	require.Error(t, err)
+
+	out := stderr.String()
+	assert.Contains(t, out, "build")
+	assert.Contains(t, out, "frontend:dev")
+	assert.Contains(t, out, `task: task "nonexistent" not found`)
+}

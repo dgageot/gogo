@@ -149,14 +149,21 @@ func (a *App) Run(ctx context.Context) error {
 
 // handleRunError augments a TaskNotFoundError with the human-friendly task
 // listing so a typo prints — in one shot — both what the user *could* have
-// run and the closest match we know about. Other errors pass through
-// untouched so the existing error surface is unchanged.
+// run and the closest match we know about. When the unresolved name matches
+// the local segment of one or more namespaced tasks (e.g. `gogo dev` in a
+// parent that only defines `frontend:dev` and `backend:dev`), the listing is
+// narrowed to just those candidates rather than the whole index. Other
+// errors pass through untouched so the existing error surface is unchanged.
 func (a *App) handleRunError(tf *taskfile.Config, err error) error {
 	var nfe *taskfile.TaskNotFoundError
 	if !errors.As(err, &nfe) {
 		return err
 	}
-	writeTaskListings(a.Stderr, gatherTaskListings(tf))
+	listings := gatherTaskListings(tf)
+	if matches := gatherNamespacedMatches(tf, nfe.Name); len(matches) > 0 {
+		listings = matches
+	}
+	writeTaskListings(a.Stderr, listings)
 	fmt.Fprintf(a.Stderr, "%stask: %s%s\n", ansiRed, nfe.Error(), ansiReset)
 	return errSilent
 }
@@ -402,6 +409,46 @@ func gatherTaskListings(tf *taskfile.Config) []taskListing {
 		entries = append(entries, row)
 	}
 	return entries
+}
+
+// gatherNamespacedMatches returns the listings for visible tasks whose local
+// segment (the part after the last colon) equals the unresolved name. This
+// powers the `gogo dev` case in a parent of several sub-projects: when no
+// root `dev` exists but `frontend:dev` and `backend:dev` do, we point the
+// user at those concrete tasks instead of dumping the whole index. Unlike
+// gatherTaskListings, tasks without a description are kept — the user asked
+// for this exact name, so every namespace that provides it is worth showing.
+// The name must be a bare segment (no colon of its own) so we only narrow
+// when the user typed an unqualified task name. Returns nil when there's
+// nothing to narrow to, in which case the caller falls back to the full
+// listing.
+func gatherNamespacedMatches(tf *taskfile.Config, name string) []taskListing {
+	if name == "" || strings.Contains(name, ":") {
+		return nil
+	}
+	var matches []taskListing
+	for _, taskName := range visibleTaskNames(tf) {
+		if !strings.Contains(taskName, ":") || lastSegment(taskName) != name {
+			continue
+		}
+		task := tf.Tasks[taskName]
+		desc, _, _ := strings.Cut(task.Desc, "\n")
+		row := taskListing{name: taskName, desc: strings.TrimSpace(desc)}
+		if len(task.Aliases) > 0 {
+			row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
+		}
+		matches = append(matches, row)
+	}
+	return matches
+}
+
+// lastSegment returns the part of a colon-joined task name after the final
+// colon — the task's local name within its namespace.
+func lastSegment(name string) string {
+	if i := strings.LastIndex(name, ":"); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
 
 // writeTaskListings prints rows in three aligned columns: a green
