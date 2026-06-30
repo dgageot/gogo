@@ -192,7 +192,10 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 		return err
 	}
 
-	if checksum != "" {
+	// Don't persist the checksum on a dry run: nothing actually executed, so
+	// recording "done" would make the next real run skip the task as up to
+	// date even though it never built anything.
+	if checksum != "" && !r.DryRun {
 		if err := writeChecksum(r.tf.Dir, resolved, checksum); err != nil {
 			// Best-effort: a failed write means we'll re-run next time, but
 			// silently swallowing it left users wondering why a clean build

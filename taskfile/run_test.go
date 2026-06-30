@@ -1191,6 +1191,39 @@ func TestSourcesChecksumWarnsWhenPersistFails(t *testing.T) {
 	assert.Contains(t, stderr.String(), "failed to persist checksum")
 }
 
+func TestDryRunDoesNotPersistChecksum(t *testing.T) {
+	// A dry run prints commands without executing them, so it must not record
+	// a checksum — otherwise the next *real* run would be skipped as "up to
+	// date" even though nothing was ever built.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.go": "package main"})
+
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Sources: StringList{"*.go"},
+				Cmds:    []Cmd{{Cmd: "go build"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	runner.DryRun = true
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	assert.Empty(t, *execs)
+	assert.NoFileExists(t, checksumPath(dir, "build"), "dry-run must not persist a checksum")
+
+	// A subsequent real run must still execute (the dry run left no checksum).
+	runner.DryRun = false
+	runner.ResetRan()
+	require.NoError(t, runner.Run("build", ""))
+	assert.Len(t, *execs, 1)
+}
+
 func TestForceIgnoresSources(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"main.go": "package main"})
