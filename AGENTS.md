@@ -26,7 +26,7 @@ the Actions group with the `ghapin` skill when reviewing those PRs.
 Releases (`release.yml`) are tag-driven and publish cross-built binaries via
 `gh release create` plus build-provenance attestations.
 
-The Go toolchain version comes from `go.mod` (`go 1.26.3`). Tests run with
+The Go toolchain version comes from `go.mod` (`go 1.26.5`). Tests run with
 `-tests=true` under golangci-lint v2.
 
 ## Code style and conventions
