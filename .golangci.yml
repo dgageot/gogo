@@ -6,18 +6,22 @@ linters:
     - asasalint
     - asciicheck
     - bidichk
+    - canonicalheader
     - containedctx
     - contextcheck
     - copyloopvar
     - decorder
     - depguard
     - dogsled
+    - dupl
     - dupword
     - durationcheck
     - embeddedstructfieldcheck
     - errcheck
+    - errchkjson
     - errname
     - errorlint
+    - exhaustive
     - exptostd
     - fatcontext
     - forbidigo
@@ -25,6 +29,7 @@ linters:
     - ginkgolinter
     - gocheckcompilerdirectives
     - godoclint
+    - godot
     - gochecknoinits
     - gochecksumtype
     - gocritic
@@ -35,6 +40,7 @@ linters:
     - grouper
     - iface
     - importas
+    - interfacebloat
     - inamedparam
     - ineffassign
     - intrange
@@ -43,6 +49,7 @@ linters:
     - misspell
     - mirror
     - modernize
+    - musttag
     - nakedret
     - nolintlint
     - nosprintfhostport
@@ -54,6 +61,7 @@ linters:
     - revive
     - rowserrcheck
     - sloglint
+    - spancheck
     - staticcheck
     - testableexamples
     - testifylint
