@@ -32,15 +32,19 @@ var (
 	}
 )
 
-// foreignRunners lists, in priority order, the foreign task files we know
-// how to delegate to. `listArgs` is the runner's native `--list`
-// invocation; leave it nil when the runner has no equivalent.
-var foreignRunners = []struct {
+// foreignRunner describes one foreign task file format and the tool that
+// runs it.
+type foreignRunner struct {
 	bin      string
 	files    []string
 	build    func(tasks, cliArgs []string) []string
 	listArgs []string
-}{
+}
+
+// foreignRunners lists, in priority order, the foreign task files we know
+// how to delegate to. `listArgs` is the runner's native `--list`
+// invocation; leave it nil when the runner has no equivalent.
+var foreignRunners = []foreignRunner{
 	{
 		bin:   "task",
 		files: []string{"Taskfile.yml", "taskfile.yml", "Taskfile.yaml", "taskfile.yaml"},
@@ -82,10 +86,11 @@ func foreignArgs(prefix, tasks, cliArgs []string) []string {
 	return argv
 }
 
-// tryForeignFallback looks in the current working directory only for a
-// foreign task file whose runner is on PATH. Returns (handled=true, err)
-// when one is invoked; a (false, nil) return means the caller should
-// surface the original error.
+// delegateToForeign looks in the current working directory only for a
+// foreign task file whose runner is on PATH, and invokes it with the argv
+// returned by argvFor. Runners for which argvFor reports ok=false are
+// skipped. Returns (handled=true, err) when one is invoked; a (false, nil)
+// return means the caller should surface its original error.
 //
 // We deliberately do NOT walk up: running gogo from inside an untrusted
 // checkout (or a temp dir under one) must not silently execute an
@@ -94,19 +99,22 @@ func foreignArgs(prefix, tasks, cliArgs []string) []string {
 // "Silently ignored if not on PATH" means: if a Taskfile is found but
 // `task` isn't installed, we don't try to run it — we may still pick up a
 // sibling runner (e.g. mise.toml) in the same directory.
-func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error) {
+func (a *App) delegateToForeign(ctx context.Context, argvFor func(foreignRunner) ([]string, bool)) (bool, error) {
 	dir, err := a.Getwd()
 	if err != nil {
 		return false, nil
 	}
 
 	for _, r := range foreignRunners {
+		argv, ok := argvFor(r)
+		if !ok {
+			continue
+		}
 		if _, err := fallbackLookPath(r.bin); err != nil {
 			continue
 		}
 		for _, name := range r.files {
 			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-				argv := r.build(parsed.Tasks, parsed.CLIArgs)
 				return true, fallbackRun(ctx, r.bin, argv, dir, a)
 			}
 		}
@@ -114,27 +122,19 @@ func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error
 	return false, nil
 }
 
-// tryForeignListFallback delegates `--list` to a colocated foreign task
-// file's runner. Same cwd-only stance as tryForeignFallback; runners
-// without a native listing command (listArgs == nil) are skipped.
-func (a *App) tryForeignListFallback(ctx context.Context) (bool, error) {
-	dir, err := a.Getwd()
-	if err != nil {
-		return false, nil
-	}
+// tryForeignFallback delegates a normal run to a colocated foreign task
+// file's runner.
+func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error) {
+	return a.delegateToForeign(ctx, func(r foreignRunner) ([]string, bool) {
+		return r.build(parsed.Tasks, parsed.CLIArgs), true
+	})
+}
 
-	for _, r := range foreignRunners {
-		if r.listArgs == nil {
-			continue
-		}
-		if _, err := fallbackLookPath(r.bin); err != nil {
-			continue
-		}
-		for _, name := range r.files {
-			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-				return true, fallbackRun(ctx, r.bin, r.listArgs, dir, a)
-			}
-		}
-	}
-	return false, nil
+// tryForeignListFallback delegates `--list` to a colocated foreign task
+// file's runner. Runners without a native listing command (listArgs == nil)
+// are skipped.
+func (a *App) tryForeignListFallback(ctx context.Context) (bool, error) {
+	return a.delegateToForeign(ctx, func(r foreignRunner) ([]string, bool) {
+		return r.listArgs, r.listArgs != nil
+	})
 }
