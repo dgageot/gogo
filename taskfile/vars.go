@@ -17,13 +17,7 @@ var templatePattern = regexp.MustCompile(`\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}
 // user-supplied string values, never YAML structure or map keys, so an env
 // value containing newlines, quotes, or `:` cannot inject new tasks/fields.
 func expandEnvTemplates(s string) string {
-	return templatePattern.ReplaceAllStringFunc(s, func(match string) string {
-		name := templatePattern.FindStringSubmatch(match)[1]
-		if val, ok := os.LookupEnv(name); ok {
-			return val
-		}
-		return match
-	})
+	return expandTemplates(s, os.LookupEnv)
 }
 
 // expandConfigEnvTemplates expands {{.VAR}} env-variable references in every

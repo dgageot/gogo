@@ -214,11 +214,7 @@ func (l *includeLoader) loadIncludeDotenv(included *includedConfig) error {
 	if err != nil {
 		return fmt.Errorf("loading dotenv for include %q from %s: %w", included.Namespace, included.Parent.parentFile(), err)
 	}
-	for k, v := range childDotenv {
-		if _, exists := l.dotenvVars[k]; !exists {
-			l.dotenvVars[k] = v
-		}
-	}
+	l.dotenvVars = mergeFirstWins(l.dotenvVars, childDotenv)
 	return nil
 }
 
@@ -276,11 +272,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 	if err != nil {
 		return fmt.Errorf("loading dotenv for flatten %q from %s: %w", req.path, req.parentFile, err)
 	}
-	for k, v := range childDotenv {
-		if _, exists := l.dotenvVars[k]; !exists {
-			l.dotenvVars[k] = v
-		}
-	}
+	l.dotenvVars = mergeFirstWins(l.dotenvVars, childDotenv)
 
 	// Recurse: nested flatten files keep the same namespace and ancestor.
 	for _, p := range flattened.Flatten {
@@ -318,6 +310,24 @@ func namespaceJoin(prefix, name string) string {
 	return prefix + ":" + name
 }
 
+// mergeFirstWins copies entries from src into dst, keeping existing dst
+// entries on a key collision ("first defined wins"). It allocates dst when
+// nil and returns the (possibly new) map.
+func mergeFirstWins[V any](dst, src map[string]V) map[string]V {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]V, len(src))
+	}
+	for k, v := range src {
+		if _, exists := dst[k]; !exists {
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
 // mergeVars merges vars declared by an included or flattened file into the
 // scope that owns them. Vars from the root or root-level flatten files
 // (namespace "") land in Config.Vars and are visible everywhere; vars from
@@ -331,61 +341,25 @@ func (l *includeLoader) mergeVars(namespace, dir string, vars map[string]Var) {
 		return
 	}
 	if namespace == "" {
-		if l.root.Vars == nil {
-			l.root.Vars = make(map[string]Var)
-		}
-		for k, v := range vars {
-			if _, exists := l.root.Vars[k]; !exists {
-				l.root.Vars[k] = v
-			}
-		}
+		l.root.Vars = mergeFirstWins(l.root.Vars, vars)
 		return
 	}
 	if _, ok := l.root.NamespaceDirs[namespace]; !ok {
 		l.root.NamespaceDirs[namespace] = dir
 	}
-	scoped := l.root.NamespaceVars[namespace]
-	if scoped == nil {
-		scoped = make(map[string]Var)
-		l.root.NamespaceVars[namespace] = scoped
-	}
-	for k, v := range vars {
-		if _, exists := scoped[k]; !exists {
-			scoped[k] = v
-		}
-	}
+	l.root.NamespaceVars[namespace] = mergeFirstWins(l.root.NamespaceVars[namespace], vars)
 }
 
 // mergeSourcePresets merges child source presets into the root. Root presets
 // win conflicts, mirroring the precedence used by mergeVars.
 func (l *includeLoader) mergeSourcePresets(presets map[string]StringList) {
-	if len(presets) == 0 {
-		return
-	}
-	if l.root.Sources == nil {
-		l.root.Sources = make(map[string]StringList)
-	}
-	for k, v := range presets {
-		if _, exists := l.root.Sources[k]; !exists {
-			l.root.Sources[k] = v
-		}
-	}
+	l.root.Sources = mergeFirstWins(l.root.Sources, presets)
 }
 
 // mergeSecrets merges child secret declarations into the root. Root entries
 // win conflicts, mirroring the precedence used by mergeVars.
 func (l *includeLoader) mergeSecrets(secrets map[string]string) {
-	if len(secrets) == 0 {
-		return
-	}
-	if l.root.Secrets == nil {
-		l.root.Secrets = make(map[string]string)
-	}
-	for k, v := range secrets {
-		if _, exists := l.root.Secrets[k]; !exists {
-			l.root.Secrets[k] = v
-		}
-	}
+	l.root.Secrets = mergeFirstWins(l.root.Secrets, secrets)
 }
 
 func (l *includeLoader) mergeTasks(included *includedConfig) error {

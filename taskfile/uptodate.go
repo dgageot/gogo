@@ -6,8 +6,8 @@ import "fmt"
 // When generates is set, it checks that all outputs exist and are newer than all sources.
 // Otherwise, it falls back to checksum-based comparison.
 // Returns whether the task is up-to-date, the current checksum (empty when using generates), and any error.
-func (r *Runner) isUpToDate(task *Task, dir, taskName string, force bool) (bool, string, error) {
-	if force || len(task.Sources) == 0 {
+func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, error) {
+	if r.Force || len(task.Sources) == 0 {
 		return false, "", nil
 	}
 

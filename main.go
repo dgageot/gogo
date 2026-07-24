@@ -388,6 +388,17 @@ type taskListing struct {
 	aliases string // pre-formatted "(aliases: a, b)" or empty
 }
 
+// newTaskListing builds the listing row for one task: the first line of its
+// description (trimmed) plus the pre-formatted alias cell.
+func newTaskListing(name string, task taskfile.Task) taskListing {
+	desc, _, _ := strings.Cut(task.Desc, "\n")
+	row := taskListing{name: name, desc: strings.TrimSpace(desc)}
+	if len(task.Aliases) > 0 {
+		row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
+	}
+	return row
+}
+
 // gatherTaskListings returns the rows that --list and the unknown-task hint
 // should print, in declaration-friendly alphabetical order. Tasks without a
 // description are intentionally omitted: we surface only what the author
@@ -396,15 +407,9 @@ type taskListing struct {
 func gatherTaskListings(tf *taskfile.Config) []taskListing {
 	var entries []taskListing
 	for _, name := range visibleTaskNames(tf) {
-		task := tf.Tasks[name]
-		desc, _, _ := strings.Cut(task.Desc, "\n")
-		desc = strings.TrimSpace(desc)
-		if desc == "" {
+		row := newTaskListing(name, tf.Tasks[name])
+		if row.desc == "" {
 			continue
-		}
-		row := taskListing{name: name, desc: desc}
-		if len(task.Aliases) > 0 {
-			row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
 		}
 		entries = append(entries, row)
 	}
@@ -431,13 +436,7 @@ func gatherNamespacedMatches(tf *taskfile.Config, name string) []taskListing {
 		if !strings.Contains(taskName, ":") || lastSegment(taskName) != name {
 			continue
 		}
-		task := tf.Tasks[taskName]
-		desc, _, _ := strings.Cut(task.Desc, "\n")
-		row := taskListing{name: taskName, desc: strings.TrimSpace(desc)}
-		if len(task.Aliases) > 0 {
-			row.aliases = "(aliases: " + strings.Join(task.Aliases, ", ") + ")"
-		}
-		matches = append(matches, row)
+		matches = append(matches, newTaskListing(taskName, tf.Tasks[taskName]))
 	}
 	return matches
 }
