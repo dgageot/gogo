@@ -103,6 +103,9 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 // `cmds: - task: X` flow through runSubTask instead, which always bypasses
 // memoization.
 func (r *Runner) Run(name, cliArgs string) error {
+	if isTaskPattern(name) {
+		return r.runPattern(name, cliArgs)
+	}
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
@@ -118,12 +121,46 @@ func (r *Runner) Run(name, cliArgs string) error {
 	})
 }
 
+// runPattern expands a `...:` wildcard and runs every match like a dep set:
+// in parallel, memoized, with failures aggregated so one broken namespace
+// doesn't hide the others (Bazel's --keep_going semantics).
+func (r *Runner) runPattern(pattern, cliArgs string) error {
+	names, err := r.expandPattern(pattern)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, len(names))
+	for i, name := range names {
+		wg.Go(func() {
+			errs[i] = r.Run(name, cliArgs)
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
+}
+
 // runSubTask is the entry point for `cmds: - task: X` calls. Each sub-task
 // invocation propagates the parent task's resolved env down so child tasks
 // see what the parent declared in its `env:` block (matching shell-function
 // semantics). Memoization is always bypassed because two parents calling the
 // same child with different env are genuinely different executions.
 func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string) error {
+	// Patterns are legal wherever a task name is: a `task: ...:X` sub-call
+	// fans out to every match. Sequential (unlike deps) because cmds are a
+	// sequence — the next cmd must not start until the whole fan-out ends.
+	if isTaskPattern(name) {
+		names, err := r.expandPattern(name)
+		if err != nil {
+			return err
+		}
+		for _, n := range names {
+			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err

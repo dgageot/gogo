@@ -52,6 +52,20 @@ cd backend
 gogo build      # resolves to backend:build
 ```
 
+## Wildcard Patterns
+
+A `...` wildcard runs a same-named task across every namespace (Bazel-style):
+
+```sh
+gogo ...:test     # runs test, backend:test, frontend:test, ...
+```
+
+The wildcard spans zero or more namespace levels, so nested tasks like `a:b:test` match too. Namespaces without a matching task are skipped; the pattern errors only when nothing matches at all. Matching is exact (no prefix shortcuts or aliases) and internal `_`-prefixed tasks are never included. Matches run in parallel and all of them run even if one fails.
+
+When run from a subdirectory, the pattern is scoped to that namespace's subtree — `gogo ...:test` from `backend/` only runs tasks under `backend:`.
+
+Patterns are accepted anywhere a task name is: in `deps:` (matches run in parallel) and in `task:` sub-calls (matches run in sequence). The one exception is `--watch`, which needs a single task to poll and rejects patterns.
+
 ## Dotenv Deduplication
 
 Each included task file can define its own `dotenv` files. If multiple includes reference the same `.env` file (by absolute path), it's loaded only once.

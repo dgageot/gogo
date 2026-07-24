@@ -42,6 +42,16 @@ func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []
 		}
 	}
 	for _, dep := range task.Deps {
+		// A `...:` pattern dep contributes the sources of every match —
+		// otherwise watch would run those tasks but never see their edits.
+		if isTaskPattern(dep.Task) {
+			if names, err := r.expandPattern(dep.Task); err == nil {
+				for _, name := range names {
+					result = append(result, r.collectSources(name, visited)...)
+				}
+			}
+			continue
+		}
 		resolved, ok := r.resolveTaskName(dep.Task)
 		if !ok {
 			continue
@@ -70,6 +80,13 @@ func multiSourcesChecksum(groups []dirPatterns) (string, error) {
 func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.Duration) error {
 	if interval < minWatchInterval {
 		return fmt.Errorf("watch interval must be at least %s", minWatchInterval)
+	}
+
+	// A pattern has no single source set or task identity to poll; watching
+	// one match set is ambiguous, so reject it with a targeted message
+	// rather than the generic not-found error resolveTask would produce.
+	if isTaskPattern(name) {
+		return fmt.Errorf("patterns like %q are not supported with --watch", name)
 	}
 
 	resolved, err := r.resolveTask(name)

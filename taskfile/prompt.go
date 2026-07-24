@@ -17,6 +17,13 @@ func (r *Runner) confirmPrompt(taskName, prompt string) error {
 		return nil
 	}
 
+	// Serialize the whole question/answer exchange: parallel deps and
+	// pattern fan-out can prompt concurrently, and interleaved byte-wise
+	// reads from the shared stdin could hand one task's "y" to another —
+	// silently authorizing a guarded task the user never confirmed.
+	r.promptMu.Lock()
+	defer r.promptMu.Unlock()
+
 	fmt.Fprintf(r.IO.Stderr, "%s[%s]%s %s [y/N]: ", colorYellow, taskName, colorReset, prompt)
 
 	declined := fmt.Errorf("task %q: prompt declined", taskName)

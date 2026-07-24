@@ -47,6 +47,7 @@ type Runner struct {
 	runs        sync.Map          // resolved task name -> *taskRun
 	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
 	gitOnce     sync.Once         // guards gitVars construction
+	promptMu    sync.Mutex        // serializes `prompt:` interactions on the shared stdin
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;

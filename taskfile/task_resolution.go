@@ -173,6 +173,47 @@ func (r *Runner) cwdNamespace() (string, bool) {
 	return bestNS, bestNS != ""
 }
 
+// isTaskPattern reports whether name is a `...:` wildcard pattern
+// (Bazel-style: `gogo ...:test` runs `test` in every namespace).
+func isTaskPattern(name string) bool {
+	return strings.HasPrefix(name, "...:")
+}
+
+// expandPattern resolves a `...:name` pattern to the sorted list of matching
+// task names. The wildcard spans zero or more namespace segments, so
+// `...:test` matches `test`, `proxy:test`, and `a:b:test`. Matching is exact
+// — no prefix fuzzing, no aliases — and internal tasks are skipped, so a
+// wildcard can never land on a private helper or a near-miss. When cwd sits
+// inside an included namespace the pattern is scoped to that subtree,
+// mirroring Bazel's cwd-relative `...`.
+func (r *Runner) expandPattern(pattern string) ([]string, error) {
+	rest := strings.TrimPrefix(pattern, "...:")
+	if rest == "" {
+		return nil, fmt.Errorf("invalid pattern %q: expected \"...:<task>\"", pattern)
+	}
+	var scope string
+	if ns, ok := r.cwdNamespace(); ok {
+		scope = ns + ":"
+	}
+	var out []string
+	for name := range r.tf.Tasks {
+		// Skip internal tasks, tasks outside the cwd scope, and (defensively)
+		// pattern-shaped names a programmatic Config could contain — matching
+		// one would recurse through runPattern forever.
+		if IsInternalTask(name) || isTaskPattern(name) || !strings.HasPrefix(name, scope) {
+			continue
+		}
+		if local := name[len(scope):]; local == rest || strings.HasSuffix(local, ":"+rest) {
+			out = append(out, name)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no tasks match pattern %q", pattern)
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
 // IsInternalTask reports whether a task name is internal (its local segment
 // starts with '_'). Only the part after the last colon is checked so
 // 'ns:_helper' is internal but 'ns:public' is not. Internal tasks are
