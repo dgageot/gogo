@@ -204,7 +204,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 		return err
 	}
 
-	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved, r.Force)
+	upToDate, checksum, err := r.isUpToDate(&task, dir, resolved)
 	if err != nil {
 		return err
 	}
