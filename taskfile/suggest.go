@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"maps"
 	"slices"
 )
 
@@ -25,14 +26,7 @@ func (r *Runner) suggestTasks(name string) []string {
 		return nil
 	}
 
-	type candidate struct {
-		display  string // shown to the user (task name, never the alias)
-		distance int
-	}
-
-	seen := make(map[string]int) // task name → best distance seen so far
-	var results []candidate
-
+	best := make(map[string]int) // task name → best distance across name and aliases
 	consider := func(label, taskName string) {
 		if IsInternalTask(taskName) {
 			return
@@ -41,11 +35,9 @@ func (r *Runner) suggestTasks(name string) []string {
 		if d > suggestionDistance {
 			return
 		}
-		if prev, ok := seen[taskName]; ok && prev <= d {
-			return
+		if prev, ok := best[taskName]; !ok || d < prev {
+			best[taskName] = d
 		}
-		seen[taskName] = d
-		results = append(results, candidate{display: taskName, distance: d})
 	}
 
 	for taskName := range r.tf.Tasks {
@@ -55,34 +47,13 @@ func (r *Runner) suggestTasks(name string) []string {
 		consider(alias, taskName)
 	}
 
-	// Drop entries that were superseded by a closer match for the same task.
-	results = slices.DeleteFunc(results, func(c candidate) bool {
-		return seen[c.display] != c.distance
-	})
-
-	slices.SortFunc(results, func(a, b candidate) int {
-		if a.distance != b.distance {
-			return a.distance - b.distance
-		}
-		switch {
-		case a.display < b.display:
-			return -1
-		case a.display > b.display:
-			return 1
-		default:
-			return 0
-		}
-	})
-
-	if len(results) > suggestionLimit {
-		results = results[:suggestionLimit]
+	// Closest first; the alphabetical pre-sort breaks distance ties.
+	names := slices.Sorted(maps.Keys(best))
+	slices.SortStableFunc(names, func(a, b string) int { return best[a] - best[b] })
+	if len(names) > suggestionLimit {
+		names = names[:suggestionLimit]
 	}
-
-	out := make([]string, len(results))
-	for i, c := range results {
-		out[i] = c.display
-	}
-	return out
+	return names
 }
 
 // levenshtein returns the edit distance between a and b — the minimum number
