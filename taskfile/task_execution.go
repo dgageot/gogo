@@ -98,16 +98,14 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 	}) == nil
 }
 
-// Run executes the named task. Extra vars (from task call sites) override task-level vars.
-func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
+// Run executes the named task. Executions are memoized per resolved name, so
+// a task shared by several deps runs once. Call-site vars from `cmds:
+// - task: X` flow through runSubTask instead, which always bypasses
+// memoization.
+func (r *Runner) Run(name, cliArgs string) error {
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
-	}
-
-	// Each call site with extra vars is a distinct execution — bypass memoization.
-	if hasExtraVars(extraVars) {
-		return r.run(resolved, cliArgs, extraVars, nil)
 	}
 
 	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{})
@@ -135,11 +133,6 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 		ev = []map[string]Var{extraVars}
 	}
 	return r.run(resolved, cliArgs, ev, parentEnv)
-}
-
-// hasExtraVars reports whether the variadic extraVars carries any overrides.
-func hasExtraVars(extraVars []map[string]Var) bool {
-	return len(extraVars) > 0 && len(extraVars[0]) > 0
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
