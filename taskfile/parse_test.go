@@ -369,6 +369,31 @@ tasks:
 	assert.Empty(t, task.Preconditions[1].Msg)
 }
 
+func TestParseIfField(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"
+tasks:
+  deploy:
+    if: test "$CI" = "true"
+    cmds:
+      - cmd: echo deploying
+        if: which docker
+      - echo done
+  build:
+    cmd: go build
+`), 0o644))
+
+	tf, err := Parse(dir)
+	require.NoError(t, err)
+
+	task := tf.Tasks["deploy"]
+	assert.Equal(t, `test "$CI" = "true"`, task.If)
+	require.Len(t, task.Cmds, 2)
+	assert.Equal(t, "which docker", task.Cmds[0].If)
+	assert.Empty(t, task.Cmds[1].If)
+	assert.Empty(t, tf.Tasks["build"].If)
+}
+
 func TestParseDeferCmd(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

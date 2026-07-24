@@ -56,3 +56,7 @@ task "deploy": DEPLOY_TOKEN is not set. Get one from the admin dashboard.
 ## Evaluation Order
 
 Preconditions are checked after dependencies and required variables, but before any commands run.
+
+## Preconditions vs `if:`
+
+A failing precondition stops the run with an error — use it when the task *should* run and something is wrong. When skipping is the normal, expected outcome (e.g. "only deploy in CI"), use an [`if:` condition](../task-file-syntax/#conditional-execution) instead: it skips the task cleanly without failing the run.

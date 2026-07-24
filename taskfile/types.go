@@ -35,6 +35,7 @@ type Task struct {
 	Platforms     StringList        `yaml:"platforms"`
 	Requires      Requires          `yaml:"requires"`
 	Preconditions []Precondition    `yaml:"preconditions"`
+	If            string            `yaml:"if"`     // shell condition; a non-zero exit skips the task (deps included) without error
 	Prompt        string            `yaml:"prompt"` // confirmation message shown before the task runs
 	Silent        bool              `yaml:"silent"` // when true, suppress the per-cmd "[task] cmd" log line
 	Desc          string            `yaml:"-"`      // set from YAML comments, not from a field
@@ -105,6 +106,7 @@ type Cmd struct {
 	Cmd         string         `yaml:"cmd"`
 	Task        string         `yaml:"task"`
 	Defer       string         `yaml:"defer"`        // shell command run after the task's cmds, even on failure
+	If          string         `yaml:"if"`           // shell condition; a non-zero exit skips this entry without error
 	IgnoreError bool           `yaml:"ignore_error"` // when true, a failure of this cmd doesn't stop the task (shell cmds only; not honored on task: or defer: entries)
 	Vars        map[string]Var `yaml:"vars"`
 }

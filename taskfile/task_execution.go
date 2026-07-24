@@ -82,6 +82,22 @@ func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env
 	return nil
 }
 
+// conditionMet reports whether an `if:` condition allows execution. The
+// condition is a shell command run with the same working dir and env as the
+// task's own commands (wrapped in `op run` when the env carries op://
+// secrets, so a check may read a resolved secret). Its exit status is the
+// answer: zero runs, non-zero skips — a skip is never an error.
+func (r *Runner) conditionMet(taskName, condition, dir string, env []string, useOpRun bool) bool {
+	return r.ShellRunner.Run(ShellCommand{
+		Kind:     ShellCommandCondition,
+		TaskName: taskName,
+		Command:  condition,
+		Dir:      dir,
+		Env:      env,
+		UseOpRun: useOpRun,
+	}) == nil
+}
+
 // Run executes the named task. Extra vars (from task call sites) override task-level vars.
 func (r *Runner) Run(name, cliArgs string, extraVars ...map[string]Var) error {
 	resolved, err := r.resolveTask(name)
@@ -135,6 +151,22 @@ func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, paren
 	if !matchesPlatform(task.Platforms) {
 		r.logTask(colorYellow, resolved, "skipped (platform mismatch)")
 		return nil
+	}
+
+	// `if:` gates the whole task — prompt and deps included — so a skipped
+	// task leaves the system untouched. The env is composed early just for
+	// the check (buildEnv is pure composition, no commands run); tasks
+	// without a condition keep the usual phase order.
+	if task.If != "" {
+		dir := r.taskDir(&task)
+		env, err := r.buildEnv(&task, dir, parentEnv)
+		if err != nil {
+			return err
+		}
+		if !r.conditionMet(resolved, task.If, dir, env, hasOpSecrets(env)) {
+			r.logTask(colorYellow, resolved, "skipped (condition not met)")
+			return nil
+		}
 	}
 
 	// Prompt before anything runs — deps included — so declining leaves the
@@ -219,6 +251,18 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 	}()
 
 	for _, cmd := range cmds {
+		// A per-entry `if:` gates every kind of entry uniformly: a defer whose
+		// condition fails is never registered, a task: sub-call is never made.
+		// Unlike task-level `if:`, the condition here sees resolved vars.
+		if cmd.If != "" {
+			condition := expandVars(cmd.If, vars, cliArgs, r.builtinLookup)
+			if !r.conditionMet(taskName, condition, dir, env, useOpRun) {
+				if !silent {
+					r.logTask(colorYellow, taskName, "skipped (condition not met): "+condition)
+				}
+				continue
+			}
+		}
 		if cmd.Defer != "" {
 			deferred = append(deferred, expandVars(cmd.Defer, vars, cliArgs, r.builtinLookup))
 			continue

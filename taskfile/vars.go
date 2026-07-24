@@ -56,6 +56,11 @@ func expandStringSlice(s []string) {
 
 func expandTaskTemplates(t *Task) {
 	t.Dir = expandEnvTemplates(t.Dir)
+	// Task-level `if:` never goes through the run-time resolver (it runs
+	// before vars are resolved, like preconditions), so it gets the same
+	// parse-time env substitution. Cmd-level `if:` goes through expandVars
+	// at run time and is deliberately left alone here.
+	t.If = expandEnvTemplates(t.If)
 	expandStringSlice(t.Sources)
 	expandStringSlice(t.Generates)
 	expandStringSlice(t.Status)
@@ -232,6 +237,9 @@ func referencedVars(task *Task) []string {
 			refs[name] = struct{}{}
 		}
 		for _, name := range templateNames(cmd.Defer) {
+			refs[name] = struct{}{}
+		}
+		for _, name := range templateNames(cmd.If) {
 			refs[name] = struct{}{}
 		}
 		for _, v := range cmd.Vars {

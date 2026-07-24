@@ -42,6 +42,7 @@ Each task supports the following fields:
 | `platforms` | list | Restrict task to specific OS/arch (e.g. `linux`, `darwin/arm64`) |
 | `requires` | map | Required variables (`vars`) and environment variables (`env`) |
 | `preconditions` | list | Shell commands that must succeed before the task runs |
+| `if` | string | Shell condition; when it exits non-zero the task is skipped without error (see [Conditional Execution](#conditional-execution)) |
 | `prompt` | string | Confirmation question shown before the task runs; declining aborts (see [Prompts](#prompts)) |
 | `silent` | bool | When `true`, suppress the `[task] cmd` log line for each command |
 
@@ -158,6 +159,39 @@ tasks:
 ```
 
 `ignore_error` is scoped to the individual command — a later command without it still fails the task. It only applies to shell commands: it is not honored on `task:` sub-calls (a failing child task always propagates) or on `defer:` entries (whose failures are already ignored).
+
+## Conditional Execution
+
+An `if:` condition is a shell command whose exit status decides whether something runs: zero runs it, non-zero skips it. Unlike `preconditions` (which abort with an error) or `status` (which checks up-to-dateness), a failed condition is a clean, silent skip.
+
+At the task level, the condition gates the whole task — dependencies and prompt included — so a skipped task leaves the system untouched:
+
+```yaml
+tasks:
+  deploy:
+    if: test "$CI" = "true"
+    deps: [build]
+    cmd: ./deploy.sh
+```
+
+Running `gogo deploy` outside CI logs `[deploy] skipped (condition not met)` and exits successfully without running `build`.
+
+At the command level, `if:` gates a single entry — the rest of the task proceeds normally:
+
+```yaml
+tasks:
+  setup:
+    vars:
+      MODE: release
+    cmds:
+      - cmd: ./install-tools.sh
+        if: '! which golangci-lint'
+      - cmd: ./sign.sh
+        if: test "{{ "{{" }}.MODE}}" = release
+      - go build ./...
+```
+
+Command-level conditions are template-expanded, so they can reference task variables. Task-level conditions run before variables are resolved (like `preconditions`) but see the task's full environment. A `defer:` entry with a failing condition is never registered, and a `task:` sub-call with one is never made.
 
 ## Prompts
 

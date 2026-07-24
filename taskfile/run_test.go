@@ -2643,3 +2643,131 @@ func TestRunnerPassesInjectedIOToShellCommands(t *testing.T) {
 	assert.Same(t, &stdout, runs[0].Stdout)
 	assert.Same(t, &stderr, runs[0].Stderr)
 }
+
+func TestTaskIfSkipsTaskAndDeps(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				If:   "false",
+				Deps: []Dep{{Task: "build"}},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+			"build": {
+				Cmds: []Cmd{{Cmd: "echo building"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	runner.IO.Stderr = &stderr
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("deploy", ""))
+	assert.Empty(t, *execs, "neither the task's cmds nor its deps should run")
+	assert.Contains(t, stderr.String(), "skipped (condition not met)")
+}
+
+func TestTaskIfRunsWhenConditionMet(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				If:   `test -n "$CI"`,
+				Env:  map[string]string{"CI": "true"},
+				Cmds: []Cmd{{Cmd: "echo deploying"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+
+	require.NoError(t, runner.Run("deploy", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 2)
+	assert.Equal(t, ShellCommandCondition, runs[0].Kind)
+	assert.Equal(t, `test -n "$CI"`, runs[0].Command)
+	assert.Equal(t, "true", envValue(runs[0].Env, "CI"), "condition sees the task's env")
+	assert.Equal(t, ShellCommandTask, runs[1].Kind)
+	assert.Equal(t, "echo deploying", runs[1].Command)
+}
+
+func TestCmdIfSkipsOnlyThatCmd(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Cmds: []Cmd{
+					{Cmd: "echo one", If: "false"},
+					{Cmd: "echo two"},
+				},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("build", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "echo two", (*execs)[0].Command)
+}
+
+func TestCmdIfExpandsVars(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {
+				Vars: map[string]Var{"MODE": {Value: "release"}},
+				Cmds: []Cmd{{Cmd: "echo building", If: `test "{{.MODE}}" = release`}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+
+	require.NoError(t, runner.Run("build", ""))
+
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 2)
+	assert.Equal(t, ShellCommandCondition, runs[0].Kind)
+	assert.Equal(t, `test "release" = release`, runs[0].Command)
+	assert.Equal(t, "echo building", runs[1].Command)
+}
+
+func TestCmdIfSkipsDeferRegistration(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"test": {
+				Cmds: []Cmd{
+					{Defer: "echo cleanup", If: "false"},
+					{Cmd: "echo testing"},
+				},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("test", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "echo testing", (*execs)[0].Command)
+}

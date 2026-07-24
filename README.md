@@ -66,6 +66,7 @@ A quick tour. Each item links to the canonical docs page.
 - **Dotenv** — global and per-task, with deterministic precedence ([Dotenv](https://dgageot.github.io/gogo/features/dotenv/))
 - **1Password secrets** via `op://` references and a top-level `secrets:` block ([Secrets](https://dgageot.github.io/gogo/features/secrets/))
 - **Preconditions & requires** to guard tasks before they run ([Preconditions](https://dgageot.github.io/gogo/features/preconditions/))
+- **Conditional execution** — `if:` skips a task or a single cmd cleanly when a shell condition fails ([Task File Syntax](https://dgageot.github.io/gogo/features/task-file-syntax/#conditional-execution))
 - **Deferred cleanup** — `defer:` cmds run after the task, in reverse order, even on failure
 - **Error tolerance** — `ignore_error: true` lets a task continue past a failing cmd
 - **Prompts** — `prompt:` asks for confirmation before destructive tasks; `--yes` auto-confirms
