@@ -9,10 +9,10 @@ import (
 )
 
 // This file implements an opt-in convenience: when gogo can't find a
-// gogo.yaml, it looks for a foreign task file (Taskfile / mise.toml) up the
-// tree and shells out to the matching tool. It's deliberately self-contained
-// and side-tested via the package-level hooks below — the rest of the
-// codebase stays oblivious.
+// gogo.yaml, it looks for a foreign task file (Taskfile / mise.toml /
+// Makefile) in the current working directory only and shells out to the
+// matching tool. It's deliberately self-contained and side-tested via the
+// package-level hooks below — the rest of the codebase stays oblivious.
 
 // fallbackLookPath / fallbackRun are overridden in tests. Production uses
 // exec.LookPath and a real exec.CommandContext.

@@ -98,9 +98,9 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 	}) == nil
 }
 
-// Run executes the named task. Executions are memoized per resolved name, so
-// a task shared by several deps runs once. Call-site vars from `cmds:
-// - task: X` flow through runSubTask instead, which always bypasses
+// Run executes the named task. Executions are memoized per resolved name,
+// so a task shared by several deps runs once. Call-site vars from
+// `cmds: - task: X` flow through runSubTask instead, which always bypasses
 // memoization.
 func (r *Runner) Run(name, cliArgs string) error {
 	resolved, err := r.resolveTask(name)
