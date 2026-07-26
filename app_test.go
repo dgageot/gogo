@@ -224,6 +224,29 @@ tasks:
 	assert.Equal(t, "build\ntest\n", stdout.String())
 }
 
+func TestAppCompleteIncludesAliases(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  build:
+    aliases: [b, compile]
+    cmd: go build
+  _internal:
+    aliases: [hidden]
+    cmd: echo hidden
+  test:
+    aliases: t
+    cmd: go test
+`)
+
+	app, stdout, _ := newTestApp(t, dir, "--complete")
+
+	require.NoError(t, app.Run(t.Context()))
+	// Aliases are callable, so completion offers them; aliases of internal
+	// tasks stay hidden.
+	assert.Equal(t, "b\nbuild\ncompile\nt\ntest\n", stdout.String())
+}
+
 func TestAppCompleteSilentOnMissingFile(t *testing.T) {
 	app, stdout, stderr := newTestApp(t, t.TempDir(), "--complete")
 

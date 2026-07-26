@@ -292,6 +292,23 @@ func visibleTaskNames(tf *taskfile.Config) []string {
 	return names
 }
 
+// completionNames returns the sorted set of words `--complete` offers: every
+// visible task name plus its aliases, since an alias is just as callable as
+// the name it stands for. Aliases of internal tasks stay hidden, as do
+// aliases that are themselves internal-looking.
+func completionNames(tf *taskfile.Config) []string {
+	names := make(map[string]struct{})
+	for _, name := range visibleTaskNames(tf) {
+		names[name] = struct{}{}
+		for _, alias := range tf.Tasks[name].Aliases {
+			if !taskfile.IsInternalTask(alias) {
+				names[alias] = struct{}{}
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(names))
+}
+
 func (a *App) printCompletionScript(shell string) error {
 	switch shell {
 	case "bash":
@@ -312,7 +329,7 @@ func (a *App) printTaskNames() {
 		return // silently fail during completion
 	}
 
-	for _, name := range visibleTaskNames(tf) {
+	for _, name := range completionNames(tf) {
 		fmt.Fprintln(a.Stdout, name)
 	}
 }
