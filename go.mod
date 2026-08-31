@@ -1,6 +1,6 @@
 module github.com/dgageot/gogo
 
-go 1.26.5
+go 1.27.0
 
 require (
 	github.com/alexflint/go-arg v1.6.1
