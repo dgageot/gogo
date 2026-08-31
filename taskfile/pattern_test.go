@@ -263,7 +263,7 @@ func TestPatternPromptsAreSerialized(t *testing.T) {
 	}
 
 	runner := newTestRunner(t, tf, dir)
-	runner.IO.Stdin = strings.NewReader("y\ny\n")
+	runner.IO.Stdin = strings.NewReader("y\ny\n") //nolint:dupword // duplication is expected
 	execs := captureExecs(runner)
 
 	require.NoError(t, runner.Run("...:deploy", ""))
