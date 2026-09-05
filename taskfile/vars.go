@@ -221,40 +221,22 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 
 func referencedVars(task *Task) []string {
 	refs := make(map[string]struct{})
+	collect := func(s string) {
+		for _, match := range templatePattern.FindAllStringSubmatch(s, -1) {
+			refs[match[1]] = struct{}{}
+		}
+	}
 	for _, name := range task.Requires.Vars {
 		refs[name] = struct{}{}
 	}
 	for _, cmd := range task.Cmds {
-		for _, name := range templateNames(cmd.Cmd) {
-			refs[name] = struct{}{}
-		}
-		for _, name := range templateNames(cmd.Defer) {
-			refs[name] = struct{}{}
-		}
-		for _, name := range templateNames(cmd.If) {
-			refs[name] = struct{}{}
-		}
+		collect(cmd.Cmd)
+		collect(cmd.Defer)
+		collect(cmd.If)
 		for _, v := range cmd.Vars {
-			for _, name := range templateNames(v.Value) {
-				refs[name] = struct{}{}
-			}
-			for _, name := range templateNames(v.Sh) {
-				refs[name] = struct{}{}
-			}
+			collect(v.Value)
+			collect(v.Sh)
 		}
-	}
-	out := slices.Sorted(maps.Keys(refs))
-	return out
-}
-
-func templateNames(s string) []string {
-	matches := templatePattern.FindAllStringSubmatch(s, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-	refs := make(map[string]struct{}, len(matches))
-	for _, match := range matches {
-		refs[match[1]] = struct{}{}
 	}
 	return slices.Sorted(maps.Keys(refs))
 }

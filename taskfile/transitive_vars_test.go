@@ -291,3 +291,20 @@ func TestVarsTaskFileDirIsAlwaysAvailable(t *testing.T) {
 	}
 	assert.Equal(t, "echo "+dir+"/dist", runCmdAndCapture(t, tf))
 }
+
+func TestReferencedVarsCollectsSortedUniqueNames(t *testing.T) {
+	task := &Task{
+		Requires: Requires{Vars: StringList{"Z", "A"}},
+		Cmds: []Cmd{
+			{Cmd: "{{.B}} {{ .A }} {{.B}} $SHELL ${ENV} {{.invalid-name}}"},
+			{Defer: "{{.C}}"},
+			{If: "{{.D}}"},
+			{Task: "callee", Vars: map[string]Var{
+				"VALUE": {Value: "{{.E}} {{.A}}"},
+				"SHELL": {Sh: "echo {{.F}}"},
+			}},
+		},
+	}
+
+	assert.Equal(t, []string{"A", "B", "C", "D", "E", "F", "Z"}, referencedVars(task))
+}
