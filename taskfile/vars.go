@@ -208,8 +208,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 	}
 
 	unused := make([]string, 0)
-	for _, name := range slices.Sorted(maps.Keys(sources)) {
-		s := sources[name]
+	for name, s := range sources {
 		if s.scope != scopeTask && s.scope != scopeExtra {
 			continue
 		}
@@ -217,6 +216,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 			unused = append(unused, name)
 		}
 	}
+	slices.Sort(unused)
 	return resolved, unused, nil
 }
 
