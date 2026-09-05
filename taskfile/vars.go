@@ -115,7 +115,7 @@ func ancestorNamespaces(ns string) []string {
 // (most-specific wins) > root global. Within each layer the value is
 // template-expanded against everything below it, then against the built-in
 // lookup (e.g. {{.GIT_COMMIT}}).
-func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars []map[string]Var) (map[string]string, []string, error) {
+func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars map[string]Var) (map[string]string, []string, error) {
 	type sourceScope int
 
 	const (
@@ -149,10 +149,8 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 	for k, v := range task.Vars {
 		sources[k] = source{v: v, dir: dir, scope: scopeTask}
 	}
-	for _, ev := range extraVars {
-		for k, v := range ev {
-			sources[k] = source{v: v, dir: dir, scope: scopeExtra}
-		}
+	for k, v := range extraVars {
+		sources[k] = source{v: v, dir: dir, scope: scopeExtra}
 	}
 
 	resolved := map[string]string{

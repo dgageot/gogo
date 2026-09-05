@@ -165,17 +165,13 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 	if err != nil {
 		return err
 	}
-	var ev []map[string]Var
-	if len(extraVars) > 0 {
-		ev = []map[string]Var{extraVars}
-	}
-	return r.run(resolved, cliArgs, ev, parentEnv)
+	return r.run(resolved, cliArgs, extraVars, parentEnv)
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
 // always runs the task, so recursive calls from runCmds must go through Run
 // (or runSubTask, which threads the parent env down).
-func (r *Runner) run(resolved, cliArgs string, extraVars []map[string]Var, parentEnv []string) error {
+func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
