@@ -98,12 +98,13 @@ func ancestorNamespaces(ns string) []string {
 	if ns == "" {
 		return nil
 	}
-	parts := strings.Split(ns, ":")
-	out := make([]string, 0, len(parts))
-	for i := 1; i <= len(parts); i++ {
-		out = append(out, strings.Join(parts[:i], ":"))
+	var out []string
+	for i, c := range ns {
+		if c == ':' {
+			out = append(out, ns[:i])
+		}
 	}
-	return out
+	return append(out, ns)
 }
 
 // resolveAllVars computes the variables that are actually used by a task.

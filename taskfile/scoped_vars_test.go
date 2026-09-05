@@ -312,3 +312,20 @@ tasks:
 	require.Len(t, *execs, 1)
 	assert.Equal(t, "echo from-flatten", (*execs)[0].Command)
 }
+
+func TestAncestorNamespaces(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want []string
+	}{
+		{name: ""},
+		{name: "app", want: []string{"app"}},
+		{name: "app:api:build", want: []string{"app", "app:api", "app:api:build"}},
+		{name: "équipe:日本:build", want: []string{"équipe", "équipe:日本", "équipe:日本:build"}},
+		{name: ":a::", want: []string{"", ":a", ":a:", ":a::"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ancestorNamespaces(tt.name))
+		})
+	}
+}
