@@ -184,3 +184,33 @@ func TestLocalGitCommitVarOverridesBuiltinOnlyForTask(t *testing.T) {
 	assert.Equal(t, `echo "sha-fullsha"`, (*execs)[1].Command)
 	assert.ElementsMatch(t, []string{"git rev-parse --short=7 HEAD", "git rev-parse HEAD"}, outputs)
 }
+
+func TestUnusedVarsStaySortedAndLazy(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"ROOT": {Sh: "unused root"}},
+		NamespaceVars: map[string]map[string]Var{
+			"app": {"NAMESPACE": {Sh: "unused namespace"}},
+		},
+	}, dir)
+	r.ShellRunner = &fakeShellRunner{outputFunc: func(ShellCommand) ([]byte, error) {
+		assert.Fail(t, "unused shell variable was evaluated")
+		return nil, nil
+	}}
+	task := &Task{
+		Vars: map[string]Var{
+			"Z":    {Sh: "unused task"},
+			"A":    {Sh: "unused task"},
+			"USED": {Value: "value"},
+		},
+		Cmds: []Cmd{{Cmd: "echo {{.USED}}"}},
+	}
+
+	vars, unused, err := r.resolveAllVars("app:show", task, dir, map[string]Var{
+		"M": {Sh: "unused call-site"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "value", vars["USED"])
+	assert.Equal(t, []string{"A", "M", "Z"}, unused)
+}

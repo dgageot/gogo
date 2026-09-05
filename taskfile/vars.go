@@ -98,12 +98,13 @@ func ancestorNamespaces(ns string) []string {
 	if ns == "" {
 		return nil
 	}
-	parts := strings.Split(ns, ":")
-	out := make([]string, 0, len(parts))
-	for i := 1; i <= len(parts); i++ {
-		out = append(out, strings.Join(parts[:i], ":"))
+	var out []string
+	for i, c := range ns {
+		if c == ':' {
+			out = append(out, ns[:i])
+		}
 	}
-	return out
+	return append(out, ns)
 }
 
 // resolveAllVars computes the variables that are actually used by a task.
@@ -115,7 +116,7 @@ func ancestorNamespaces(ns string) []string {
 // (most-specific wins) > root global. Within each layer the value is
 // template-expanded against everything below it, then against the built-in
 // lookup (e.g. {{.GIT_COMMIT}}).
-func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars []map[string]Var) (map[string]string, []string, error) {
+func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars map[string]Var) (map[string]string, []string, error) {
 	type sourceScope int
 
 	const (
@@ -149,10 +150,8 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 	for k, v := range task.Vars {
 		sources[k] = source{v: v, dir: dir, scope: scopeTask}
 	}
-	for _, ev := range extraVars {
-		for k, v := range ev {
-			sources[k] = source{v: v, dir: dir, scope: scopeExtra}
-		}
+	for k, v := range extraVars {
+		sources[k] = source{v: v, dir: dir, scope: scopeExtra}
 	}
 
 	resolved := map[string]string{
@@ -209,8 +208,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 	}
 
 	unused := make([]string, 0)
-	for _, name := range slices.Sorted(maps.Keys(sources)) {
-		s := sources[name]
+	for name, s := range sources {
 		if s.scope != scopeTask && s.scope != scopeExtra {
 			continue
 		}
@@ -218,45 +216,28 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 			unused = append(unused, name)
 		}
 	}
+	slices.Sort(unused)
 	return resolved, unused, nil
 }
 
 func referencedVars(task *Task) []string {
 	refs := make(map[string]struct{})
+	collect := func(s string) {
+		for _, match := range templatePattern.FindAllStringSubmatch(s, -1) {
+			refs[match[1]] = struct{}{}
+		}
+	}
 	for _, name := range task.Requires.Vars {
 		refs[name] = struct{}{}
 	}
 	for _, cmd := range task.Cmds {
-		for _, name := range templateNames(cmd.Cmd) {
-			refs[name] = struct{}{}
-		}
-		for _, name := range templateNames(cmd.Defer) {
-			refs[name] = struct{}{}
-		}
-		for _, name := range templateNames(cmd.If) {
-			refs[name] = struct{}{}
-		}
+		collect(cmd.Cmd)
+		collect(cmd.Defer)
+		collect(cmd.If)
 		for _, v := range cmd.Vars {
-			for _, name := range templateNames(v.Value) {
-				refs[name] = struct{}{}
-			}
-			for _, name := range templateNames(v.Sh) {
-				refs[name] = struct{}{}
-			}
+			collect(v.Value)
+			collect(v.Sh)
 		}
-	}
-	out := slices.Sorted(maps.Keys(refs))
-	return out
-}
-
-func templateNames(s string) []string {
-	matches := templatePattern.FindAllStringSubmatch(s, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-	refs := make(map[string]struct{}, len(matches))
-	for _, match := range matches {
-		refs[match[1]] = struct{}{}
 	}
 	return slices.Sorted(maps.Keys(refs))
 }
