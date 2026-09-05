@@ -152,3 +152,25 @@ func TestUnquoteEscapedQuotes(t *testing.T) {
 func TestUnquoteSingleQuotesAreLiteral(t *testing.T) {
 	assert.Equal(t, `hello \"world\"`, unquote(`'hello \"world\"'`))
 }
+
+func TestUnquoteEscapeBoundaries(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "escaped newline stays literal", input: `"\\n"`, want: `\n`},
+		{name: "escaped tab stays literal", input: `"\\t"`, want: `\t`},
+		{name: "backslash before newline", input: `"\\\n"`, want: "\\\n"},
+		{name: "unknown escape stays literal", input: `"\q"`, want: `\q`},
+		{name: "trailing backslash", input: `"tail\\"`, want: `tail\`},
+		{name: "mixed escapes", input: `"\"\\\n\t"`, want: "\"\\\n\t"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, unquote(tt.input))
+		})
+	}
+}
