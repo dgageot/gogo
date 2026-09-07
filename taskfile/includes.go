@@ -163,8 +163,12 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 		}
 	}
 
-	for _, nested := range nestedIncludes(included) {
-		if err := l.loadInclude(nested); err != nil {
+	for _, name := range included.Includes {
+		if err := l.loadInclude(includeRequest{
+			parentDir: included.Dir,
+			name:      name,
+			namespace: included.Namespace + ":" + name,
+		}); err != nil {
 			return err
 		}
 	}
@@ -223,18 +227,6 @@ type includedConfig struct {
 
 	Namespace string
 	Parent    includeRequest
-}
-
-func nestedIncludes(parent *includedConfig) []includeRequest {
-	var requests []includeRequest
-	for _, name := range parent.Includes {
-		requests = append(requests, includeRequest{
-			parentDir: parent.Dir,
-			name:      name,
-			namespace: parent.Namespace + ":" + name,
-		})
-	}
-	return requests
 }
 
 // flattenRequest describes a single `flatten:` entry pulled from a parent

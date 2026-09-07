@@ -331,3 +331,21 @@ func TestParentVarsDoNotFlowDownAsEnv(t *testing.T) {
 	require.Len(t, *execs, 1)
 	assert.Empty(t, envValue((*execs)[0].Env, "PARENT_VAR"))
 }
+
+func TestBuildEnvPreservesInputSlices(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{Dir: dir}, dir)
+	r.BaseEnv = []string{"BASE=base", "PATH=/base"}
+	parentEnv := []string{"PARENT=parent", "PATH=/parent"}
+	task := &Task{Env: map[string]string{
+		"PATH": "$PATH:/task",
+		"COPY": "$BASE:$PARENT:$PATH",
+	}}
+
+	env, err := r.buildEnv(task, dir, parentEnv)
+	require.NoError(t, err)
+	assert.Equal(t, "/parent:/task", envValue(env, "PATH"))
+	assert.Equal(t, "base:parent:/parent:/task", envValue(env, "COPY"))
+	assert.Equal(t, []string{"BASE=base", "PATH=/base"}, r.BaseEnv)
+	assert.Equal(t, []string{"PARENT=parent", "PATH=/parent"}, parentEnv)
+}

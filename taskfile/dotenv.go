@@ -91,14 +91,15 @@ func isValidEnvKey(key string) bool {
 	return true
 }
 
+var dotenvUnescaper = strings.NewReplacer(`\"`, `"`, `\\`, `\`, `\n`, "\n", `\t`, "\t")
+
 // unquote removes matching surrounding quotes from a value and processes escape sequences.
 // Double-quoted values support \" and \\ escapes. Single-quoted values are literal.
 func unquote(s string) string {
 	if after, ok := strings.CutPrefix(s, `"`); ok {
 		if before, ok := strings.CutSuffix(after, `"`); ok {
 			// Process escape sequences in double-quoted strings
-			r := strings.NewReplacer(`\"`, `"`, `\\`, `\`, `\n`, "\n", `\t`, "\t")
-			return r.Replace(before)
+			return dotenvUnescaper.Replace(before)
 		}
 	}
 	if after, ok := strings.CutPrefix(s, "'"); ok {

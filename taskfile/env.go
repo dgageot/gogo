@@ -105,8 +105,7 @@ func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string) ([]string,
 		}
 	}
 
-	base := slices.Clone(env)
-	resolvedTaskEnv := resolveTaskEnv(task.Env, base)
+	resolvedTaskEnv := resolveTaskEnv(task.Env, env)
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
 		env = setEnv(env, k, resolvedTaskEnv[k])
 	}
