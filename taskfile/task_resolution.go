@@ -14,6 +14,9 @@ func (r *Runner) resolveTask(name string) (string, error) {
 	if resolved, ok := r.resolveTaskName(name); ok {
 		return resolved, nil
 	}
+	if resolved, ok := r.resolveNamespaceDefault(name); ok {
+		return resolved, nil
+	}
 	switch matches := r.prefixMatches(name); len(matches) {
 	case 1:
 		return matches[0], nil
@@ -62,6 +65,19 @@ func (r *Runner) resolveTaskName(name string) (string, bool) {
 		}
 		if taskName, ok := r.aliases[cand]; ok {
 			return taskName, true
+		}
+	}
+	return "", false
+}
+
+func (r *Runner) resolveNamespaceDefault(name string) (string, bool) {
+	for _, cand := range r.nameCandidates(name) {
+		defaultTask, ok := r.tf.NamespaceDefaults[cand]
+		if !ok {
+			continue
+		}
+		if _, ok := r.tf.Tasks[defaultTask]; ok {
+			return defaultTask, true
 		}
 	}
 	return "", false
