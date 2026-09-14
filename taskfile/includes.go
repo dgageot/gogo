@@ -374,7 +374,7 @@ func (l *includeLoader) mergeSecrets(secrets map[string]string) {
 
 func (l *includeLoader) mergeTasks(included *includedConfig) error {
 	for _, name := range slices.Sorted(maps.Keys(included.Tasks)) {
-		task := normalizedIncludedTask(included, name, l.root.Tasks)
+		task := normalizedIncludedTask(included, name, l.root.Tasks, l.root.NamespaceDefaults)
 		finalName := included.Namespace + ":" + name
 		if err := validateTaskName(finalName); err != nil {
 			return err
@@ -402,17 +402,17 @@ func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancest
 		makeTaskDirAbsolute(&task, ancestorDir)
 		if namespace != "" {
 			ic := &includedConfig{Config: flattened, Namespace: namespace}
-			namespaceLocalReferences(&task, ic, l.root.Tasks)
+			namespaceLocalReferences(&task, ic, l.root.Tasks, l.root.NamespaceDefaults)
 		}
 		l.root.Tasks[finalName] = task
 	}
 	return nil
 }
 
-func normalizedIncludedTask(included *includedConfig, name string, loadedTasks map[string]Task) Task {
+func normalizedIncludedTask(included *includedConfig, name string, loadedTasks map[string]Task, loadedDefaults map[string]string) Task {
 	task := included.Tasks[name]
 	makeTaskDirAbsolute(&task, included.Dir)
-	namespaceLocalReferences(&task, included, loadedTasks)
+	namespaceLocalReferences(&task, included, loadedTasks, loadedDefaults)
 	return task
 }
 
@@ -422,7 +422,7 @@ func makeTaskDirAbsolute(task *Task, fileDir string) {
 	}
 }
 
-func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks map[string]Task) {
+func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks map[string]Task, loadedDefaults map[string]string) {
 	// Aliases are namespaced like the task name so two included files can
 	// each declare the same bare alias (e.g. `up`) without colliding in the
 	// runner's global alias map.
@@ -440,6 +440,12 @@ func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks 
 		candidate := namespaceJoin(included.Namespace, name)
 		if hasTask(loadedTasks, candidate) {
 			return candidate
+		}
+		if defaultTask, ok := loadedDefaults[name]; ok {
+			return defaultTask
+		}
+		if defaultTask, ok := loadedDefaults[candidate]; ok {
+			return defaultTask
 		}
 		return name
 	}

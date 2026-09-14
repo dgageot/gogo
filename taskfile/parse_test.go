@@ -134,6 +134,40 @@ tasks:
 	assert.Contains(t, tf.Tasks, "cli:nested:test")
 }
 
+func TestLoadWithIncludesNestedReferencesUseNamespaceDefaults(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - evals
+`,
+		"evals/gogo.yaml": `version: "1"
+includes:
+  - gen
+tasks:
+  smoke:
+    deps: [gen]
+    cmds:
+      - task: gen
+`,
+		"evals/gen/gogo.yaml": `version: "1"
+default: run
+tasks:
+  run:
+    cmd: generate
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	smoke := tf.Tasks["evals:smoke"]
+	require.Len(t, smoke.Deps, 1)
+	assert.Equal(t, "evals:gen:run", smoke.Deps[0].Task)
+	require.Len(t, smoke.Cmds, 1)
+	assert.Equal(t, "evals:gen:run", smoke.Cmds[0].Task)
+}
+
 func TestLoadWithIncludesNestedReferencesUseParentNamespace(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
