@@ -115,7 +115,7 @@ func TestBuildEnvWithTaskDotenv(t *testing.T) {
 	require.NoError(t, err)
 
 	task := &Task{Dotenv: []string{".env.task"}}
-	env, err := r.buildEnv(task, dir, nil)
+	env, err := r.buildEnv(task, dir, nil, nil)
 	require.NoError(t, err)
 	assert.Contains(t, env, "TASK_VAR=task_value")
 }
@@ -126,7 +126,7 @@ func TestBuildEnvWithoutTaskDotenv(t *testing.T) {
 	require.NoError(t, err)
 
 	task := &Task{}
-	env, err := r.buildEnv(task, tf.Dir, nil)
+	env, err := r.buildEnv(task, tf.Dir, nil, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, env) // at least inherited env vars
 }

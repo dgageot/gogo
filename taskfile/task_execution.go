@@ -185,7 +185,9 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 	// without a condition keep the usual phase order.
 	if task.If != "" {
 		dir := r.taskDir(&task)
-		env, err := r.buildEnv(&task, dir, parentEnv)
+		// Vars are deliberately nil here: task-level conditions run before var
+		// resolution, so env templates remain unchanged during the early check.
+		env, err := r.buildEnv(&task, dir, parentEnv, nil)
 		if err != nil {
 			return err
 		}
@@ -221,7 +223,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		return err
 	}
 
-	env, err := r.buildEnv(&task, dir, parentEnv)
+	env, err := r.buildEnv(&task, dir, parentEnv, vars)
 	if err != nil {
 		return err
 	}

@@ -720,7 +720,7 @@ func TestTaskVarsOverrideGlobalVars(t *testing.T) {
 	assert.Equal(t, "echo local", (*execs)[0].Command)
 }
 
-func TestEnvExpansionDoesNotReferenceVars(t *testing.T) {
+func TestEnvShellExpansionDoesNotReferenceVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir: dir,
@@ -744,7 +744,7 @@ func TestEnvExpansionDoesNotReferenceVars(t *testing.T) {
 	assert.Equal(t, "${BASE}/bin", envValue((*execs)[0].Env, "MY_PATH"))
 }
 
-func TestEnvTemplateExpansionDoesNotReferenceVars(t *testing.T) {
+func TestEnvTemplateExpansionReferencesVars(t *testing.T) {
 	dir := t.TempDir()
 	tf := &Config{
 		Dir:  dir,
@@ -765,12 +765,56 @@ func TestEnvTemplateExpansionDoesNotReferenceVars(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, *execs, 1)
-	assert.Equal(t, "{{.YO}}", envValue((*execs)[0].Env, "GIT_COMMIT"))
+	assert.Equal(t, "abc123", envValue((*execs)[0].Env, "GIT_COMMIT"))
 }
 
-func TestEnvTemplateDoesNotReferenceUserVarAfterParse(t *testing.T) {
-	// Env values belong to the environment namespace. {{.VAR}} syntax is only
-	// expanded in command/precondition strings and var values, not task.env.
+func TestEnvTemplateExpansionReferencesTaskFileDir(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"dev": {
+				Env:  map[string]string{"ROOT": "{{.TASK_FILE_DIR}}"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("dev", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, dir, envValue((*execs)[0].Env, "ROOT"))
+}
+
+func TestEnvTemplateExpansionReferencesBuiltin(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"dev": {
+				Env:  map[string]string{"HOME_COPY": "{{.HOME}}"},
+				Cmds: []Cmd{{Cmd: "run"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("dev", ""))
+	require.Len(t, *execs, 1)
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	assert.Equal(t, home, envValue((*execs)[0].Env, "HOME_COPY"))
+}
+
+func TestEnvTemplateUserVarBeatsOSEnvAfterParse(t *testing.T) {
+	// Runtime expansion must honor gogo-variable precedence rather than
+	// consuming the process environment during parsing.
 	t.Setenv("YO", "from-os")
 
 	dir := t.TempDir()
@@ -795,7 +839,7 @@ tasks:
 	require.NoError(t, runner.Run("dev", ""))
 
 	require.Len(t, *execs, 1)
-	assert.Equal(t, "{{.YO}}", envValue((*execs)[0].Env, "GIT_COMMIT"))
+	assert.Equal(t, "from-vars", envValue((*execs)[0].Env, "GIT_COMMIT"))
 }
 
 func TestCmdTemplateUserVarBeatsOSEnvAfterParse(t *testing.T) {
@@ -2669,6 +2713,32 @@ func TestTaskIfSkipsTaskAndDeps(t *testing.T) {
 	require.NoError(t, runner.Run("deploy", ""))
 	assert.Empty(t, *execs, "neither the task's cmds nor its deps should run")
 	assert.Contains(t, stderr.String(), "skipped (condition not met)")
+}
+
+func TestTaskIfDoesNotResolveEnvTemplateVars(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"deploy": {
+				If:   "false",
+				Vars: map[string]Var{"VALUE": {Sh: "compute-value"}},
+				Env:  map[string]string{"VALUE": "{{.VALUE}}"},
+				Cmds: []Cmd{{Cmd: "deploy"}},
+			},
+		},
+		DotenvVars: make(map[string]string),
+	}
+
+	runner := newTestRunner(t, tf, dir)
+	shell := &fakeShellRunner{}
+	runner.ShellRunner = shell
+
+	require.NoError(t, runner.Run("deploy", ""))
+	runs := shell.runsSnapshot()
+	require.Len(t, runs, 1)
+	assert.Equal(t, ShellCommandCondition, runs[0].Kind)
+	assert.Equal(t, "{{.VALUE}}", envValue(runs[0].Env, "VALUE"))
 }
 
 func TestTaskIfRunsWhenConditionMet(t *testing.T) {
