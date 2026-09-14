@@ -241,6 +241,9 @@ func referencedVars(task *Task) []string {
 			collect(v.Value)
 			collect(v.Sh)
 		}
+		for _, value := range cmd.Env {
+			collect(value)
+		}
 	}
 	return slices.Sorted(maps.Keys(refs))
 }

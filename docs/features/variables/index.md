@@ -231,7 +231,26 @@ tasks:
       - task: ingest   # same
 ```
 
-The child's own declarations override the inherited ones on a per-key basis:
+A task call can add or override environment variables for that invocation only:
+
+```yaml
+tasks:
+  smoke:
+    vars:
+      SIZE: "2"
+    cmds:
+      - task: gen
+        env:
+          TESTSET_SIZE: "{{.SIZE}}"
+          MIRROR_FS: "1"
+      - task: ingest
+        env:
+          EVAL_KIND: knowledge
+```
+
+Call-site `env` values may reference the caller's variables with `{{.VAR}}` and other call-site entries with `${VAR}`. They override inherited parent env and the child's own `env:` declarations. Each call runs separately with its own environment; sub-task calls are never memoized.
+
+The child's own declarations override the inherited parent environment on a per-key basis:
 
 ```yaml
 tasks:
@@ -275,7 +294,8 @@ The environment handed to `/bin/sh` is built up in layers, each one overriding t
 2. **Inherited parent env** — only on sub-task calls (`cmds: - task: X`); deps don't inherit
 3. **Task `dotenv:`** — never overrides `BaseEnv` (i.e. global dotenv and OS env always win)
 4. **Task `env:`** — with cross-references resolved (see [Cross-References Between Env Entries](#cross-references-between-env-entries))
-5. **Task `secrets:`** — **highest precedence**; declaring a secret overrides any same-named placeholder in `env:`
+5. **Call-site `env:`** — only on `cmds: - task: X` calls; overrides both the inherited environment and the child's task `env:`
+6. **Task `secrets:`** — **highest precedence**; declaring a secret overrides any same-named placeholder in `env:`
 
 Note that task `vars:` are **not** part of this list: vars and env are separate
 namespaces. A `vars:` entry is available to `{{ "{{" }}.VAR}}` templating but is
