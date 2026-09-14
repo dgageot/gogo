@@ -118,7 +118,24 @@ tasks:
       - task: ingest
 ```
 
-The child's own `env` block (or a per-call `vars:` override) wins per key. See [Variables](../variables/#parent-to-child-env-propagation) for the full precedence rules.
+A call can override environment variables for only that child invocation:
+
+```yaml
+tasks:
+  smoke:
+    cmds:
+      - task: gen
+        env:
+          TESTSET_SIZE: "2"
+          MIRROR_FS: "1"
+      - task: ingest
+        env:
+          EVAL_KIND: knowledge
+```
+
+Call-site `env` values support `${VAR}` cross-references and `{{.VAR}}` references to the caller's resolved variables. They have higher precedence than inherited parent env and the child's own `env` block, while the child's `secrets:` remain the final layer.
+
+The child's own `env` block overrides inherited parent env. Per-call `vars:` overrides the child's variables. See [Variables](../variables/#parent-to-child-env-propagation) for the full precedence rules.
 
 ## Deferred Cleanup
 
@@ -341,7 +358,7 @@ Four fields accept a string *or* a struct, and the long forms are interchangeabl
 
 | Field | Short form | Long form |
 |-------|------------|-----------|
-| `cmd` / `cmds[]` | `cmd: go build ./...` | `cmds: [{ cmd: go build ./... }]` or `cmds: [{ task: build }]` (sub-task call, optionally with `vars:`) |
+| `cmd` / `cmds[]` | `cmd: go build ./...` | `cmds: [{ cmd: go build ./... }]` or `cmds: [{ task: build }]` (sub-task call, optionally with `vars:` and `env:`) |
 | `deps[]` | `deps: [build]` | `deps: [{ task: build }]` |
 | `vars` value | `VERSION: 1.0.0` | `VERSION: { value: "1.0.0" }` or `VERSION: { sh: git describe --tags }` |
 | `preconditions[]` | `- test -f config.yaml` | `- { sh: test -f config.yaml, msg: config.yaml is missing }` |

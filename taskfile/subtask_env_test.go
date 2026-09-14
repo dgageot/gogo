@@ -155,6 +155,132 @@ func TestSubTaskInheritsParentEnv(t *testing.T) {
 	assert.Equal(t, "1", envValue((*execs)[0].Env, "MIRROR_FS"))
 }
 
+func TestSubTaskCallEnvOverridesParentAndChildEnv(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"parent": {
+				Env: map[string]string{"MODE": "parent", "PARENT_ONLY": "yes"},
+				Cmds: []Cmd{{
+					Task: "child",
+					Env:  map[string]string{"MODE": "call", "CALL_ONLY": "yes"},
+				}},
+			},
+			"child": {
+				Env:  map[string]string{"MODE": "child", "CHILD_ONLY": "yes"},
+				Cmds: []Cmd{{Cmd: "true"}},
+			},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+
+	require.NoError(t, r.Run("parent", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "call", envValue((*execs)[0].Env, "MODE"))
+	assert.Equal(t, "yes", envValue((*execs)[0].Env, "PARENT_ONLY"))
+	assert.Equal(t, "yes", envValue((*execs)[0].Env, "CALL_ONLY"))
+	assert.Equal(t, "yes", envValue((*execs)[0].Env, "CHILD_ONLY"))
+}
+
+func TestSubTaskCallEnvDoesNotOverrideSecrets(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir:     dir,
+		Secrets: map[string]string{"TOKEN": "op://vault/item/field"},
+		Tasks: map[string]Task{
+			"parent": {
+				Cmds: []Cmd{{
+					Task: "child",
+					Env:  map[string]string{"TOKEN": "call"},
+				}},
+			},
+			"child": {
+				Secrets: StringList{"TOKEN"},
+				Cmds:    []Cmd{{Cmd: "true"}},
+			},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+
+	require.NoError(t, r.Run("parent", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "op://vault/item/field", envValue((*execs)[0].Env, "TOKEN"))
+}
+
+func TestSubTaskCallEnvEntriesReferenceEachOther(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"parent": {
+				Cmds: []Cmd{{
+					Task: "child",
+					Env: map[string]string{
+						"HOST": "localhost",
+						"URL":  "http://${HOST}:8080",
+					},
+				}},
+			},
+			"child": {Cmds: []Cmd{{Cmd: "true"}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+
+	require.NoError(t, r.Run("parent", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "http://localhost:8080", envValue((*execs)[0].Env, "URL"))
+}
+
+func TestSubTaskCallEnvExpandsCallerVars(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"parent": {
+				Vars: map[string]Var{"MODE": {Value: "smoke"}},
+				Cmds: []Cmd{{
+					Task: "child",
+					Env:  map[string]string{"MODE": "{{.MODE}}"},
+				}},
+			},
+			"child": {Cmds: []Cmd{{Cmd: "true"}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+
+	require.NoError(t, r.Run("parent", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "smoke", envValue((*execs)[0].Env, "MODE"))
+}
+
+func TestSubTaskCallEnvRunsChildForEachCall(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"parent": {
+				Cmds: []Cmd{
+					{Task: "child", Env: map[string]string{"MODE": "one"}},
+					{Task: "child", Env: map[string]string{"MODE": "two"}},
+				},
+			},
+			"child": {Cmds: []Cmd{{Cmd: "true"}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+
+	require.NoError(t, r.Run("parent", ""))
+	require.Len(t, *execs, 2)
+	assert.Equal(t, "one", envValue((*execs)[0].Env, "MODE"))
+	assert.Equal(t, "two", envValue((*execs)[1].Env, "MODE"))
+}
+
 func TestSubTaskOwnEnvOverridesParent(t *testing.T) {
 	// Per-key precedence: when the child also declares an env entry, the
 	// child's value wins. This is the same rule that applies to BaseEnv vs
@@ -388,7 +514,7 @@ func TestBuildEnvPreservesInputSlices(t *testing.T) {
 		"COPY": "$BASE:$PARENT:$PATH",
 	}}
 
-	env, err := r.buildEnv(task, dir, parentEnv, nil)
+	env, err := r.buildEnv(task, dir, parentEnv, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "/parent:/task", envValue(env, "PATH"))
 	assert.Equal(t, "base:parent:/parent:/task", envValue(env, "COPY"))

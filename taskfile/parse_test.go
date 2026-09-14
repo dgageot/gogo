@@ -428,6 +428,27 @@ tasks:
 	assert.Empty(t, tf.Tasks["build"].If)
 }
 
+func TestParseTaskCallEnv(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+tasks:
+  parent:
+    cmds:
+      - task: child
+        env:
+          MODE: smoke
+  child:
+    cmd: run
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	require.Len(t, tf.Tasks["parent"].Cmds, 1)
+	assert.Equal(t, map[string]string{"MODE": "smoke"}, tf.Tasks["parent"].Cmds[0].Env)
+}
+
 func TestParseDeferCmd(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

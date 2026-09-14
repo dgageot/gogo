@@ -117,7 +117,7 @@ func (r *Runner) Run(name, cliArgs string) error {
 		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
 	}
 	return tr.do(func() error {
-		return r.run(resolved, cliArgs, nil, nil)
+		return r.run(resolved, cliArgs, nil, nil, nil)
 	})
 }
 
@@ -145,7 +145,7 @@ func (r *Runner) runPattern(pattern, cliArgs string) error {
 // see what the parent declared in its `env:` block (matching shell-function
 // semantics). Memoization is always bypassed because two parents calling the
 // same child with different env are genuinely different executions.
-func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string) error {
+func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string) error {
 	// Patterns are legal wherever a task name is: a `task: ...:X` sub-call
 	// fans out to every match. Sequential (unlike deps) because cmds are a
 	// sequence — the next cmd must not start until the whole fan-out ends.
@@ -155,7 +155,7 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 			return err
 		}
 		for _, n := range names {
-			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv); err != nil {
+			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv, callEnv); err != nil {
 				return err
 			}
 		}
@@ -165,13 +165,13 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 	if err != nil {
 		return err
 	}
-	return r.run(resolved, cliArgs, extraVars, parentEnv)
+	return r.run(resolved, cliArgs, extraVars, parentEnv, callEnv)
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
 // always runs the task, so recursive calls from runCmds must go through Run
 // (or runSubTask, which threads the parent env down).
-func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string) error {
+func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
@@ -187,7 +187,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		dir := r.taskDir(&task)
 		// Vars are deliberately nil here: task-level conditions run before var
 		// resolution, so env templates remain unchanged during the early check.
-		env, err := r.buildEnv(&task, dir, parentEnv, nil)
+		env, err := r.buildEnv(&task, dir, parentEnv, nil, callEnv)
 		if err != nil {
 			return err
 		}
@@ -223,7 +223,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		return err
 	}
 
-	env, err := r.buildEnv(&task, dir, parentEnv, vars)
+	env, err := r.buildEnv(&task, dir, parentEnv, vars, callEnv)
 	if err != nil {
 		return err
 	}
@@ -298,9 +298,16 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		if cmd.Task != "" {
 			// `task: X` sub-calls inherit the parent's resolved env so a
 			// task-level `env:` block flows down without the user having to
-			// shell out to `gogo` to plumb env through. Child env still wins
-			// per-key (composed inside buildEnv).
-			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env); err != nil {
+			// shell out to `gogo` to plumb env through. Call-site env wins over
+			// both parent and child env declarations.
+			var callEnv map[string]string
+			if len(cmd.Env) > 0 {
+				callEnv = make(map[string]string, len(cmd.Env))
+				for key, value := range cmd.Env {
+					callEnv[key] = expandVars(value, vars, cliArgs, r.builtinLookup)
+				}
+			}
+			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env, callEnv); err != nil {
 				return err
 			}
 			continue
