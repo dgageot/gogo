@@ -186,7 +186,7 @@ If `AWS_REGION` is set in the environment, it will be substituted before the tas
 
 ## Task Environment
 
-Tasks can set environment variables for their commands. Values support `${VAR}` and `{{.VAR}}` expansion from variables and the environment:
+Tasks can set environment variables for their commands. Use `{{.VAR}}` for gogo variables and built-ins, and `${VAR}` for environment variables:
 
 ```yaml
 vars:
@@ -214,7 +214,7 @@ tasks:
     cmd: server --addr $ADDR
 ```
 
-Lookup order for `${VAR}` inside an env value: another key in the same `env` block first, then task `vars`, then **inherited parent env (when invoked via `cmds: - task: X`)**, then the process environment. Self-cycles or mutual cycles between env keys resolve to the empty string rather than looping forever.
+Lookup order for `${VAR}` inside an env value: another key in the same `env` block first, then **inherited parent env (when invoked via `cmds: - task: X`)**, then the process environment. Use `{{.VAR}}` to reference task, namespace, or global vars and built-ins such as `GIT_COMMIT` and `TASK_FILE_DIR`. Self-cycles or mutual cycles between env keys resolve to the empty string rather than looping forever.
 
 ## Parent-to-child Env Propagation
 
@@ -254,16 +254,18 @@ Two distinct precedence chains govern how variables work in gogo. Most tasks onl
 
 ### 1. Variable lookup (`{{ "{{" }}.VAR}}` and `${VAR}` inside commands)
 
-When gogo expands a reference *inside a command* (and inside a task's own `env` values), it consults these sources in order:
+When gogo expands `{{.VAR}}` inside a command or task `env:` value, it consults task, namespace, and global variables first, followed by built-in variables such as `GIT_COMMIT` and `TASK_FILE_DIR`. Commands can additionally reference `CLI_ARGS`.
 
-1. Task-scoped `vars` (which already shadow global `vars`)
-2. `CLI_ARGS` — only when the lookup is for that name
+For commands, the complete order is:
+
+1. Task-scoped `vars` (which already shadow global vars)
+2. `CLI_ARGS`
 3. Built-in variables (`GIT_*`, `TASK_FILE_DIR`)
 4. The process environment
 
 Var bodies (the `value:` and `sh:` of another variable) use a slightly tighter chain — only other vars and built-ins, no `CLI_ARGS` and no process env. This keeps `vars:` deterministic and free of CLI/shell context.
 
-Unknown `${VAR}` references are left intact for the shell to expand. Unknown `{{ "{{" }}.VAR}}` templates are left verbatim.
+Unknown `{{ "{{" }}.VAR}}` templates are left verbatim. Shell-style `$VAR` and `${VAR}` references remain in the environment namespace: inside task `env:` values they resolve against other env entries, inherited env, and the process environment; inside commands they are left for the shell.
 
 ### 2. Final task environment (what the command actually sees)
 

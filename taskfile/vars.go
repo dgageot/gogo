@@ -230,6 +230,9 @@ func referencedVars(task *Task) []string {
 	for _, name := range task.Requires.Vars {
 		refs[name] = struct{}{}
 	}
+	for _, value := range task.Env {
+		collect(value)
+	}
 	for _, cmd := range task.Cmds {
 		collect(cmd.Cmd)
 		collect(cmd.Defer)

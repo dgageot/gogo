@@ -191,7 +191,7 @@ tasks:
       - go build ./...
 ```
 
-Command-level conditions are template-expanded, so they can reference task variables. Task-level conditions run before variables are resolved (like `preconditions`) but see the task's full environment. A `defer:` entry with a failing condition is never registered, and a `task:` sub-call with one is never made.
+Command-level conditions are template-expanded, so they can reference task variables. Task-level conditions run before variables are resolved (like `preconditions`) but see the task's environment; `{{.VAR}}` templates in `env:` are left unresolved during this early check and expand before the task body runs. A `defer:` entry with a failing condition is never registered, and a `task:` sub-call with one is never made.
 
 ## Prompts
 

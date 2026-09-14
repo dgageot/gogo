@@ -342,7 +342,7 @@ func TestBuildEnvPreservesInputSlices(t *testing.T) {
 		"COPY": "$BASE:$PARENT:$PATH",
 	}}
 
-	env, err := r.buildEnv(task, dir, parentEnv)
+	env, err := r.buildEnv(task, dir, parentEnv, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "/parent:/task", envValue(env, "PATH"))
 	assert.Equal(t, "base:parent:/parent:/task", envValue(env, "COPY"))

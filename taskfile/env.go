@@ -81,7 +81,7 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 //     `secrets: [X]` reference is a stronger signal than a same-named
 //     `env: { X: ... }` entry, and is the only way op:// values reach the
 //     env when secrets are declared centrally).
-func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string) ([]string, error) {
+func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string, vars map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
 	// Inherited parent env wins over BaseEnv (a parent's `env: { GOOS: linux }`
@@ -105,7 +105,7 @@ func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string) ([]string,
 		}
 	}
 
-	resolvedTaskEnv := resolveTaskEnv(task.Env, env)
+	resolvedTaskEnv := resolveTaskEnv(task.Env, env, vars, r.builtinLookup)
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
 		env = setEnv(env, k, resolvedTaskEnv[k])
 	}
@@ -121,7 +121,7 @@ func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string) ([]string,
 	return env, nil
 }
 
-func resolveTaskEnv(taskEnv map[string]string, baseEnv []string) map[string]string {
+func resolveTaskEnv(taskEnv map[string]string, baseEnv []string, vars map[string]string, builtin func(string) (string, bool)) map[string]string {
 	resolved := make(map[string]string, len(taskEnv))
 	visiting := make(map[string]struct{})
 
@@ -151,7 +151,19 @@ func resolveTaskEnv(taskEnv map[string]string, baseEnv []string) map[string]stri
 		if strings.HasPrefix(raw, "op://") {
 			v = raw
 		} else {
-			v = expandShellEnv(raw, lookup)
+			v = raw
+			if vars != nil {
+				v = expandTemplates(v, func(name string) (string, bool) {
+					if value, ok := vars[name]; ok {
+						return value, true
+					}
+					if builtin != nil {
+						return builtin(name)
+					}
+					return "", false
+				})
+			}
+			v = expandShellEnv(v, lookup)
 		}
 		delete(visiting, k)
 		resolved[k] = v
