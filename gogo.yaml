@@ -39,10 +39,18 @@ tasks:
 
   # Cross-compile for all platforms
   cross:
-    cmd: >
-      docker buildx build
-      --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-      .
+    cmd: |
+      set -e
+      mkdir -p dist
+      for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+        os=${target%/*}
+        arch=${target#*/}
+        ext=
+        if [ "$os" = windows ]; then
+          ext=.exe
+        fi
+        CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "dist/gogo-$os-$arch$ext" .
+      done
 
   # Install gogo on the path
   install:
@@ -50,4 +58,4 @@ tasks:
 
   # Remove build artifacts
   clean:
-    cmd: rm -rf bin
+    cmd: rm -rf bin dist

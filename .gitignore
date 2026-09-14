@@ -1,4 +1,3 @@
 .gogo/
 bin/
 dist/
-.zig-cache/
