@@ -17,10 +17,11 @@ day-to-day development. Use the `gogo` binary for all dev workflows — see
 | Cross-compile all | `gogo cross`       |
 | Clean artifacts   | `gogo clean`       |
 
-CI (`.github/workflows/ci.yml`) runs four jobs: tests (`go test ./...`),
-`golangci-lint`, `govulncheck`, and the multi-platform Docker build. The
-`vulncheck` job also runs on a weekly cron so newly disclosed advisories
-surface even when the repo is quiet. Dependabot (`.github/dependabot.yml`)
+CI runs tests (`go test ./...`), `golangci-lint`, `govulncheck`, and a
+six-target pure-Go cross-compile matrix. A separate path-filtered Docker
+workflow validates the multi-platform release build whenever its Docker or
+workflow files change. The `vulncheck` job also runs on a weekly cron so newly
+disclosed advisories surface even when the repo is quiet. Dependabot (`.github/dependabot.yml`)
 bumps Go modules, GitHub Actions SHAs, and Docker base images weekly — pair
 the Actions group with the `ghapin` skill when reviewing those PRs.
 Releases (`release.yml`) are tag-driven and publish cross-built binaries via
@@ -111,7 +112,9 @@ The Go toolchain version comes from `go.mod` (`go 1.26.5`). Tests run with
 - **`Dockerfile`** — multi-stage cross build using `tonistiigi/xx`
   (`xx-go build`) and `crazymax/osxcross` for darwin targets. CGO is on for
   darwin, off otherwise. Update `GO_VERSION` here when bumping `go.mod`.
-- **`.github/workflows/`** — `ci.yml` (test/lint/vulncheck/build) and
+- **`.github/workflows/`** — `ci.yml` (test/lint/vulncheck plus a fast
+  cross-compile matrix), `docker.yml` (path-filtered multi-platform Docker
+  validation), and
   `release.yml` (tag-triggered cross build + GitHub release with build
   provenance attestations). Action SHAs are pinned; use the `ghapin` skill
   when bumping them. `.github/dependabot.yml` opens grouped weekly PRs for
