@@ -134,6 +134,40 @@ tasks:
 	assert.Contains(t, tf.Tasks, "cli:nested:test")
 }
 
+func TestLoadWithIncludesNestedReferencesUseParentNamespace(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - cli
+`,
+		"cli/gogo.yaml": `version: "1"
+includes:
+  - nested
+tasks:
+  check:
+    deps:
+      - nested:test
+    cmds:
+      - task: nested:test
+`,
+		"cli/nested/gogo.yaml": `version: "1"
+tasks:
+  test:
+    cmd: go test ./...
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	check := tf.Tasks["cli:check"]
+	require.Len(t, check.Deps, 1)
+	assert.Equal(t, "cli:nested:test", check.Deps[0].Task)
+	require.Len(t, check.Cmds, 1)
+	assert.Equal(t, "cli:nested:test", check.Cmds[0].Task)
+}
+
 func TestLoadWithIncludesRejectsParentEscape(t *testing.T) {
 	// `includes:` must point at a direct subdirectory, so `..` (or any path
 	// that climbs out of the parent) is rejected. This makes parent-escape
