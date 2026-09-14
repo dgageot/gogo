@@ -90,6 +90,29 @@ tasks:
 	assert.Equal(t, "op://cli/item/field", tf.Secrets["CLI_ONLY"], "child entry merged in")
 }
 
+func TestLoadWithFlattenMergesSecrets(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+flatten:
+  - shared.yml
+`,
+		"shared.yml": `version: "1"
+secrets:
+  TOKEN: op://vault/item/field
+tasks:
+  test:
+    secrets: TOKEN
+    cmd: true
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "op://vault/item/field", tf.Secrets["TOKEN"])
+	assert.Equal(t, StringList{"TOKEN"}, tf.Tasks["test"].Secrets)
+}
+
 func TestLoadWithIncludesRejectsOpSyntaxInVars(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(`version: "1"

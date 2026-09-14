@@ -924,6 +924,48 @@ tasks:
 	assert.NotContains(t, tf.Tasks, "helper")
 }
 
+func TestLoadWithFlattenInsideIncludeParentDeclarationsWin(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes:
+  - cli
+`,
+		"cli/gogo.yaml": `version: "1"
+flatten:
+  - shared.yml
+vars:
+  MODE: parent
+sources:
+  inputs: parent.go
+secrets:
+  TOKEN: op://parent/item/field
+`,
+		"cli/shared.yml": `version: "1"
+vars:
+  MODE: flattened
+sources:
+  inputs: flattened.go
+secrets:
+  TOKEN: op://flattened/item/field
+  FLAT_ONLY: op://flattened/only/field
+tasks:
+  build:
+    cmd: echo {{.MODE}}
+    sources: inputs
+    secrets: [TOKEN, FLAT_ONLY]
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, "parent", tf.NamespaceVars["cli"]["MODE"].Value)
+	assert.Equal(t, StringList{"parent.go"}, tf.Sources["inputs"])
+	assert.Equal(t, "op://parent/item/field", tf.Secrets["TOKEN"])
+	assert.Equal(t, "op://flattened/only/field", tf.Secrets["FLAT_ONLY"])
+}
+
 func TestLoadWithFlattenAbsolutePath(t *testing.T) {
 	dir := t.TempDir()
 	extras := filepath.Join(dir, "shared", "extras.yml")
