@@ -20,18 +20,30 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - name: Build binaries for all platforms
-        run: >
-          docker buildx build
-          --platform linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-          --output=./dist
-          .
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          set -e
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            ext=
+            if [ "$os" = windows ]; then
+              ext=.exe
+            fi
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "dist/gogo-$os-$arch$ext" .
+          done
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: "dist/*/*"
+          subject-path: "dist/*"
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" --generate-notes dist/*/*
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --generate-notes dist/*

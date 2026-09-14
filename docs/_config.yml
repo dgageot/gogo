@@ -27,7 +27,6 @@ exclude:
   - Gemfile.lock
   - node_modules/
   - _config.dev.yml
-  - Dockerfile
   - .markdownlint-cli2.yaml
   - .prettierrc
   - .prettierignore

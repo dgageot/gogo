@@ -17,12 +17,12 @@ day-to-day development. Use the `gogo` binary for all dev workflows — see
 | Cross-compile all | `gogo cross`       |
 | Clean artifacts   | `gogo clean`       |
 
-CI (`.github/workflows/ci.yml`) runs four jobs: tests (`go test ./...`),
-`golangci-lint`, `govulncheck`, and the multi-platform Docker build. The
-`vulncheck` job also runs on a weekly cron so newly disclosed advisories
-surface even when the repo is quiet. Dependabot (`.github/dependabot.yml`)
-bumps Go modules, GitHub Actions SHAs, and Docker base images weekly — pair
-the Actions group with the `ghapin` skill when reviewing those PRs.
+CI runs tests (`go test ./...`), `golangci-lint`, `govulncheck`, and a
+six-target pure-Go cross-compile matrix. The `vulncheck` job also runs on a
+weekly cron so newly disclosed advisories surface even when the repo is quiet.
+Dependabot (`.github/dependabot.yml`) bumps Go modules and GitHub Actions SHAs
+weekly — pair the Actions group with the `ghapin` skill when reviewing those
+PRs.
 Releases (`release.yml`) are tag-driven and publish cross-built binaries via
 `gh release create` plus build-provenance attestations.
 
@@ -108,16 +108,13 @@ The Go toolchain version comes from `go.mod` (`go 1.26.5`). Tests run with
   shares one source list. Edit when changing dev workflows.
 - **`.golangci.yml`** — single source of truth for lint config; keep
   `gci.sections` in sync if the module path ever changes.
-- **`Dockerfile`** — multi-stage cross build using `tonistiigi/xx`
-  (`xx-go build`) and `crazymax/osxcross` for darwin targets. CGO is on for
-  darwin, off otherwise. Update `GO_VERSION` here when bumping `go.mod`.
-- **`.github/workflows/`** — `ci.yml` (test/lint/vulncheck/build) and
-  `release.yml` (tag-triggered cross build + GitHub release with build
-  provenance attestations). Action SHAs are pinned; use the `ghapin` skill
+- **`.github/workflows/`** — `ci.yml` (test/lint/vulncheck plus a fast
+  cross-compile matrix) and `release.yml` (tag-triggered pure-Go cross build +
+  GitHub release with build-provenance attestations). Action SHAs are pinned; use the `ghapin` skill
   when bumping them. `.github/dependabot.yml` opens grouped weekly PRs for
-  Go modules, Actions, and Docker base images.
-- **Generated/ignored** (`.gitignore`): `.gogo/` (checksum cache),
-  `bin/`, `dist/`, `.zig-cache/`.
+  Go modules and GitHub Actions.
+- **Generated/ignored** (`.gitignore`): `.gogo/` (checksum cache), `bin/`,
+  and `dist/`.
 - **No env vars** are required at runtime; gogo only consumes whatever the
   user puts in their own `gogo.yaml` / dotenv files.
 - **Source presets** — built-ins `go`, `go-lint`, and `go-vendored` live in

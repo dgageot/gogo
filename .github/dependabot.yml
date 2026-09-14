@@ -21,10 +21,3 @@ updates:
       gha:
         patterns:
           - "*"
-
-  # Base images and tooling pinned in the Dockerfile (golang, alpine,
-  # tonistiigi/xx, crazymax/osxcross).
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
