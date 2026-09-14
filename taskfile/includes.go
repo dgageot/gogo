@@ -149,6 +149,12 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 		return err
 	}
 
+	// The including file owns this namespace, so its declarations take
+	// precedence over declarations pulled in through flatten files.
+	l.mergeVars(included.Namespace, included.Dir, included.Vars)
+	l.mergeSourcePresets(included.Sources)
+	l.mergeSecrets(included.Secrets)
+
 	// Process flatten files declared inside this include — their tasks merge
 	// at this include's namespace.
 	for _, p := range included.Flatten {
@@ -173,9 +179,6 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 		}
 	}
 
-	l.mergeVars(included.Namespace, included.Dir, included.Vars)
-	l.mergeSourcePresets(included.Sources)
-	l.mergeSecrets(included.Secrets)
 	return l.mergeTasks(included)
 }
 
@@ -266,6 +269,12 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 	}
 	l.dotenvVars = mergeFirstWins(l.dotenvVars, childDotenv)
 
+	// A flattened file takes precedence over files it flattens, matching the
+	// parent-over-flatten behavior at the root and include levels.
+	l.mergeVars(req.namespace, req.ancestorDir, flattened.Vars)
+	l.mergeSourcePresets(flattened.Sources)
+	l.mergeSecrets(flattened.Secrets)
+
 	// Recurse: nested flatten files keep the same namespace and ancestor.
 	for _, p := range flattened.Flatten {
 		if err := l.loadFlatten(flattenRequest{
@@ -290,8 +299,6 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 		}
 	}
 
-	l.mergeVars(req.namespace, req.ancestorDir, flattened.Vars)
-	l.mergeSourcePresets(flattened.Sources)
 	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
 }
 
