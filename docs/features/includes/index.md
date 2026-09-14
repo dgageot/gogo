@@ -43,6 +43,45 @@ gogo backend:build
 gogo frontend:test
 ```
 
+## Namespace Defaults
+
+An included file can declare its own `default:` task:
+
+```yaml
+# project/backend/gogo.yaml
+default: dev
+
+tasks:
+  dev:
+    cmd: go run ./cmd/server
+```
+
+Invoking the exact namespace runs that default:
+
+```sh
+gogo backend    # runs backend:dev
+```
+
+An exact task or alias still takes precedence over a namespace default. Defaults are preserved at every include depth, so `gogo services:api` can run the default declared by `services/api/gogo.yaml`.
+
+## References Between Included Tasks
+
+Task references are relative to the file that declares them. References to local tasks and nested includes are automatically qualified when the file is loaded under a namespace:
+
+```yaml
+# project/services/gogo.yaml
+includes:
+  - api
+
+tasks:
+  deploy:
+    deps: [api:build]
+    cmds:
+      - task: api:test
+```
+
+From the project root, those references resolve to `services:api:build` and `services:api:test`. The same file therefore works both directly from `services/` and when included by the project root.
+
 ## Automatic Namespace Resolution
 
 When you run gogo from a subdirectory, it automatically resolves task names to the matching namespace. From the `backend/` directory:
@@ -110,7 +149,7 @@ Key behaviors:
 - **Path resolution**: `flatten` entries are paths to YAML files (not directories), resolved relative to the file that declares them. Absolute paths and `~/` are supported.
 - **First defined wins**: a task declared directly in the parent file beats a same-named task in a flatten file. Between two flatten files, the first listed wins.
 - **`dir:` is rooted at the parent**: a `dir: backend` written inside a flatten file means "`backend` next to the parent task file", not relative to the flatten file's location.
-- **Variables merge**: global `vars` from flatten files are merged into the parent's `vars`, with the parent winning conflicts.
+- **Declarations merge with parent precedence**: `vars`, source presets, and secret declarations from flatten files are merged into the current namespace. The parent file wins conflicts; between flatten files, the first listed wins.
 - **Comments become descriptions**: task comments in a flatten file are preserved as `Desc` and shown by `gogo -l`.
 - **Nesting**: a flatten file can itself declare `flatten:` (still no namespace) or `includes:` (sub-namespaces under the parent's namespace).
 - **Inside an include**: when used from inside a namespaced include, the flatten file's tasks land in that include's namespace (e.g. `cli:helper` rather than `helper`).
