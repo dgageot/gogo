@@ -310,6 +310,36 @@ func TestAppRejectsCLIArgsFlag(t *testing.T) {
 	assert.Contains(t, err.Error(), "--cliargs")
 }
 
+func TestAppBareInvocationListsTasksWhenNoDefaultExists(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  # Build the project
+  build:
+    cmd: go build
+`)
+
+	app, stdout, stderr := newTestApp(t, dir)
+	require.NoError(t, app.Run(t.Context()))
+	assert.Contains(t, stdout.String(), "build")
+	assert.Contains(t, stdout.String(), "Build the project")
+	assert.Empty(t, stderr.String())
+}
+
+func TestAppBareInvocationRunsLiteralDefaultTask(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "gogo.yaml"), `version: "1"
+tasks:
+  default:
+    cmd: echo legacy-default
+`)
+
+	app, stdout, stderr := newTestApp(t, dir, "--dry")
+	require.NoError(t, app.Run(t.Context()))
+	assert.Empty(t, stdout.String())
+	assert.Contains(t, stderr.String(), "echo legacy-default")
+}
+
 func TestAppRunsTopLevelDefaultTask(t *testing.T) {
 	// End-to-end: `gogo` (no positional arg) runs the task named by the
 	// top-level `default:` field instead of falling back to the implicit

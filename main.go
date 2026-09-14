@@ -95,6 +95,16 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 
+	// With no requested task or configured default, a literal `default` task
+	// keeps the original convention. Otherwise, bare gogo is a successful
+	// shorthand for --list.
+	if len(parsed.Tasks) == 0 && tf.Default == "" {
+		if _, ok := tf.Tasks["default"]; !ok {
+			writeTaskListings(a.Stdout, gatherTaskListings(tf))
+			return nil
+		}
+	}
+
 	cliArgs := shellJoin(parsed.CLIArgs)
 	runner, err := taskfile.NewRunner(tf, dir)
 	if err != nil {
