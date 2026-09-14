@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -69,6 +70,8 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 	return env
 }
 
+var shellDefaultPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*):-([^{}]*)\}`)
+
 // buildEnv composes the environment used to run a task's commands:
 //
 //  1. start from r.BaseEnv (os env + global dotenv),
@@ -82,8 +85,24 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 //     `secrets: [X]` reference is a stronger signal than a same-named
 //     `env: { X: ... }` entry, and is the only way op:// values reach the
 //     env when secrets are declared centrally).
-func (r *Runner) buildEnv(task *Task, dir string, parentEnv []string, vars, callEnv map[string]string) ([]string, error) {
+func (r *Runner) buildEnv(taskName string, task *Task, dir string, parentEnv []string, vars, callEnv map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
+
+	// File-level env entries are defaults: root values flow everywhere,
+	// namespace values become more specific, and the process environment wins.
+	scoped := maps.Clone(r.tf.Env)
+	for _, namespace := range ancestorNamespaces(taskNamespace(taskName)) {
+		if scoped == nil {
+			scoped = make(map[string]string)
+		}
+		maps.Copy(scoped, r.tf.NamespaceEnv[namespace])
+	}
+	resolvedScoped := resolveTaskEnv(scoped, env, vars, r.builtinLookup)
+	for _, key := range slices.Sorted(maps.Keys(resolvedScoped)) {
+		if !envHasKey(env, key) {
+			env = append(env, envPair(key, resolvedScoped[key]))
+		}
+	}
 
 	// Inherited parent env wins over BaseEnv (a parent's `env: { GOOS: linux }`
 	// must override the OS GOOS for child tasks). Child task.dotenv/env then
@@ -169,6 +188,7 @@ func resolveTaskEnv(taskEnv map[string]string, baseEnv []string, vars map[string
 					return "", false
 				})
 			}
+			v = expandShellDefaults(v, lookup)
 			v = expandShellEnv(v, lookup)
 		}
 		delete(visiting, k)
@@ -180,6 +200,16 @@ func resolveTaskEnv(taskEnv map[string]string, baseEnv []string, vars map[string
 		lookup(key)
 	}
 	return resolved
+}
+
+func expandShellDefaults(value string, lookup func(string) (string, bool)) string {
+	return shellDefaultPattern.ReplaceAllStringFunc(value, func(match string) string {
+		parts := shellDefaultPattern.FindStringSubmatch(match)
+		if current, ok := lookup(parts[1]); ok && current != "" {
+			return current
+		}
+		return parts[2]
+	})
 }
 
 // hasOpSecrets reports whether any env entry's value is an op:// reference.

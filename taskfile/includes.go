@@ -73,6 +73,7 @@ func (l *includeLoader) load() (*Config, error) {
 	l.root.Namespaces = make(map[string]string)
 	l.root.NamespaceDirs = make(map[string]string)
 	l.root.NamespaceDefaults = make(map[string]string)
+	l.root.NamespaceEnv = make(map[string]map[string]string)
 	l.root.NamespaceVars = make(map[string]map[string]Var)
 
 	// Process flatten files first (their tasks merge into the root namespace).
@@ -152,6 +153,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 
 	// The including file owns this namespace, so its declarations take
 	// precedence over declarations pulled in through flatten files.
+	l.mergeEnv(included.Namespace, included.Env)
 	l.mergeVars(included.Namespace, included.Dir, included.Vars)
 	l.mergeSourcePresets(included.Sources)
 	l.mergeSecrets(included.Secrets)
@@ -282,6 +284,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 
 	// A flattened file takes precedence over files it flattens, matching the
 	// parent-over-flatten behavior at the root and include levels.
+	l.mergeEnv(req.namespace, flattened.Env)
 	l.mergeVars(req.namespace, req.ancestorDir, flattened.Vars)
 	l.mergeSourcePresets(flattened.Sources)
 	l.mergeSecrets(flattened.Secrets)
@@ -336,6 +339,18 @@ func mergeFirstWins[V any](dst, src map[string]V) map[string]V {
 		}
 	}
 	return dst
+}
+
+// mergeEnv merges file-level environment defaults into their owning scope.
+func (l *includeLoader) mergeEnv(namespace string, env map[string]string) {
+	if len(env) == 0 {
+		return
+	}
+	if namespace == "" {
+		l.root.Env = mergeFirstWins(l.root.Env, env)
+		return
+	}
+	l.root.NamespaceEnv[namespace] = mergeFirstWins(l.root.NamespaceEnv[namespace], env)
 }
 
 // mergeVars merges vars declared by an included or flattened file into the

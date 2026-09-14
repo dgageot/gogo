@@ -15,6 +15,7 @@ gogo reads task definitions from a `gogo.yaml` file in the current directory.
 | `includes` | list of strings | Subdirectories containing other task files (namespaced — see [Includes](../includes/)) |
 | `flatten` | list of strings | YAML files whose tasks merge into the current namespace without a prefix (see [Includes](../includes/#flatten)) |
 | `dotenv` | list of strings | Paths to `.env` files to load |
+| `env` | map | Root environment defaults, inherited by all tasks and overridden by the process environment |
 | `vars` | map | Global variables |
 | `sources` | map | Named source-pattern presets, referenced by task `sources:` (see [Sources & Checksums](../sources-checksums/#presets)) |
 | `secrets` | map | Named secret URIs (currently `op://`), referenced by task `secrets:` (see [Secrets](../secrets/)) |
