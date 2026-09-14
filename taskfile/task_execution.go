@@ -187,7 +187,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		dir := r.taskDir(&task)
 		// Vars are deliberately nil here: task-level conditions run before var
 		// resolution, so env templates remain unchanged during the early check.
-		env, err := r.buildEnv(&task, dir, parentEnv, nil, callEnv)
+		env, err := r.buildEnv(resolved, &task, dir, parentEnv, nil, callEnv)
 		if err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		return err
 	}
 
-	env, err := r.buildEnv(&task, dir, parentEnv, vars, callEnv)
+	env, err := r.buildEnv(resolved, &task, dir, parentEnv, vars, callEnv)
 	if err != nil {
 		return err
 	}

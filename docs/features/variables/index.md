@@ -184,6 +184,18 @@ tasks:
 
 If `AWS_REGION` is set in the environment, it will be substituted before the task file is processed.
 
+## File Environment Defaults
+
+A top-level `env:` block provides overridable defaults for every task in the file:
+
+```yaml
+env:
+  AWS_PROFILE: ${AWS_PROFILE:-Docker-Main/AIAgentTeam}
+  MIRROR_FS: ${MIRROR_FS:-1}
+```
+
+The process environment wins, so `AWS_PROFILE=custom gogo deploy` uses `custom`. Included files scope their top-level environment to their namespace; nested namespaces inherit ancestor defaults, and siblings remain isolated. A task's own `env:` block still overrides these defaults.
+
 ## Task Environment
 
 Tasks can set environment variables for their commands. Use `{{.VAR}}` for gogo variables and built-ins, and `${VAR}` for environment variables:
