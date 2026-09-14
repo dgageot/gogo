@@ -9,6 +9,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMisspelledGitBuiltinWarns(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"build": {Cmds: []Cmd{{Cmd: "echo {{.GIT_SHA}}"}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	r.IO.Stderr = &stderr
+	captureExecs(r)
+
+	require.NoError(t, r.Run("build", ""))
+	assert.Contains(t, stderr.String(), `warning: unknown built-in variable "GIT_SHA"`)
+	assert.Contains(t, stderr.String(), `did you mean "GIT_SHORT_COMMIT"?`)
+}
+
+func TestUnknownForeignTemplateDoesNotWarn(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir: dir,
+		Tasks: map[string]Task{
+			"show": {Cmds: []Cmd{{Cmd: `docker inspect --format '{{.ID}}' image`}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	r.IO.Stderr = &stderr
+	captureExecs(r)
+
+	require.NoError(t, r.Run("show", ""))
+	assert.NotContains(t, stderr.String(), "unknown built-in variable")
+}
+
+func TestUserDefinedGitVarDoesNotWarn(t *testing.T) {
+	dir := t.TempDir()
+	tf := &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"GIT_SHA": {Value: "abc1234"}},
+		Tasks: map[string]Task{
+			"build": {Cmds: []Cmd{{Cmd: "echo {{.GIT_SHA}}"}}},
+		},
+	}
+	r := newTestRunner(t, tf, dir)
+	var stderr strings.Builder
+	r.IO.Stderr = &stderr
+	captureExecs(r)
+
+	require.NoError(t, r.Run("build", ""))
+	assert.NotContains(t, stderr.String(), "unknown built-in variable")
+}
+
 func TestTaskVarShIsLazyAndScoped(t *testing.T) {
 	dir := t.TempDir()
 	var gitCalls atomic.Int64

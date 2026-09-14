@@ -218,6 +218,13 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 	for _, name := range unusedVars {
 		r.logTask(colorYellow, resolved, fmt.Sprintf("warning: variable %q is declared but not used", name))
 	}
+	for _, name := range unknownGitBuiltins(referencedVars(&task), vars) {
+		msg := fmt.Sprintf("warning: unknown built-in variable %q", name)
+		if suggestion := suggestGitBuiltin(name); suggestion != "" {
+			msg += fmt.Sprintf("; did you mean %q?", suggestion)
+		}
+		r.logTask(colorYellow, resolved, msg)
+	}
 
 	if err := checkRequires(resolved, &task, vars, r.builtinLookup); err != nil {
 		return err
@@ -264,6 +271,35 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		}
 	}
 	return nil
+}
+
+func unknownGitBuiltins(referenced []string, vars map[string]string) []string {
+	var unknown []string
+	for _, name := range referenced {
+		if !strings.HasPrefix(name, "GIT_") {
+			continue
+		}
+		if _, userDefined := vars[name]; userDefined || slices.Contains(builtinGitVars, name) {
+			continue
+		}
+		unknown = append(unknown, name)
+	}
+	return unknown
+}
+
+func suggestGitBuiltin(name string) string {
+	if name == "GIT_SHA" {
+		return "GIT_SHORT_COMMIT"
+	}
+	bestName := ""
+	bestDistance := suggestionDistance + 1
+	for _, candidate := range builtinGitVars {
+		if distance := levenshtein(name, candidate); distance < bestDistance {
+			bestName = candidate
+			bestDistance = distance
+		}
+	}
+	return bestName
 }
 
 // runCmds executes a list of commands in sequence. When silent is true, the
