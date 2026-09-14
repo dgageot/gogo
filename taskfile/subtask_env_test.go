@@ -65,6 +65,52 @@ tasks:
 	assert.Contains(t, tf.Tasks, "cli:build")
 }
 
+func TestLoadWithIncludesPreservesNamespaceDefaults(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes: [cli]
+`,
+		"cli/gogo.yaml": `version: "1"
+default: dev
+includes: [tools]
+tasks:
+  dev:
+    cmd: run-dev
+`,
+		"cli/tools/gogo.yaml": `version: "1"
+default: build
+tasks:
+  build:
+    cmd: run-build
+`,
+	})
+
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "cli:dev", tf.NamespaceDefaults["cli"])
+	assert.Equal(t, "cli:tools:build", tf.NamespaceDefaults["cli:tools"])
+}
+
+func TestLoadWithIncludesRejectsUnknownNamespaceDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml": `version: "1"
+includes: [cli]
+`,
+		"cli/gogo.yaml": `version: "1"
+default: missing
+tasks:
+  build:
+    cmd: run-build
+`,
+	})
+
+	_, err := LoadWithIncludes(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `namespace "cli" default: "missing"`)
+}
+
 func TestDefaultFieldRoundtripsThroughLoad(t *testing.T) {
 	// Smoke test: top-level `default:` survives parsing and (when valid)
 	// makes it through include resolution to the final Config.

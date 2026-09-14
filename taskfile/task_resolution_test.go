@@ -23,6 +23,30 @@ func makePrefixTF(dir string, names ...string) *Config {
 	}
 }
 
+func TestNamespaceDefaultResolvesExactNamespace(t *testing.T) {
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "cli:dev", "cli:deploy")
+	tf.NamespaceDefaults = map[string]string{"cli": "cli:dev"}
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("cli", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "cli:dev", (*execs)[0].Task)
+}
+
+func TestNamespaceDefaultDoesNotOverrideExactTask(t *testing.T) {
+	dir := t.TempDir()
+	tf := makePrefixTF(dir, "cli", "cli:dev")
+	tf.NamespaceDefaults = map[string]string{"cli": "cli:dev"}
+	runner := newTestRunner(t, tf, dir)
+	execs := captureExecs(runner)
+
+	require.NoError(t, runner.Run("cli", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "cli", (*execs)[0].Task)
+}
+
 func TestPrefixMatchUniqueResolvesToFullName(t *testing.T) {
 	// "gogo i" → "install" because "install" is the only task whose name
 	// starts with "i".

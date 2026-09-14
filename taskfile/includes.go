@@ -72,6 +72,7 @@ func newIncludeLoader(root *Config) (*includeLoader, error) {
 func (l *includeLoader) load() (*Config, error) {
 	l.root.Namespaces = make(map[string]string)
 	l.root.NamespaceDirs = make(map[string]string)
+	l.root.NamespaceDefaults = make(map[string]string)
 	l.root.NamespaceVars = make(map[string]map[string]Var)
 
 	// Process flatten files first (their tasks merge into the root namespace).
@@ -177,6 +178,16 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 		}); err != nil {
 			return err
 		}
+	}
+
+	if included.Default != "" {
+		defaultTask := namespaceJoin(included.Namespace, included.Default)
+		_, localTask := included.Tasks[included.Default]
+		_, loadedTask := l.root.Tasks[defaultTask]
+		if !localTask && !loadedTask {
+			return fmt.Errorf("namespace %q default: %q does not reference any defined task", included.Namespace, included.Default)
+		}
+		l.root.NamespaceDefaults[included.Namespace] = defaultTask
 	}
 
 	return l.mergeTasks(included)
