@@ -356,7 +356,7 @@ func (l *includeLoader) mergeSecrets(secrets map[string]string) {
 
 func (l *includeLoader) mergeTasks(included *includedConfig) error {
 	for _, name := range slices.Sorted(maps.Keys(included.Tasks)) {
-		task := normalizedIncludedTask(included, name)
+		task := normalizedIncludedTask(included, name, l.root.Tasks)
 		finalName := included.Namespace + ":" + name
 		if err := validateTaskName(finalName); err != nil {
 			return err
@@ -384,17 +384,17 @@ func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancest
 		makeTaskDirAbsolute(&task, ancestorDir)
 		if namespace != "" {
 			ic := &includedConfig{Config: flattened, Namespace: namespace}
-			namespaceLocalReferences(&task, ic)
+			namespaceLocalReferences(&task, ic, l.root.Tasks)
 		}
 		l.root.Tasks[finalName] = task
 	}
 	return nil
 }
 
-func normalizedIncludedTask(included *includedConfig, name string) Task {
+func normalizedIncludedTask(included *includedConfig, name string, loadedTasks map[string]Task) Task {
 	task := included.Tasks[name]
 	makeTaskDirAbsolute(&task, included.Dir)
-	namespaceLocalReferences(&task, included)
+	namespaceLocalReferences(&task, included, loadedTasks)
 	return task
 }
 
@@ -404,7 +404,7 @@ func makeTaskDirAbsolute(task *Task, fileDir string) {
 	}
 }
 
-func namespaceLocalReferences(task *Task, included *includedConfig) {
+func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks map[string]Task) {
 	// Aliases are namespaced like the task name so two included files can
 	// each declare the same bare alias (e.g. `up`) without colliding in the
 	// runner's global alias map.
@@ -415,14 +415,22 @@ func namespaceLocalReferences(task *Task, included *includedConfig) {
 		}
 		task.Aliases = aliases
 	}
-	for i, dep := range task.Deps {
-		if hasTask(included.Tasks, dep.Task) {
-			task.Deps[i].Task = included.Namespace + ":" + dep.Task
+	qualify := func(name string) string {
+		if hasTask(included.Tasks, name) {
+			return namespaceJoin(included.Namespace, name)
 		}
+		candidate := namespaceJoin(included.Namespace, name)
+		if hasTask(loadedTasks, candidate) {
+			return candidate
+		}
+		return name
+	}
+	for i, dep := range task.Deps {
+		task.Deps[i].Task = qualify(dep.Task)
 	}
 	for i, cmd := range task.Cmds {
-		if cmd.Task != "" && hasTask(included.Tasks, cmd.Task) {
-			task.Cmds[i].Task = included.Namespace + ":" + cmd.Task
+		if cmd.Task != "" {
+			task.Cmds[i].Task = qualify(cmd.Task)
 		}
 	}
 }
