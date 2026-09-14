@@ -120,11 +120,11 @@ The Go toolchain version comes from `go.mod` (`go 1.26.5`). Tests run with
   `bin/`, `dist/`, `.zig-cache/`.
 - **No env vars** are required at runtime; gogo only consumes whatever the
   user puts in their own `gogo.yaml` / dotenv files.
-- **Source presets** — built-ins `go` and `go-vendored` live in
+- **Source presets** — built-ins `go`, `go-lint`, and `go-vendored` live in
   `taskfile/sources.go::builtinSourcePresets`. Users can override or extend
   them via a top-level `sources:` map (`Config.Sources`); user entries win
-  on a name collision. Presets compose recursively (`go-vendored`
-  references `go`); cycles and unknown preset-shaped names are caught in
+  on a name collision. Presets compose recursively (`go-lint` and `go-vendored`
+  reference `go`); cycles and unknown preset-shaped names are caught in
   `expandSources`. Anything containing a glob metacharacter or path
   separator is treated as a literal pattern, so `go.mod` / `*.go` work as
   before.

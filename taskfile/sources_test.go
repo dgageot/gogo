@@ -21,6 +21,19 @@ func TestResolveSourcesBuiltinGoVendoredComposesGo(t *testing.T) {
 	assert.Equal(t, []string{"**/*.go", "go.mod", "go.sum", "vendor/**"}, got)
 }
 
+func TestResolveSourcesBuiltinGoLintComposesGo(t *testing.T) {
+	got, err := resolveSources(builtinSourcePresets(), []string{"go-lint"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"**/*.go", "go.mod", "go.sum", ".golangci.yml", ".golangci.yaml"}, got)
+}
+
+func TestResolveSourcesUserOverridesBuiltinGoLint(t *testing.T) {
+	user := map[string]StringList{"go-lint": {"custom-lint.yml"}}
+	got, err := resolveSources(effectivePresets(user), []string{"go-lint"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"custom-lint.yml"}, got)
+}
+
 func TestResolveSourcesUnknownNameTreatedAsLiteral(t *testing.T) {
 	// "go.mod" has no glob characters and isn't a preset name — keep as-is so
 	// existing files like "go.mod" or ".golangci.yml" still work without

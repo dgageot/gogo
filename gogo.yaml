@@ -22,7 +22,7 @@ tasks:
   lint:
     deps: [lint:custom]
     cmd: golangci-lint run
-    sources: [go, .golangci.yml]
+    sources: go-lint
 
   # Run gogo's project-specific cops (rubocop-go). Lives in its own nested
   # module under tools/gogolint so rubocop-go's x/tools dependency stays out

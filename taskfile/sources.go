@@ -13,10 +13,11 @@ import (
 //
 // The default set focuses on Go projects because that's by far the most
 // duplicated boilerplate today. Presets compose: `go-vendored` references
-// `go` and adds `vendor/**`.
+// `go` and adds `vendor/**`; `go-lint` adds common golangci-lint config files.
 func builtinSourcePresets() map[string]StringList {
 	return map[string]StringList{
 		"go":          {"**/*.go", "go.mod", "go.sum"},
+		"go-lint":     {"go", ".golangci.yml", ".golangci.yaml"},
 		"go-vendored": {"go", "vendor/**"},
 	}
 }
