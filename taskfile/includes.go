@@ -493,10 +493,10 @@ func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks 
 		if _, ok := aliases[name]; ok {
 			return name
 		}
-		if defaultTask, ok := loadedDefaults[name]; ok {
+		if defaultTask, ok := loadedDefaults[candidate]; ok {
 			return defaultTask
 		}
-		if defaultTask, ok := loadedDefaults[candidate]; ok {
+		if defaultTask, ok := loadedDefaults[name]; ok {
 			return defaultTask
 		}
 		return name

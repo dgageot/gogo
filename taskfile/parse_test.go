@@ -1217,3 +1217,26 @@ func TestIncludedReferencePrefersRootAliasOverNamespaceDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "web", tf.Tasks["api:all"].Deps[0].Task)
 }
+
+func TestNestedNamespaceDefaultReferencesStayLocal(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"api/gogo.yaml":    "includes: [db]\ntasks:\n  deploy: {deps: [db], cmds: [{task: db}]}\n",
+		"api/db/gogo.yaml": "default: start\ntasks:\n  start: {cmd: local-db}\n",
+		"db/gogo.yaml":     "default: start\ntasks:\n  start: {cmd: unrelated-db}\n",
+	})
+	for _, includes := range []string{"[api, db]", "[db, api]"} {
+		writeFiles(t, dir, map[string]string{"gogo.yaml": "includes: " + includes + "\n"})
+		tf, err := LoadWithIncludes(dir)
+		require.NoError(t, err)
+		assert.Equal(t, "api:db:start", tf.Tasks["api:deploy"].Deps[0].Task)
+		assert.Equal(t, "api:db:start", tf.Tasks["api:deploy"].Cmds[0].Task)
+		r := newTestRunner(t, tf, dir)
+		execs := captureExecs(r)
+		require.NoError(t, r.Run("api:deploy", ""))
+		require.Len(t, *execs, 2)
+		for _, exec := range *execs {
+			assert.Equal(t, "local-db", exec.Command)
+		}
+	}
+}
