@@ -306,7 +306,7 @@ func TestReferencedVarsCollectsSortedUniqueNames(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, []string{"A", "B", "C", "D", "E", "F", "Z"}, referencedVars(task))
+	assert.Equal(t, []string{"A", "B", "C", "D", "Z"}, referencedVars(task))
 }
 
 func TestNestedShFailureDoesNotExecuteOuterCommand(t *testing.T) {
@@ -327,4 +327,52 @@ func TestNestedShFailureDoesNotExecuteOuterCommand(t *testing.T) {
 	require.Len(t, outputs, 1)
 	assert.Equal(t, "lookup", outputs[0].Command)
 	assert.Empty(t, shell.runsSnapshot())
+}
+
+func TestCallSiteVarsOnlyResolveInCalleeScope(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"LOCATION": {Sh: "must not run"}},
+		Tasks: map[string]Task{
+			"caller": {Cmds: []Cmd{{Task: "callee", Vars: map[string]Var{
+				"GREETING": {Value: "Hi from {{.LOCATION}}"},
+				"DYNAMIC":  {Sh: "echo {{.LOCATION}}"},
+			}}}},
+			"callee": {
+				Vars: map[string]Var{"LOCATION": {Value: "Paris"}},
+				Cmds: []Cmd{{Cmd: "echo {{.GREETING}} / {{.DYNAMIC}}"}},
+			},
+		},
+	}, dir)
+	shell := &fakeShellRunner{outputFunc: func(req ShellCommand) ([]byte, error) {
+		assert.Equal(t, "echo Paris", req.Command)
+		return []byte("Paris"), nil
+	}}
+	r.ShellRunner = shell
+	execs := captureExecs(r)
+
+	require.NoError(t, r.RunContext(t.Context(), "caller", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "echo Hi from Paris / Paris", (*execs)[0].Command)
+	assert.Len(t, shell.outputsSnapshot(), 1)
+}
+
+func TestCallSiteVarsDoNotEvaluateUnusedCalleeValues(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:  dir,
+		Vars: map[string]Var{"UNUSED": {Sh: "must not run"}},
+		Tasks: map[string]Task{
+			"caller": {Cmds: []Cmd{{Task: "callee", Vars: map[string]Var{
+				"IGNORED": {Value: "{{.UNUSED}}"},
+			}}}},
+			"callee": {Cmds: []Cmd{{Cmd: "true"}}},
+		},
+	}, dir)
+	shell := &fakeShellRunner{}
+	r.ShellRunner = shell
+
+	require.NoError(t, r.RunContext(t.Context(), "caller", ""))
+	assert.Empty(t, shell.outputsSnapshot())
 }

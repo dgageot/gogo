@@ -247,10 +247,7 @@ func referencedVars(task *Task, scopedEnv ...map[string]string) []string {
 		collect(cmd.Cmd)
 		collect(cmd.Defer)
 		collect(cmd.If)
-		for _, v := range cmd.Vars {
-			collect(v.Value)
-			collect(v.Sh)
-		}
+		// Call-site vars resolve in the callee, unlike call-site env below.
 		for _, value := range cmd.Env {
 			collect(value)
 		}
