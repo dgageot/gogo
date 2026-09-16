@@ -3,7 +3,7 @@ module github.com/dgageot/gogo/tools/gogolint
 go 1.26.5
 
 require (
-	github.com/dgageot/rubocop-go v0.0.0-20260627140528-ee9a9b36c3eb
+	github.com/dgageot/rubocop-go v0.0.0-20260914103134-ceff10dc27fa
 	github.com/stretchr/testify v1.12.1
 )
 
