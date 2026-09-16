@@ -269,3 +269,34 @@ func TestPatternPromptsAreSerialized(t *testing.T) {
 	require.NoError(t, runner.Run("...:deploy", ""))
 	assert.ElementsMatch(t, []string{"a:deploy", "b:deploy"}, patternTaskNames(*execs))
 }
+
+func TestPatternCLIArgsAgreeWithDependencyCalls(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"all:test": {Deps: []Dep{{Task: "a:test"}}},
+		"a:test":   {Cmds: []Cmd{{Cmd: "echo [{{.CLI_ARGS}}]"}}},
+	}}, dir)
+	execs := captureExecs(r)
+	for range 100 {
+		r.ResetRan()
+		require.NoError(t, r.Run("...:test", "ARGS"))
+	}
+	require.Len(t, *execs, 100)
+	for _, exec := range *execs {
+		assert.Equal(t, "echo [ARGS]", exec.Command)
+	}
+}
+
+func TestRunMemoizationDistinguishesCLIArgs(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"test": {Cmds: []Cmd{{Cmd: "echo {{.CLI_ARGS}}"}}},
+	}}, dir)
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("test", "one"))
+	require.NoError(t, r.Run("test", "two"))
+	require.NoError(t, r.Run("test", "one"))
+	require.Len(t, *execs, 2)
+	assert.Equal(t, "echo one", (*execs)[0].Command)
+	assert.Equal(t, "echo two", (*execs)[1].Command)
+}

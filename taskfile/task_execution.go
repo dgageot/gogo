@@ -98,7 +98,7 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 	}) == nil
 }
 
-// Run executes the named task. Executions are memoized per resolved name,
+// Run executes the named task. Executions are memoized per resolved name and CLI arguments,
 // so a task shared by several deps runs once. Call-site vars from
 // `cmds: - task: X` flow through runSubTask instead, which always bypasses
 // memoization.
@@ -115,7 +115,7 @@ func (r *Runner) runNamed(name, cliArgs string, parent *taskRun) error {
 		return err
 	}
 
-	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{name: resolved})
+	entry, _ := r.runs.LoadOrStore(taskRunKey{name: resolved, cliArgs: cliArgs}, &taskRun{name: resolved})
 	tr, ok := entry.(*taskRun)
 	if !ok {
 		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
@@ -229,7 +229,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		}
 	}
 
-	if err := r.runDeps(task.Deps, current); err != nil {
+	if err := r.runDeps(task.Deps, cliArgs, current); err != nil {
 		return err
 	}
 
@@ -416,7 +416,7 @@ func (r *Runner) runDeferred(taskName string, cmds []string, dir string, env []s
 }
 
 // runDeps executes task dependencies concurrently.
-func (r *Runner) runDeps(deps []Dep, current *taskRun) error {
+func (r *Runner) runDeps(deps []Dep, cliArgs string, current *taskRun) error {
 	if len(deps) == 0 {
 		return nil
 	}
@@ -425,7 +425,7 @@ func (r *Runner) runDeps(deps []Dep, current *taskRun) error {
 	errs := make([]error, len(deps))
 	for i, dep := range deps {
 		wg.Go(func() {
-			errs[i] = r.runNamed(dep.Task, "", current)
+			errs[i] = r.runNamed(dep.Task, cliArgs, current)
 		})
 	}
 	wg.Wait()

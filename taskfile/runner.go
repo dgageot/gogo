@@ -44,13 +44,18 @@ type Runner struct {
 	AssumeYes   bool              // if true, task prompts are auto-confirmed (--yes)
 	ShellRunner ShellRunner       // replaceable shell executor (defaults to real exec)
 	IO          RunnerIO          // process streams used for logs and command stdio
-	runs        sync.Map          // resolved task name -> *taskRun
+	runs        sync.Map          // (resolved task name, CLI args) -> *taskRun
 	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
 	gitOnce     sync.Once         // guards gitVars construction
 	outputMu    sync.Mutex        // protects non-file output streams
 	graphMu     sync.Mutex
 	waits       map[*taskRun]map[*taskRun]int // active invocation edges, including memoized waits
 	promptMu    sync.Mutex                    // serializes `prompt:` interactions on the shared stdin
+}
+
+type taskRunKey struct {
+	name    string
+	cliArgs string
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;

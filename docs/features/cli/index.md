@@ -34,6 +34,8 @@ tasks, so `gogo clean install` runs `clean`, then `install` (including
 | `task...` | One or more tasks to run in sequence (default: `default`) |
 | `args...` | Extra arguments passed as `{{ "{{" }}.CLI_ARGS}}` to every task (after `--`) |
 
+CLI arguments also reach dependencies and task sub-calls. Shared dependencies with the same arguments still execute only once per run.
+
 ## Examples
 
 ```sh
