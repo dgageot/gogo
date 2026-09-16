@@ -1,9 +1,9 @@
 package taskfile
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -154,8 +154,8 @@ func readStoredChecksum(fileDir, taskName string) string {
 	return string(data)
 }
 
-// writeChecksum confines cache writes to the task-file directory. Removing the
-// leaf before exclusive creation also prevents following a pre-placed symlink.
+// writeChecksum publishes a complete cache entry by replacing it with a sibling
+// temporary file. Rooted operations prevent directory symlinks from escaping.
 func writeChecksum(fileDir, taskName, checksum string) error {
 	root, err := os.OpenRoot(fileDir)
 	if err != nil {
@@ -167,18 +167,26 @@ func writeChecksum(fileDir, taskName, checksum string) error {
 	if err := root.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	if err := root.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	f, err := root.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	cache, err := root.OpenRoot(filepath.Dir(p))
 	if err != nil {
 		return err
 	}
+	defer cache.Close()
+
+	tmp := ".tmp-" + rand.Text()
+	f, err := cache.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = cache.Remove(tmp) }()
 	if _, err := f.WriteString(checksum); err != nil {
 		_ = f.Close()
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return cache.Rename(tmp, filepath.Base(p))
 }
 
 // outputsNewerThanSources checks if all generated files exist and are newer

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -410,4 +411,71 @@ func TestCaseDistinctTasksBothExecute(t *testing.T) {
 	require.NoError(t, r.RunContext(t.Context(), "build", ""))
 	require.NoError(t, r.RunContext(t.Context(), "Build", ""))
 	assert.Len(t, *execs, 2, "each task retains its own cached result")
+}
+
+func TestConcurrentChecksumWritesPublishCompleteEntries(t *testing.T) {
+	dir := t.TempDir()
+	original := strings.Repeat("a", 64)
+	replacement := strings.Repeat("b", 64)
+	require.NoError(t, writeChecksum(dir, "build", original))
+	start := make(chan struct{})
+	done := make(chan struct{})
+	readErr := make(chan string, 1)
+	go func() {
+		<-start
+		for {
+			select {
+			case <-done:
+				readErr <- ""
+				return
+			default:
+			}
+			value := readStoredChecksum(dir, "build")
+			if value != original && value != replacement {
+				readErr <- "incomplete cache entry: " + value
+				return
+			}
+		}
+	}()
+	var wg sync.WaitGroup
+	errs := make([]error, 32)
+	for i := range errs {
+		wg.Go(func() {
+			<-start
+			for range 10 {
+				if err := writeChecksum(dir, "build", replacement); err != nil {
+					errs[i] = err
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(done)
+	assert.Empty(t, <-readErr)
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, replacement, readStoredChecksum(dir, "build"))
+	entries, err := os.ReadDir(filepath.Join(dir, ".gogo", "checksum"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "temporary entries must be cleaned up")
+	assert.Equal(t, sanitizeTaskName("build"), entries[0].Name())
+}
+
+func TestChecksumRenameFailureCleansTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	path := checksumPath(dir, "build")
+	require.NoError(t, os.MkdirAll(path, 0o755))
+	writeFiles(t, path, map[string]string{"keep": "original"})
+
+	require.Error(t, writeChecksum(dir, "build", "checksum"))
+	entries, err := os.ReadDir(filepath.Dir(path))
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.True(t, entries[0].IsDir())
+	data, err := os.ReadFile(filepath.Join(path, "keep"))
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(data))
 }
