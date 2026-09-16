@@ -154,3 +154,35 @@ func TestGitLookupWaiterCanCancelIndependently(t *testing.T) {
 	close(release)
 	<-done
 }
+
+func TestCancelledPreconditionDoesNotPoisonRetry(t *testing.T) {
+	assertPreconditionCancellationRetries(t, "")
+}
+
+func TestCancelledPreconditionWithMessageDoesNotPoisonRetry(t *testing.T) {
+	assertPreconditionCancellationRetries(t, "not ready")
+}
+
+func assertPreconditionCancellationRetries(t *testing.T, message string) {
+	t.Helper()
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"parent": {Deps: []Dep{{Task: "build"}}},
+		"build":  {Preconditions: []Precondition{{Sh: "check", Msg: message}}, Cmds: []Cmd{{Cmd: "build"}}},
+	}}, dir)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r.ShellRunner = &fakeShellRunner{runFunc: func(req ShellCommand) error {
+		if req.Kind == ShellCommandPrecondition {
+			cancel()
+			return ctx.Err()
+		}
+		return nil
+	}}
+	require.ErrorIs(t, r.RunContext(ctx, "parent", ""), context.Canceled)
+	r.ShellRunner = &fakeShellRunner{}
+	execs := captureExecs(r)
+	require.NoError(t, r.RunContext(t.Context(), "parent", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "build", (*execs)[0].Command)
+}

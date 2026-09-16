@@ -76,6 +76,9 @@ func (r *Runner) checkPreconditions(ctx context.Context, taskName string, task *
 			Env:      env,
 			UseOpRun: useOpRun,
 		}); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if pre.Msg != "" {
 				return fmt.Errorf("task %q: %s", taskName, pre.Msg)
 			}
