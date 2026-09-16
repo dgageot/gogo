@@ -80,6 +80,8 @@ Dry run skips command execution only — everything that decides *whether* a com
 - **Sources / generates** are not consulted: an up-to-date task is still printed in dry-run so you can see what *would* run on a forced re-build.
 - **Secrets:** any `op://` URI is left as a placeholder in the printed output. Because the command never executes, `op run` is not invoked and no Touch ID prompt appears.
 
+When delegating to a foreign task runner, `--dry` is rejected rather than executing tasks without a dry-run guarantee.
+
 Dry run pairs naturally with `-f` to see the full plan after a clean: `gogo -n -f build`.
 
 ## Force (`-f`, `--force`)

@@ -99,7 +99,7 @@ func foreignArgs(prefix, tasks, cliArgs []string) []string {
 // "Silently ignored if not on PATH" means: if a Taskfile is found but
 // `task` isn't installed, we don't try to run it — we may still pick up a
 // sibling runner (e.g. mise.toml) in the same directory.
-func (a *App) delegateToForeign(ctx context.Context, argvFor func(foreignRunner) ([]string, bool)) (bool, error) {
+func (a *App) delegateToForeign(ctx context.Context, dryRun bool, argvFor func(foreignRunner) ([]string, bool)) (bool, error) {
 	dir, err := a.Getwd()
 	if err != nil {
 		return false, nil
@@ -115,6 +115,9 @@ func (a *App) delegateToForeign(ctx context.Context, argvFor func(foreignRunner)
 		}
 		for _, name := range r.files {
 			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				if dryRun {
+					return true, fmt.Errorf("--dry is not supported when delegating to %s", r.bin)
+				}
 				return true, fallbackRun(ctx, r.bin, argv, dir, a)
 			}
 		}
@@ -125,7 +128,7 @@ func (a *App) delegateToForeign(ctx context.Context, argvFor func(foreignRunner)
 // tryForeignFallback delegates a normal run to a colocated foreign task
 // file's runner.
 func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error) {
-	return a.delegateToForeign(ctx, func(r foreignRunner) ([]string, bool) {
+	return a.delegateToForeign(ctx, parsed.DryRun, func(r foreignRunner) ([]string, bool) {
 		return r.build(parsed.Tasks, parsed.CLIArgs), true
 	})
 }
@@ -134,7 +137,7 @@ func (a *App) tryForeignFallback(ctx context.Context, parsed *args) (bool, error
 // file's runner. Runners without a native listing command (listArgs == nil)
 // are skipped.
 func (a *App) tryForeignListFallback(ctx context.Context) (bool, error) {
-	return a.delegateToForeign(ctx, func(r foreignRunner) ([]string, bool) {
+	return a.delegateToForeign(ctx, false, func(r foreignRunner) ([]string, bool) {
 		return r.listArgs, r.listArgs != nil
 	})
 }

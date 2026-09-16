@@ -276,3 +276,18 @@ func TestFallbackPropagatesError(t *testing.T) {
 	app, _, _ := newTestApp(t, dir, "build")
 	require.ErrorIs(t, app.Run(t.Context()), want)
 }
+
+func TestFallbackDryRunNeverExecutes(t *testing.T) {
+	for _, file := range []string{"Makefile", "Taskfile.yml", "mise.toml"} {
+		t.Run(file, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, file), []byte("unused"), 0o644))
+			fr := &fakeRun{}
+			withForeignHooks(t, allFound, fr.run)
+			app, _, _ := newTestApp(t, dir, "--dry", "deploy")
+			err := app.Run(t.Context())
+			require.ErrorContains(t, err, "--dry is not supported when delegating to")
+			assert.False(t, fr.called)
+		})
+	}
+}
