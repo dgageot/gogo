@@ -52,8 +52,8 @@ func (r *Runner) collectSources(taskName string, visited map[string]struct{}) []
 			}
 			continue
 		}
-		resolved, ok := r.resolveTaskName(dep.Task)
-		if !ok {
+		resolved, err := r.resolveTask(dep.Task)
+		if err != nil {
 			continue
 		}
 		result = append(result, r.collectSources(resolved, visited)...)

@@ -198,3 +198,22 @@ func TestWatchDetectsEditDuringInitialBuild(t *testing.T) {
 	require.ErrorIs(t, r.Watch(ctx, "build", "", minWatchInterval), context.Canceled)
 	assert.Equal(t, 2, calls)
 }
+
+func TestWatchCollectsResolvedDependencySources(t *testing.T) {
+	for _, dep := range []string{"api", "api:bui", "api:alias"} {
+		t.Run(dep, func(t *testing.T) {
+			dir := t.TempDir()
+			r := newTestRunner(t, &Config{
+				Dir:               dir,
+				NamespaceDefaults: map[string]string{"api": "api:build"},
+				Tasks: map[string]Task{
+					"dev":       {Deps: []Dep{{Task: dep}}},
+					"api:build": {Sources: StringList{"*.go"}, Aliases: StringList{"api:alias"}},
+				},
+			}, dir)
+			groups := r.collectSources("dev", make(map[string]struct{}))
+			require.Len(t, groups, 1)
+			assert.Equal(t, []string{"*.go"}, groups[0].Patterns)
+		})
+	}
+}
