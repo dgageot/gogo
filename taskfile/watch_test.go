@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -175,4 +176,25 @@ func TestWatchWritesRunErrorsToInjectedStderr(t *testing.T) {
 	err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Contains(t, stderr.String(), `task "build"`)
+}
+
+func TestWatchDetectsEditDuringInitialBuild(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"input.txt": "original"})
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"build": {Sources: StringList{"*.txt"}, Cmds: []Cmd{{Cmd: "build"}}},
+	}}, dir)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	calls := 0
+	r.ShellRunner = &fakeShellRunner{runFunc: func(ShellCommand) error {
+		calls++
+		if calls == 1 {
+			return os.WriteFile(filepath.Join(dir, "input.txt"), []byte("edited during build"), 0o644)
+		}
+		cancel()
+		return nil
+	}}
+	require.ErrorIs(t, r.Watch(ctx, "build", "", minWatchInterval), context.Canceled)
+	assert.Equal(t, 2, calls)
 }

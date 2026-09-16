@@ -99,15 +99,15 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		return fmt.Errorf("task %q has no sources, cannot watch", name)
 	}
 
-	// Run once immediately
-	if err := r.Run(resolved, cliArgs); err != nil {
-		fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
-	}
-
-	// Track checksum after initial run to avoid immediate re-run
+	// Snapshot before execution so edits made during the first build are
+	// detected by the next poll rather than absorbed into the baseline.
 	lastChecksum, err := multiSourcesChecksum(sources)
 	if err != nil {
 		return fmt.Errorf("computing sources checksum: %w", err)
+	}
+
+	if err := r.Run(resolved, cliArgs); err != nil {
+		fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
 	}
 
 	ticker := time.NewTicker(interval)
