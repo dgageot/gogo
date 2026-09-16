@@ -118,6 +118,14 @@ Almost always wraps a cyclic-preset error.
 
 Filesystem failure while reading a source file (permissions, disappeared between glob and read, etc.). The wrapped error names the file.
 
+## Task cycles
+
+`task cycle involving "X" and "Y"` means active task calls would wait on each
+other. Break the dependency cycle, including references through aliases or
+wildcards. Non-memoized `task:` calls may recurse with changing vars or env;
+more than 100 nested calls fails with a task-call-depth error instead of
+exhausting the stack.
+
 ## Preconditions
 
 ### `task <T>: <msg>`

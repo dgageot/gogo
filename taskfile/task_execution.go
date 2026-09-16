@@ -103,28 +103,37 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 // `cmds: - task: X` flow through runSubTask instead, which always bypasses
 // memoization.
 func (r *Runner) Run(name, cliArgs string) error {
+	return r.runNamed(name, cliArgs, nil)
+}
+
+func (r *Runner) runNamed(name, cliArgs string, parent *taskRun) error {
 	if isTaskPattern(name) {
-		return r.runPattern(name, cliArgs)
+		return r.runPattern(name, cliArgs, parent)
 	}
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}
 
-	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{})
+	entry, _ := r.runs.LoadOrStore(resolved, &taskRun{name: resolved})
 	tr, ok := entry.(*taskRun)
 	if !ok {
 		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
 	}
+	unlink, err := r.linkRun(parent, tr)
+	if err != nil {
+		return err
+	}
+	defer unlink()
 	return tr.do(func() error {
-		return r.run(resolved, cliArgs, nil, nil, nil)
+		return r.run(resolved, cliArgs, nil, nil, nil, tr)
 	})
 }
 
 // runPattern expands a `...:` wildcard and runs every match like a dep set:
 // in parallel, memoized, with failures aggregated so one broken namespace
 // doesn't hide the others (Bazel's --keep_going semantics).
-func (r *Runner) runPattern(pattern, cliArgs string) error {
+func (r *Runner) runPattern(pattern, cliArgs string, parent *taskRun) error {
 	names, err := r.expandPattern(pattern)
 	if err != nil {
 		return err
@@ -133,7 +142,7 @@ func (r *Runner) runPattern(pattern, cliArgs string) error {
 	errs := make([]error, len(names))
 	for i, name := range names {
 		wg.Go(func() {
-			errs[i] = r.Run(name, cliArgs)
+			errs[i] = r.runNamed(name, cliArgs, parent)
 		})
 	}
 	wg.Wait()
@@ -145,7 +154,7 @@ func (r *Runner) runPattern(pattern, cliArgs string) error {
 // see what the parent declared in its `env:` block (matching shell-function
 // semantics). Memoization is always bypassed because two parents calling the
 // same child with different env are genuinely different executions.
-func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string) error {
+func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, parent *taskRun) error {
 	// Patterns are legal wherever a task name is: a `task: ...:X` sub-call
 	// fans out to every match. Sequential (unlike deps) because cmds are a
 	// sequence — the next cmd must not start until the whole fan-out ends.
@@ -155,7 +164,7 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 			return err
 		}
 		for _, n := range names {
-			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv, callEnv); err != nil {
+			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv, callEnv, parent); err != nil {
 				return err
 			}
 		}
@@ -165,13 +174,28 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 	if err != nil {
 		return err
 	}
-	return r.run(resolved, cliArgs, extraVars, parentEnv, callEnv)
+	// Allow bounded recursion with changing vars/env, but stop runaway calls.
+	const maxTaskCallDepth = 100
+	depth := 1
+	if parent != nil {
+		depth += parent.depth
+	}
+	if depth > maxTaskCallDepth {
+		return fmt.Errorf("task %q: task call depth exceeds %d (possible task cycle)", resolved, maxTaskCallDepth)
+	}
+	tr := &taskRun{name: resolved, depth: depth}
+	unlink, err := r.linkRun(parent, tr)
+	if err != nil {
+		return err
+	}
+	defer unlink()
+	return r.run(resolved, cliArgs, extraVars, parentEnv, callEnv, tr)
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
 // always runs the task, so recursive calls from runCmds must go through Run
 // (or runSubTask, which threads the parent env down).
-func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string) error {
+func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, current *taskRun) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
@@ -205,7 +229,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		}
 	}
 
-	if err := r.runDeps(task.Deps); err != nil {
+	if err := r.runDeps(task.Deps, current); err != nil {
 		return err
 	}
 
@@ -255,7 +279,7 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		return nil
 	}
 
-	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env), task.Silent); err != nil {
+	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env), task.Silent, current); err != nil {
 		return err
 	}
 
@@ -308,7 +332,7 @@ func suggestGitBuiltin(name string) string {
 // registered before a failure still run after the task's body, in reverse
 // registration order — they exist for cleanup, so a failed cmd must not skip
 // them.
-func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool) error {
+func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool, current *taskRun) error {
 	var deferred []string
 	defer func() {
 		r.runDeferred(taskName, deferred, dir, env, useOpRun, silent)
@@ -343,7 +367,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 					callEnv[key] = expandVars(value, vars, cliArgs, r.builtinLookup)
 				}
 			}
-			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env, callEnv); err != nil {
+			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env, callEnv, current); err != nil {
 				return err
 			}
 			continue
@@ -392,7 +416,7 @@ func (r *Runner) runDeferred(taskName string, cmds []string, dir string, env []s
 }
 
 // runDeps executes task dependencies concurrently.
-func (r *Runner) runDeps(deps []Dep) error {
+func (r *Runner) runDeps(deps []Dep, current *taskRun) error {
 	if len(deps) == 0 {
 		return nil
 	}
@@ -401,7 +425,7 @@ func (r *Runner) runDeps(deps []Dep) error {
 	errs := make([]error, len(deps))
 	for i, dep := range deps {
 		wg.Go(func() {
-			errs[i] = r.Run(dep.Task, "")
+			errs[i] = r.runNamed(dep.Task, "", current)
 		})
 	}
 	wg.Wait()

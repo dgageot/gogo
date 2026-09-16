@@ -47,14 +47,18 @@ type Runner struct {
 	runs        sync.Map          // resolved task name -> *taskRun
 	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
 	gitOnce     sync.Once         // guards gitVars construction
-	promptMu    sync.Mutex        // serializes `prompt:` interactions on the shared stdin
+	graphMu     sync.Mutex
+	waits       map[*taskRun]map[*taskRun]int // active invocation edges, including memoized waits
+	promptMu    sync.Mutex                    // serializes `prompt:` interactions on the shared stdin
 }
 
 // taskRun memoizes a single task execution. The first caller runs the body;
 // concurrent and later callers observe the same result.
 type taskRun struct {
-	once sync.Once
-	err  error
+	name  string
+	depth int // nested non-memoized calls
+	once  sync.Once
+	err   error
 }
 
 // do runs fn exactly once, returning its memoized result to every caller.
