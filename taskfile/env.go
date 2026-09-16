@@ -90,13 +90,7 @@ func (r *Runner) buildEnv(taskName string, task *Task, dir string, parentEnv []s
 
 	// File-level env entries are defaults: root values flow everywhere,
 	// namespace values become more specific, and the process environment wins.
-	scoped := maps.Clone(r.tf.Env)
-	for _, namespace := range ancestorNamespaces(taskNamespace(taskName)) {
-		if scoped == nil {
-			scoped = make(map[string]string)
-		}
-		maps.Copy(scoped, r.tf.NamespaceEnv[namespace])
-	}
+	scoped := r.scopedEnv(taskName)
 	resolvedScoped := resolveTaskEnv(scoped, env, vars, r.builtinLookup)
 	for _, key := range slices.Sorted(maps.Keys(resolvedScoped)) {
 		if !envHasKey(env, key) {
@@ -222,4 +216,16 @@ func hasOpSecrets(env []string) bool {
 		}
 	}
 	return false
+}
+
+// scopedEnv collects file-level defaults from the root to the task namespace.
+func (r *Runner) scopedEnv(taskName string) map[string]string {
+	scoped := maps.Clone(r.tf.Env)
+	for _, namespace := range ancestorNamespaces(taskNamespace(taskName)) {
+		if scoped == nil {
+			scoped = make(map[string]string)
+		}
+		maps.Copy(scoped, r.tf.NamespaceEnv[namespace])
+	}
+	return scoped
 }

@@ -200,7 +200,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 		return value, true
 	}
 
-	for _, name := range referencedVars(task) {
+	for _, name := range referencedVars(task, r.scopedEnv(taskName)) {
 		lookup(name)
 		if firstErr != nil {
 			return nil, nil, firstErr
@@ -220,7 +220,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 	return resolved, unused, nil
 }
 
-func referencedVars(task *Task) []string {
+func referencedVars(task *Task, scopedEnv ...map[string]string) []string {
 	refs := make(map[string]struct{})
 	collect := func(s string) {
 		for _, match := range templatePattern.FindAllStringSubmatch(s, -1) {
@@ -232,6 +232,11 @@ func referencedVars(task *Task) []string {
 	}
 	for _, value := range task.Env {
 		collect(value)
+	}
+	for _, env := range scopedEnv {
+		for _, value := range env {
+			collect(value)
+		}
 	}
 	for _, cmd := range task.Cmds {
 		collect(cmd.Cmd)

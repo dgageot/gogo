@@ -81,3 +81,44 @@ env: {MODE: flattened, FLAT: yes}
 	assert.Equal(t, "parent", tf.NamespaceEnv["api"]["MODE"])
 	assert.Equal(t, "yes", tf.NamespaceEnv["api"]["FLAT"])
 }
+
+func TestFileEnvTemplatesResolveLazyVars(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:           dir,
+		Vars:          map[string]Var{"VERSION": {Value: "v1"}, "UNUSED": {Sh: "must not run"}},
+		Env:           map[string]string{"IMAGE": "app:{{.VERSION}}"},
+		NamespaceEnv:  map[string]map[string]string{"api": {"TAG": "{{.LOCAL}}"}},
+		NamespaceVars: map[string]map[string]Var{"api": {"LOCAL": {Sh: "echo local"}}},
+		Tasks: map[string]Task{
+			"api:build": {Cmds: []Cmd{{Cmd: "echo $IMAGE $TAG"}}},
+			"other":     {Cmds: []Cmd{{Cmd: "echo $IMAGE"}}},
+		},
+	}, dir)
+	shell := &fakeShellRunner{outputFunc: func(req ShellCommand) ([]byte, error) {
+		assert.Equal(t, "echo local", req.Command)
+		return []byte("local"), nil
+	}}
+	r.ShellRunner = shell
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("api:build", ""))
+	require.NoError(t, r.Run("other", ""))
+	assert.Equal(t, "app:v1", envValue((*execs)[0].Env, "IMAGE"))
+	assert.Equal(t, "local", envValue((*execs)[0].Env, "TAG"))
+	assert.Empty(t, envValue((*execs)[1].Env, "TAG"))
+	assert.Len(t, shell.outputsSnapshot(), 1)
+}
+
+func TestScopedEnvCrossReferenceResolvesOverlaidDefault(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:   dir,
+		Vars:  map[string]Var{"VERSION": {Value: "v1"}},
+		Env:   map[string]string{"TAG": "{{.VERSION}}", "IMAGE": "app:$TAG"},
+		Tasks: map[string]Task{"show": {Env: map[string]string{"TAG": "local"}, Cmds: []Cmd{{Cmd: "true"}}}},
+	}, dir)
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("show", ""))
+	assert.Equal(t, "local", envValue((*execs)[0].Env, "TAG"))
+	assert.Equal(t, "app:v1", envValue((*execs)[0].Env, "IMAGE"))
+}
