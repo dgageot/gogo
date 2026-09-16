@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgageot/gogo/taskfile"
 )
 
 func TestShellQuote(t *testing.T) {
@@ -38,6 +40,33 @@ func TestShellJoinPreservesBoundaries(t *testing.T) {
 			got = strings.Split(s, "\n")
 		}
 		assert.Equal(t, append([]string(nil), in...), got, "round-trip failed for %q", in)
+	}
+}
+
+func TestGatherNamespacedMatches(t *testing.T) {
+	tf := &taskfile.Config{Tasks: map[string]taskfile.Task{
+		"build":              {},
+		"dev":                {},
+		"backend:dev":        {},
+		"backend:dev:":       {},
+		"backend:develop":    {},
+		"frontend:tools:dev": {},
+		"backend:_helper":    {},
+	}}
+	for _, tc := range []struct {
+		name string
+		want []taskListing
+	}{
+		{name: "dev", want: []taskListing{{name: "backend:dev"}, {name: "frontend:tools:dev"}}},
+		{name: "build"},
+		{name: "backend:dev"},
+		{name: "_helper"},
+		{name: "missing"},
+		{name: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, gatherNamespacedMatches(tf, tc.name))
+		})
 	}
 }
 

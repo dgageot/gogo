@@ -464,21 +464,13 @@ func gatherNamespacedMatches(tf *taskfile.Config, name string) []taskListing {
 	}
 	var matches []taskListing
 	for _, taskName := range visibleTaskNames(tf) {
-		if !strings.Contains(taskName, ":") || lastSegment(taskName) != name {
+		_, local, found := strings.CutLast(taskName, ":")
+		if !found || local != name {
 			continue
 		}
 		matches = append(matches, newTaskListing(taskName, tf.Tasks[taskName]))
 	}
 	return matches
-}
-
-// lastSegment returns the part of a colon-joined task name after the final
-// colon — the task's local name within its namespace.
-func lastSegment(name string) string {
-	if i := strings.LastIndex(name, ":"); i >= 0 {
-		return name[i+1:]
-	}
-	return name
 }
 
 // writeTaskListings prints rows in three aligned columns: a green
