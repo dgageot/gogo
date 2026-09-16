@@ -105,12 +105,32 @@ func (l *includeLoader) load() (*Config, error) {
 		}
 	}
 
+	// Qualify aliases before references so aliases in later files are visible.
+	for name, origin := range l.taskOrigins {
+		task := l.root.Tasks[name]
+		if len(task.Aliases) == 0 {
+			continue
+		}
+		aliases := make(StringList, len(task.Aliases))
+		for i, alias := range task.Aliases {
+			aliases[i] = namespaceJoin(origin.Namespace, alias)
+		}
+		task.Aliases = aliases
+		l.root.Tasks[name] = task
+	}
+	aliasNames := make(map[string]struct{})
+	for _, task := range l.root.Tasks {
+		for _, alias := range task.Aliases {
+			aliasNames[alias] = struct{}{}
+		}
+	}
+
 	// Resolve references only after parent, sibling and nested tasks all exist.
 	for _, name := range slices.Sorted(maps.Keys(l.taskOrigins)) {
 		task := l.root.Tasks[name]
 		task.Deps = slices.Clone(task.Deps)
 		task.Cmds = slices.Clone(task.Cmds)
-		namespaceLocalReferences(&task, l.taskOrigins[name], l.root.Tasks, l.root.NamespaceDefaults)
+		namespaceLocalReferences(&task, l.taskOrigins[name], l.root.Tasks, l.root.NamespaceDefaults, aliasNames)
 		l.root.Tasks[name] = task
 	}
 
@@ -455,17 +475,7 @@ func makeTaskDirAbsolute(task *Task, fileDir string) {
 	}
 }
 
-func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks map[string]Task, loadedDefaults map[string]string) {
-	// Aliases are namespaced like the task name so two included files can
-	// each declare the same bare alias (e.g. `up`) without colliding in the
-	// runner's global alias map.
-	if len(task.Aliases) > 0 {
-		aliases := make(StringList, len(task.Aliases))
-		for i, alias := range task.Aliases {
-			aliases[i] = included.Namespace + ":" + alias
-		}
-		task.Aliases = aliases
-	}
+func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks map[string]Task, loadedDefaults map[string]string, aliases map[string]struct{}) {
 	qualify := func(name string) string {
 		if hasTask(included.Tasks, name) {
 			return namespaceJoin(included.Namespace, name)
@@ -473,6 +483,15 @@ func namespaceLocalReferences(task *Task, included *includedConfig, loadedTasks 
 		candidate := namespaceJoin(included.Namespace, name)
 		if hasTask(loadedTasks, candidate) {
 			return candidate
+		}
+		if _, ok := aliases[candidate]; ok {
+			return candidate
+		}
+		if hasTask(loadedTasks, name) {
+			return name
+		}
+		if _, ok := aliases[name]; ok {
+			return name
 		}
 		if defaultTask, ok := loadedDefaults[name]; ok {
 			return defaultTask

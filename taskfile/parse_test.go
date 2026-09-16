@@ -1172,3 +1172,48 @@ func TestFlattenedReferencesResolveAfterParentAndSiblingsLoad(t *testing.T) {
 	assert.Equal(t, []Cmd{{Task: "api:build"}, {Task: "api:helper"}}, task.Cmds)
 	assert.Equal(t, "unrelated-root", tf.Tasks["build"].Cmds[0].Cmd)
 }
+
+func TestIncludedAliasReferencesStayLocal(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":     "includes: [api]\ntasks:\n  b: {cmd: unrelated-root}\n",
+		"api/gogo.yaml": "flatten: [extra.yml]\ntasks:\n  build: {aliases: [b], cmd: local-build}\n  all: {deps: [b, h], cmds: [{task: b}, {task: h}]}\n",
+		"api/extra.yml": "tasks:\n  helper: {aliases: [h], cmd: local-helper}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	task := tf.Tasks["api:all"]
+	assert.Equal(t, []Dep{{Task: "api:b"}, {Task: "api:h"}}, task.Deps)
+	assert.Equal(t, []Cmd{{Task: "api:b"}, {Task: "api:h"}}, task.Cmds)
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("api:all", ""))
+	require.Len(t, *execs, 4)
+	for _, exec := range *execs {
+		assert.NotEqual(t, "unrelated-root", exec.Command)
+	}
+}
+
+func TestIncludedReferencePrefersRootTaskOverNamespaceDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":     "includes: [api, web]\ntasks:\n  web: {cmd: root-task}\n",
+		"api/gogo.yaml": "tasks:\n  all: {deps: [web]}\n",
+		"web/gogo.yaml": "default: serve\ntasks:\n  serve: {cmd: default-task}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "web", tf.Tasks["api:all"].Deps[0].Task)
+}
+
+func TestIncludedReferencePrefersRootAliasOverNamespaceDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":     "includes: [api, web]\ntasks:\n  root: {aliases: [web], cmd: root-task}\n",
+		"api/gogo.yaml": "tasks:\n  all: {deps: [web]}\n",
+		"web/gogo.yaml": "default: serve\ntasks:\n  serve: {cmd: default-task}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "web", tf.Tasks["api:all"].Deps[0].Task)
+}
