@@ -156,7 +156,9 @@ sources:
 
 ## Checksum Storage
 
-Checksums are stored in `.gogo/checksum/` relative to the task file directory. You should add `.gogo/` to your `.gitignore`:
+Checksums are stored in `.gogo/checksum/` relative to the task file directory. Filenames hash the exact task name so case-distinct tasks remain independent on case-insensitive filesystems. Older name-based entries are ignored; upgrading causes a one-time rebuild.
+
+You should add `.gogo/` to your `.gitignore`:
 
 ```
 # .gitignore

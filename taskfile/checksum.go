@@ -137,12 +137,12 @@ func checksumPath(fileDir, taskName string) string {
 	return filepath.Join(fileDir, ".gogo", "checksum", sanitizeTaskName(taskName))
 }
 
-// sanitizeTaskName encodes a task name as a filesystem-safe filename using
-// a reversible escape: '_' -> '__' and ':' -> '_.'. Any two distinct task
-// names produce distinct encodings, so separate tasks cannot share a file.
+// sanitizeTaskName uses a lowercase digest so cache identities remain distinct
+// on case-insensitive filesystems and fit within filename length limits.
+// The prefix cannot occur in legacy escaped task names, preventing stale hits.
 func sanitizeTaskName(name string) string {
-	escaped := strings.ReplaceAll(name, "_", "__")
-	return strings.ReplaceAll(escaped, ":", "_.")
+	digest := sha256.Sum256([]byte(name))
+	return ".sha256-" + hex.EncodeToString(digest[:])
 }
 
 // readStoredChecksum returns the previously stored checksum for a task, or empty if none.

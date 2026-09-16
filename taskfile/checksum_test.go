@@ -150,12 +150,12 @@ func TestChecksumStorage(t *testing.T) {
 	require.NoError(t, writeChecksum(dir, "build", "abc123"))
 	assert.Equal(t, "abc123", readStoredChecksum(dir, "build"))
 
-	// Colons in task names are sanitized
+	// Namespaced tasks retain independent cache entries.
 	require.NoError(t, writeChecksum(dir, "cli:build", "def456"))
 	assert.Equal(t, "def456", readStoredChecksum(dir, "cli:build"))
 
-	// Verify the on-disk filename is the escaped form
-	_, err := os.Stat(filepath.Join(dir, ".gogo", "checksum", "cli_.build"))
+	// Verify the hashed entry exists.
+	_, err := os.Stat(checksumPath(dir, "cli:build"))
 	assert.NoError(t, err)
 }
 
@@ -179,7 +179,7 @@ func TestWriteChecksumDoesNotFollowSymlink(t *testing.T) {
 	require.NoError(t, os.WriteFile(target, []byte("original"), 0o644))
 
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".gogo", "checksum"), 0o755))
-	link := filepath.Join(dir, ".gogo", "checksum", "build")
+	link := checksumPath(dir, "build")
 	require.NoError(t, os.Symlink(target, link))
 
 	require.NoError(t, writeChecksum(dir, "build", "new-checksum"))
@@ -201,11 +201,11 @@ func TestWriteChecksumDoesNotFollowSymlink(t *testing.T) {
 func TestWriteChecksumRejectsCacheDirectoryEscape(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
-	writeFiles(t, outside, map[string]string{"checksum/build": "original"})
+	writeFiles(t, outside, map[string]string{filepath.Join("checksum", sanitizeTaskName("build")): "original"})
 	require.NoError(t, os.Symlink(outside, filepath.Join(dir, ".gogo")))
 
 	require.Error(t, writeChecksum(dir, "build", "new-checksum"))
-	data, err := os.ReadFile(filepath.Join(outside, "checksum", "build"))
+	data, err := os.ReadFile(filepath.Join(outside, "checksum", sanitizeTaskName("build")))
 	require.NoError(t, err)
 	assert.Equal(t, "original", string(data))
 }
@@ -213,12 +213,12 @@ func TestWriteChecksumRejectsCacheDirectoryEscape(t *testing.T) {
 func TestWriteChecksumRejectsChecksumDirectoryEscape(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
-	writeFiles(t, outside, map[string]string{"build": "original"})
+	writeFiles(t, outside, map[string]string{sanitizeTaskName("build"): "original"})
 	require.NoError(t, os.Mkdir(filepath.Join(dir, ".gogo"), 0o755))
 	require.NoError(t, os.Symlink(outside, filepath.Join(dir, ".gogo", "checksum")))
 
 	require.Error(t, writeChecksum(dir, "build", "new-checksum"))
-	data, err := os.ReadFile(filepath.Join(outside, "build"))
+	data, err := os.ReadFile(filepath.Join(outside, sanitizeTaskName("build")))
 	require.NoError(t, err)
 	assert.Equal(t, "original", string(data))
 }
@@ -367,4 +367,47 @@ func TestAbsoluteRecursiveGenerates(t *testing.T) {
 	fresh, err := outputsNewerThanSources(dir, []string{"input.txt"}, []string{filepath.Join(outputDir, "**", "*.out")})
 	require.NoError(t, err)
 	assert.True(t, fresh)
+}
+
+func TestChecksumIgnoresLegacyHashShapedTaskName(t *testing.T) {
+	dir := t.TempDir()
+	// A legacy task could be named exactly the new digest of "build".
+	legacyName := "44575cf5b28512d75644bf54a517dcef304ff809fd511747621b4d64f19aac66"
+	writeFiles(t, dir, map[string]string{filepath.Join(".gogo", "checksum", legacyName): "stale"})
+
+	assert.Empty(t, readStoredChecksum(dir, "build"))
+	require.NoError(t, writeChecksum(dir, "build", "fresh"))
+	assert.Equal(t, "fresh", readStoredChecksum(dir, "build"))
+	legacy, err := os.ReadFile(filepath.Join(dir, ".gogo", "checksum", legacyName))
+	require.NoError(t, err)
+	assert.Equal(t, "stale", string(legacy))
+}
+
+func TestChecksumCaseDistinctTaskNames(t *testing.T) {
+	dir := t.TempDir()
+	assert.NotEqual(t, strings.ToLower(checksumPath(dir, "build")), strings.ToLower(checksumPath(dir, "Build")))
+	require.NoError(t, writeChecksum(dir, "build", "lower"))
+	require.NoError(t, writeChecksum(dir, "Build", "upper"))
+	assert.Equal(t, "lower", readStoredChecksum(dir, "build"))
+	assert.Equal(t, "upper", readStoredChecksum(dir, "Build"))
+}
+
+func TestCaseDistinctTasksBothExecute(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"input.txt": "source"})
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"build": {Sources: StringList{"input.txt"}, Cmds: []Cmd{{Cmd: "lower"}}},
+		"Build": {Sources: StringList{"input.txt"}, Cmds: []Cmd{{Cmd: "upper"}}},
+	}}, dir)
+	execs := captureExecs(r)
+	require.NoError(t, r.RunContext(t.Context(), "build", ""))
+	require.NoError(t, r.RunContext(t.Context(), "Build", ""))
+	require.Len(t, *execs, 2)
+	assert.Equal(t, "lower", (*execs)[0].Command)
+	assert.Equal(t, "upper", (*execs)[1].Command)
+
+	r.ResetRan()
+	require.NoError(t, r.RunContext(t.Context(), "build", ""))
+	require.NoError(t, r.RunContext(t.Context(), "Build", ""))
+	assert.Len(t, *execs, 2, "each task retains its own cached result")
 }
