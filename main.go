@@ -89,8 +89,10 @@ func (a *App) Run(ctx context.Context) error {
 
 	dir, tf, err := a.loadConfig()
 	if err != nil {
-		if handled, fbErr := a.tryForeignFallback(ctx, parsed); handled {
-			return fbErr
+		if errors.Is(err, taskfile.ErrNoTaskFile) {
+			if handled, fbErr := a.tryForeignFallback(ctx, parsed); handled {
+				return fbErr
+			}
 		}
 		return err
 	}
@@ -351,8 +353,10 @@ func (a *App) printTaskNames() {
 func (a *App) listTasks(ctx context.Context) error {
 	_, tf, err := a.loadConfig()
 	if err != nil {
-		if handled, fbErr := a.tryForeignListFallback(ctx); handled {
-			return fbErr
+		if errors.Is(err, taskfile.ErrNoTaskFile) {
+			if handled, fbErr := a.tryForeignListFallback(ctx); handled {
+				return fbErr
+			}
 		}
 		return err
 	}

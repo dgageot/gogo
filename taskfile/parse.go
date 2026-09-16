@@ -12,6 +12,9 @@ import (
 
 const fileName = "gogo.yaml"
 
+// ErrNoTaskFile means no gogo.yaml was found in the directory search.
+var ErrNoTaskFile = errors.New("no gogo.yaml found")
+
 // validateTaskName enforces a strict whitelist of characters allowed in task
 // names. Names appear in checksum file paths, log lines, and shell
 // completions; allowing arbitrary characters lets a malicious task file
@@ -110,5 +113,5 @@ func FindRootDir(dir string) (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("no gogo.yaml found")
+	return "", ErrNoTaskFile
 }

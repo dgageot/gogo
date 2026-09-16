@@ -291,3 +291,21 @@ func TestFallbackDryRunNeverExecutes(t *testing.T) {
 		})
 	}
 }
+
+func TestFallbackPreservesConfigErrors(t *testing.T) {
+	for _, config := range []string{"tasks: [", "includes: [missing]", "default: missing"} {
+		t.Run(config, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "gogo.yaml"), []byte(config), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte("version: '3'"), 0o644))
+			fr := &fakeRun{}
+			withForeignHooks(t, allFound, fr.run)
+			app, _, _ := newTestApp(t, dir, "build")
+			require.Error(t, app.Run(t.Context()))
+			assert.False(t, fr.called)
+			app.Args = []string{"--list"}
+			require.Error(t, app.Run(t.Context()))
+			assert.False(t, fr.called)
+		})
+	}
+}
