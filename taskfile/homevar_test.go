@@ -14,7 +14,7 @@ func TestBuiltinLookupExposesHome(t *testing.T) {
 	want, err := os.UserHomeDir()
 	require.NoError(t, err)
 
-	got, ok := r.builtinLookup("HOME")
+	got, ok := r.builtins(t.Context())("HOME")
 	assert.True(t, ok)
 	assert.Equal(t, want, got)
 }

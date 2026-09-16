@@ -106,7 +106,10 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		return fmt.Errorf("computing sources checksum: %w", err)
 	}
 
-	if err := r.Run(resolved, cliArgs); err != nil {
+	if err := r.RunContext(ctx, resolved, cliArgs); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
 	}
 
@@ -134,7 +137,10 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		// Reset dedup state so tasks can re-run
 		r.ResetRan()
 
-		if err := r.Run(resolved, cliArgs); err != nil {
+		if err := r.RunContext(ctx, resolved, cliArgs); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
 		}
 	}

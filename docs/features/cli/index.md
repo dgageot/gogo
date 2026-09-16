@@ -129,3 +129,11 @@ gogo --completion fish > ~/.config/fish/completions/gogo.fish
 ```
 
 Completion suggests every visible task name in the current `gogo.yaml`, including namespaced tasks like `backend:build`. Internal tasks (names starting with `_`) are excluded.
+
+## Watch Cancellation
+
+Watch cancellation stops running shell commands, including conditions, variables,
+preconditions, and status checks. Registered cleanup commands still get up to five
+seconds to finish after cancellation. On Linux and macOS, non-interactive command
+process groups are terminated together; interactive commands keep their foreground
+terminal group. Other platforms terminate the direct child and bound pipe waits.

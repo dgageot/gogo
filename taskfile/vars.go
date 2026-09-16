@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -116,7 +117,7 @@ func ancestorNamespaces(ns string) []string {
 // (most-specific wins) > root global. Within each layer the value is
 // template-expanded against everything below it, then against the built-in
 // lookup (e.g. {{.GIT_COMMIT}}).
-func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVars map[string]Var) (map[string]string, []string, error) {
+func (r *Runner) resolveAllVars(ctx context.Context, taskName string, task *Task, dir string, extraVars map[string]Var) (map[string]string, []string, error) {
 	type sourceScope int
 
 	const (
@@ -174,7 +175,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 		}
 		s, ok := sources[key]
 		if !ok {
-			return r.builtinLookup(key)
+			return r.builtins(ctx)(key)
 		}
 		used[key] = struct{}{}
 		visiting[key] = struct{}{}
@@ -184,6 +185,7 @@ func (r *Runner) resolveAllVars(taskName string, task *Task, dir string, extraVa
 		if s.v.Sh != "" {
 			cmdLine := expandTemplates(s.v.Sh, lookup)
 			out, err := r.ShellRunner.Output(ShellCommand{
+				Context: ctx,
 				Kind:    ShellCommandVar,
 				Command: cmdLine,
 				Dir:     s.dir,

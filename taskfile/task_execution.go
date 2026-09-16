@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // matchesPlatform reports whether the current OS/arch matches any entry in
@@ -62,10 +64,11 @@ func checkRequires(taskName string, task *Task, vars map[string]string, builtin 
 // (e.g. `test -n "$TOKEN"`) sees the resolved value rather than the literal
 // op:// URI. If any command fails, it returns an error with the
 // precondition's message or a default message.
-func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env []string) error {
+func (r *Runner) checkPreconditions(ctx context.Context, taskName string, task *Task, dir string, env []string) error {
 	useOpRun := hasOpSecrets(env)
 	for _, pre := range task.Preconditions {
 		if err := r.ShellRunner.Run(ShellCommand{
+			Context:  ctx,
 			Kind:     ShellCommandPrecondition,
 			TaskName: taskName,
 			Command:  pre.Sh,
@@ -87,8 +90,9 @@ func (r *Runner) checkPreconditions(taskName string, task *Task, dir string, env
 // task's own commands (wrapped in `op run` when the env carries op://
 // secrets, so a check may read a resolved secret). Its exit status is the
 // answer: zero runs, non-zero skips — a skip is never an error.
-func (r *Runner) conditionMet(taskName, condition, dir string, env []string, useOpRun bool) bool {
+func (r *Runner) conditionMet(ctx context.Context, taskName, condition, dir string, env []string, useOpRun bool) bool {
 	return r.ShellRunner.Run(ShellCommand{
+		Context:  ctx,
 		Kind:     ShellCommandCondition,
 		TaskName: taskName,
 		Command:  condition,
@@ -103,19 +107,31 @@ func (r *Runner) conditionMet(taskName, condition, dir string, env []string, use
 // `cmds: - task: X` flow through runSubTask instead, which always bypasses
 // memoization.
 func (r *Runner) Run(name, cliArgs string) error {
-	return r.runNamed(name, cliArgs, nil)
+	return r.RunContext(context.Background(), name, cliArgs)
 }
 
-func (r *Runner) runNamed(name, cliArgs string, parent *taskRun) error {
+// RunContext executes tasks and cancels their shell commands with ctx.
+func (r *Runner) RunContext(ctx context.Context, name, cliArgs string) error {
+	err := r.runNamed(ctx, name, cliArgs, nil)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+func (r *Runner) runNamed(ctx context.Context, name, cliArgs string, parent *taskRun) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if isTaskPattern(name) {
-		return r.runPattern(name, cliArgs, parent)
+		return r.runPattern(ctx, name, cliArgs, parent)
 	}
 	resolved, err := r.resolveTask(name)
 	if err != nil {
 		return err
 	}
 
-	entry, _ := r.runs.LoadOrStore(taskRunKey{name: resolved, cliArgs: cliArgs}, &taskRun{name: resolved})
+	entry, _ := r.runs.LoadOrStore(taskRunKey{name: resolved, cliArgs: cliArgs}, &taskRun{name: resolved, done: make(chan struct{})})
 	tr, ok := entry.(*taskRun)
 	if !ok {
 		return fmt.Errorf("internal error: unexpected runs entry type %T for task %q", entry, resolved)
@@ -125,15 +141,23 @@ func (r *Runner) runNamed(name, cliArgs string, parent *taskRun) error {
 		return err
 	}
 	defer unlink()
-	return tr.do(func() error {
-		return r.run(resolved, cliArgs, nil, nil, nil, tr)
+	result := tr.do(ctx, func() error {
+		return r.run(ctx, resolved, cliArgs, nil, nil, nil, tr)
 	})
+	select {
+	case <-tr.done:
+		if errors.Is(tr.err, context.Canceled) || errors.Is(tr.err, context.DeadlineExceeded) {
+			r.runs.CompareAndDelete(taskRunKey{name: resolved, cliArgs: cliArgs}, tr)
+		}
+	default:
+	}
+	return result
 }
 
 // runPattern expands a `...:` wildcard and runs every match like a dep set:
 // in parallel, memoized, with failures aggregated so one broken namespace
 // doesn't hide the others (Bazel's --keep_going semantics).
-func (r *Runner) runPattern(pattern, cliArgs string, parent *taskRun) error {
+func (r *Runner) runPattern(ctx context.Context, pattern, cliArgs string, parent *taskRun) error {
 	names, err := r.expandPattern(pattern)
 	if err != nil {
 		return err
@@ -142,7 +166,7 @@ func (r *Runner) runPattern(pattern, cliArgs string, parent *taskRun) error {
 	errs := make([]error, len(names))
 	for i, name := range names {
 		wg.Go(func() {
-			errs[i] = r.runNamed(name, cliArgs, parent)
+			errs[i] = r.runNamed(ctx, name, cliArgs, parent)
 		})
 	}
 	wg.Wait()
@@ -154,7 +178,7 @@ func (r *Runner) runPattern(pattern, cliArgs string, parent *taskRun) error {
 // see what the parent declared in its `env:` block (matching shell-function
 // semantics). Memoization is always bypassed because two parents calling the
 // same child with different env are genuinely different executions.
-func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, parent *taskRun) error {
+func (r *Runner) runSubTask(ctx context.Context, name, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, parent *taskRun) error {
 	// Patterns are legal wherever a task name is: a `task: ...:X` sub-call
 	// fans out to every match. Sequential (unlike deps) because cmds are a
 	// sequence — the next cmd must not start until the whole fan-out ends.
@@ -164,7 +188,7 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 			return err
 		}
 		for _, n := range names {
-			if err := r.runSubTask(n, cliArgs, extraVars, parentEnv, callEnv, parent); err != nil {
+			if err := r.runSubTask(ctx, n, cliArgs, extraVars, parentEnv, callEnv, parent); err != nil {
 				return err
 			}
 		}
@@ -189,13 +213,13 @@ func (r *Runner) runSubTask(name, cliArgs string, extraVars map[string]Var, pare
 		return err
 	}
 	defer unlink()
-	return r.run(resolved, cliArgs, extraVars, parentEnv, callEnv, tr)
+	return r.run(ctx, resolved, cliArgs, extraVars, parentEnv, callEnv, tr)
 }
 
 // run executes a task's body. Deduplication is handled by Run; this method
 // always runs the task, so recursive calls from runCmds must go through Run
 // (or runSubTask, which threads the parent env down).
-func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, current *taskRun) error {
+func (r *Runner) run(ctx context.Context, resolved, cliArgs string, extraVars map[string]Var, parentEnv []string, callEnv map[string]string, current *taskRun) error {
 	task := r.tf.Tasks[resolved]
 
 	if !matchesPlatform(task.Platforms) {
@@ -211,11 +235,14 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		dir := r.taskDir(&task)
 		// Vars are deliberately nil here: task-level conditions run before var
 		// resolution, so env templates remain unchanged during the early check.
-		env, err := r.buildEnv(resolved, &task, dir, parentEnv, nil, callEnv)
+		env, err := r.buildEnv(ctx, resolved, &task, dir, parentEnv, nil, callEnv)
 		if err != nil {
 			return err
 		}
-		if !r.conditionMet(resolved, task.If, dir, env, hasOpSecrets(env)) {
+		if !r.conditionMet(ctx, resolved, task.If, dir, env, hasOpSecrets(env)) {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			r.logTask(colorYellow, resolved, "skipped (condition not met)")
 			return nil
 		}
@@ -229,13 +256,13 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		}
 	}
 
-	if err := r.runDeps(task.Deps, cliArgs, current); err != nil {
+	if err := r.runDeps(ctx, task.Deps, cliArgs, current); err != nil {
 		return err
 	}
 
 	dir := r.taskDir(&task)
 
-	vars, unusedVars, err := r.resolveAllVars(resolved, &task, dir, extraVars)
+	vars, unusedVars, err := r.resolveAllVars(ctx, resolved, &task, dir, extraVars)
 	if err != nil {
 		return err
 	}
@@ -250,16 +277,16 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 		r.logTask(colorYellow, resolved, msg)
 	}
 
-	if err := checkRequires(resolved, &task, vars, r.builtinLookup); err != nil {
+	if err := checkRequires(resolved, &task, vars, r.builtins(ctx)); err != nil {
 		return err
 	}
 
-	env, err := r.buildEnv(resolved, &task, dir, parentEnv, vars, callEnv)
+	env, err := r.buildEnv(ctx, resolved, &task, dir, parentEnv, vars, callEnv)
 	if err != nil {
 		return err
 	}
 
-	if err := r.checkPreconditions(resolved, &task, dir, env); err != nil {
+	if err := r.checkPreconditions(ctx, resolved, &task, dir, env); err != nil {
 		return err
 	}
 
@@ -272,14 +299,18 @@ func (r *Runner) run(resolved, cliArgs string, extraVars map[string]Var, parentE
 	// It's only consulted when it can still flip the answer — changed
 	// sources already force a run, no point shelling out on top.
 	if !r.Force && len(task.Status) > 0 && (len(task.Sources) == 0 || upToDate) {
-		upToDate = r.statusUpToDate(resolved, &task, dir, env)
+		upToDate = r.statusUpToDate(ctx, resolved, &task, dir, env)
 	}
 	if upToDate {
 		r.logTask(colorYellow, resolved, "up to date")
 		return nil
 	}
 
-	if err := r.runCmds(resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env), task.Silent, current); err != nil {
+	if err := r.runCmds(ctx, resolved, task.Cmds, vars, cliArgs, dir, env, hasOpSecrets(env), task.Silent, current); err != nil {
+		return err
+	}
+
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
@@ -332,19 +363,31 @@ func suggestGitBuiltin(name string) string {
 // registered before a failure still run after the task's body, in reverse
 // registration order — they exist for cleanup, so a failed cmd must not skip
 // them.
-func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool, current *taskRun) error {
+func (r *Runner) runCmds(ctx context.Context, taskName string, cmds []Cmd, vars map[string]string, cliArgs, dir string, env []string, useOpRun, silent bool, current *taskRun) error {
 	var deferred []string
 	defer func() {
-		r.runDeferred(taskName, deferred, dir, env, useOpRun, silent)
+		cleanupCtx := ctx
+		if ctx.Err() != nil && len(deferred) > 0 {
+			var cancel context.CancelFunc
+			cleanupCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+		}
+		r.runDeferred(cleanupCtx, taskName, deferred, dir, env, useOpRun, silent)
 	}()
 
 	for _, cmd := range cmds {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// A per-entry `if:` gates every kind of entry uniformly: a defer whose
 		// condition fails is never registered, a task: sub-call is never made.
 		// Unlike task-level `if:`, the condition here sees resolved vars.
 		if cmd.If != "" {
-			condition := expandVars(cmd.If, vars, cliArgs, r.builtinLookup)
-			if !r.conditionMet(taskName, condition, dir, env, useOpRun) {
+			condition := expandVars(cmd.If, vars, cliArgs, r.builtins(ctx))
+			if !r.conditionMet(ctx, taskName, condition, dir, env, useOpRun) {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				if !silent {
 					r.logTask(colorYellow, taskName, "skipped (condition not met): "+condition)
 				}
@@ -352,7 +395,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			}
 		}
 		if cmd.Defer != "" {
-			deferred = append(deferred, expandVars(cmd.Defer, vars, cliArgs, r.builtinLookup))
+			deferred = append(deferred, expandVars(cmd.Defer, vars, cliArgs, r.builtins(ctx)))
 			continue
 		}
 		if cmd.Task != "" {
@@ -364,10 +407,10 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 			if len(cmd.Env) > 0 {
 				callEnv = make(map[string]string, len(cmd.Env))
 				for key, value := range cmd.Env {
-					callEnv[key] = expandVars(value, vars, cliArgs, r.builtinLookup)
+					callEnv[key] = expandVars(value, vars, cliArgs, r.builtins(ctx))
 				}
 			}
-			if err := r.runSubTask(cmd.Task, cliArgs, cmd.Vars, env, callEnv, current); err != nil {
+			if err := r.runSubTask(ctx, cmd.Task, cliArgs, cmd.Vars, env, callEnv, current); err != nil {
 				return err
 			}
 			continue
@@ -377,16 +420,16 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 		// can never drift apart (and we don't resolve built-in vars twice).
 		if r.DryRun {
 			if !silent {
-				r.logTask(colorGreen, taskName, expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup))
+				r.logTask(colorGreen, taskName, expandVars(cmd.Cmd, vars, cliArgs, r.builtins(ctx)))
 			}
 			continue
 		}
 
-		expanded := expandVars(cmd.Cmd, vars, cliArgs, r.builtinLookup)
+		expanded := expandVars(cmd.Cmd, vars, cliArgs, r.builtins(ctx))
 		if !silent {
 			r.logTask(colorGreen, taskName, expanded)
 		}
-		if err := r.runShellTaskCommand(taskName, expanded, dir, env, useOpRun); err != nil {
+		if err := r.runShellTaskCommand(ctx, taskName, expanded, dir, env, useOpRun); err != nil {
 			if cmd.IgnoreError {
 				r.logTask(colorYellow, taskName, fmt.Sprintf("warning: command failed (ignored): %v", err))
 				continue
@@ -401,7 +444,7 @@ func (r *Runner) runCmds(taskName string, cmds []Cmd, vars map[string]string, cl
 // mirroring Go's defer semantics. A deferred command failure is logged as a
 // warning rather than returned: cleanup must not mask the task's own result,
 // and later defers must still run.
-func (r *Runner) runDeferred(taskName string, cmds []string, dir string, env []string, useOpRun, silent bool) {
+func (r *Runner) runDeferred(ctx context.Context, taskName string, cmds []string, dir string, env []string, useOpRun, silent bool) {
 	for _, cmd := range slices.Backward(cmds) {
 		if !silent {
 			r.logTask(colorGreen, taskName, cmd)
@@ -409,14 +452,14 @@ func (r *Runner) runDeferred(taskName string, cmds []string, dir string, env []s
 		if r.DryRun {
 			continue
 		}
-		if err := r.runShellTaskCommand(taskName, cmd, dir, env, useOpRun); err != nil {
+		if err := r.runShellTaskCommand(ctx, taskName, cmd, dir, env, useOpRun); err != nil {
 			r.logTask(colorYellow, taskName, fmt.Sprintf("warning: deferred command failed: %v", err))
 		}
 	}
 }
 
 // runDeps executes task dependencies concurrently.
-func (r *Runner) runDeps(deps []Dep, cliArgs string, current *taskRun) error {
+func (r *Runner) runDeps(ctx context.Context, deps []Dep, cliArgs string, current *taskRun) error {
 	if len(deps) == 0 {
 		return nil
 	}
@@ -425,7 +468,7 @@ func (r *Runner) runDeps(deps []Dep, cliArgs string, current *taskRun) error {
 	errs := make([]error, len(deps))
 	for i, dep := range deps {
 		wg.Go(func() {
-			errs[i] = r.runNamed(dep.Task, cliArgs, current)
+			errs[i] = r.runNamed(ctx, dep.Task, cliArgs, current)
 		})
 	}
 	wg.Wait()
@@ -447,9 +490,10 @@ func (r *Runner) logTask(color, name, msg string) {
 }
 
 // runShellTaskCommand executes a task command through the configured shell runner.
-func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string, useOpRun bool) error {
+func (r *Runner) runShellTaskCommand(ctx context.Context, taskName, command, dir string, env []string, useOpRun bool) error {
 	stdout, stderr := r.outputStreams()
 	err := r.ShellRunner.Run(ShellCommand{
+		Context:  ctx,
 		Kind:     ShellCommandTask,
 		TaskName: taskName,
 		Command:  command,

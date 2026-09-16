@@ -1,6 +1,9 @@
 package taskfile
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // isUpToDate checks if the task sources are unchanged since the last run.
 // When generates is set, it checks that all outputs exist and are newer than all sources.
@@ -41,10 +44,11 @@ func (r *Runner) isUpToDate(task *Task, dir, taskName string) (bool, string, err
 // Status commands see the task's full env — including op:// secret
 // resolution — exactly like preconditions, so probes can read the same
 // credentials the task itself would use.
-func (r *Runner) statusUpToDate(taskName string, task *Task, dir string, env []string) bool {
+func (r *Runner) statusUpToDate(ctx context.Context, taskName string, task *Task, dir string, env []string) bool {
 	useOpRun := hasOpSecrets(env)
 	for _, sh := range task.Status {
 		if err := r.ShellRunner.Run(ShellCommand{
+			Context:  ctx,
 			Kind:     ShellCommandStatus,
 			TaskName: taskName,
 			Command:  sh,

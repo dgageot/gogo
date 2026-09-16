@@ -1,12 +1,14 @@
 package taskfile
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"maps"
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 )
 
 // Execution records a single command that was (or would be) executed.
@@ -61,16 +63,26 @@ type taskRunKey struct {
 // taskRun memoizes a single task execution. The first caller runs the body;
 // concurrent and later callers observe the same result.
 type taskRun struct {
-	name  string
-	depth int // nested non-memoized calls
-	once  sync.Once
-	err   error
+	name    string
+	depth   int // nested non-memoized calls
+	started atomic.Bool
+	done    chan struct{}
+	err     error
 }
 
-// do runs fn exactly once, returning its memoized result to every caller.
-func (t *taskRun) do(fn func() error) error {
-	t.once.Do(func() { t.err = fn() })
-	return t.err
+// do runs fn once; other callers may cancel without waiting for its owner.
+func (t *taskRun) do(ctx context.Context, fn func() error) error {
+	if t.started.CompareAndSwap(false, true) {
+		defer close(t.done)
+		t.err = fn()
+		return t.err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.done:
+		return t.err
+	}
 }
 
 // NewRunner creates a task runner for the given task file.
@@ -97,23 +109,25 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 	return r, nil
 }
 
-// builtinLookup returns the value of a gogo-provided variable (currently
+// builtins returns the value of a gogo-provided variable (currently
 // {{.HOME}} and the {{.GIT_*}} family). The gitVars resolver is constructed
 // on first call so tests that swap r.ShellRunner after NewRunner still see
 // git invocations routed through their fake runner — binding earlier would
 // capture the real shell runner in the lazy closures.
-func (r *Runner) builtinLookup(name string) (string, bool) {
-	if name == "HOME" {
-		// os.UserHomeDir resolves $HOME on Unix and USERPROFILE on Windows,
-		// falling back to the user database if those are unset. An error
-		// resolves to the empty string — same convention as the GIT_* family.
-		home, _ := os.UserHomeDir()
-		return home, true
+func (r *Runner) builtins(ctx context.Context) func(string) (string, bool) {
+	return func(name string) (string, bool) {
+		if name == "HOME" {
+			// os.UserHomeDir resolves $HOME on Unix and USERPROFILE on Windows,
+			// falling back to the user database if those are unset. An error
+			// resolves to the empty string — same convention as the GIT_* family.
+			home, _ := os.UserHomeDir()
+			return home, true
+		}
+		r.gitOnce.Do(func() {
+			r.gitVars = newGitVars(r.tf.Dir, r.ShellRunner)
+		})
+		return r.gitVars.lookup(ctx, name)
 	}
-	r.gitOnce.Do(func() {
-		r.gitVars = newGitVars(r.tf.Dir, r.ShellRunner)
-	})
-	return r.gitVars.lookup(name)
 }
 
 // ResetRan clears the memoized task results, allowing tasks to run again.

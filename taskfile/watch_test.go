@@ -170,11 +170,11 @@ func TestWatchWritesRunErrorsToInjectedStderr(t *testing.T) {
 	var stderr strings.Builder
 	runner.IO.Stderr = &stderr
 
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
 
 	err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
-	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Contains(t, stderr.String(), `task "build"`)
 }
 

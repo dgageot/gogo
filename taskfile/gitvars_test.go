@@ -46,7 +46,7 @@ func TestGitVarsLookupKnownNames(t *testing.T) {
 		"GIT_BRANCH":       "main",
 		"GIT_DIRTY":        "dirty",
 	} {
-		got, ok := g.lookup(name)
+		got, ok := g.lookup(t.Context(), name)
 		assert.True(t, ok, "lookup(%q) should report known", name)
 		assert.Equal(t, want, got, "lookup(%q)", name)
 	}
@@ -56,7 +56,7 @@ func TestGitVarsLookupUnknownReturnsFalse(t *testing.T) {
 	sh, _ := fakeGit(nil)
 	g := newGitVars("", sh)
 
-	val, ok := g.lookup("NOT_A_BUILTIN")
+	val, ok := g.lookup(t.Context(), "NOT_A_BUILTIN")
 	assert.False(t, ok)
 	assert.Empty(t, val)
 }
@@ -65,7 +65,7 @@ func TestGitVarsLookupNilReceiverIsSafe(t *testing.T) {
 	// builtinLookup constructs gitVars lazily; callers should never see a
 	// non-nil panic if they happen to call lookup before construction.
 	var g *gitVars
-	val, ok := g.lookup("GIT_COMMIT")
+	val, ok := g.lookup(t.Context(), "GIT_COMMIT")
 	assert.False(t, ok)
 	assert.Empty(t, val)
 }
@@ -79,7 +79,7 @@ func TestGitVarsErrorBecomesEmptyValue(t *testing.T) {
 	g := newGitVars("", sh)
 
 	for _, name := range builtinGitVars {
-		val, ok := g.lookup(name)
+		val, ok := g.lookup(t.Context(), name)
 		assert.True(t, ok, "%s should still be reported as known", name)
 		assert.Empty(t, val, "%s should resolve to empty on error", name)
 	}
@@ -90,7 +90,7 @@ func TestGitVarsMemoizesAcrossCalls(t *testing.T) {
 	g := newGitVars("", sh)
 
 	for range 5 {
-		val, _ := g.lookup("GIT_COMMIT")
+		val, _ := g.lookup(t.Context(), "GIT_COMMIT")
 		assert.Equal(t, "deadbeef", val)
 	}
 	assert.Equal(t, int64(1), calls.Load(), "git should be invoked exactly once")
@@ -101,7 +101,7 @@ func TestRunnerBuiltinLookupExposesGitVars(t *testing.T) {
 	r := newTestRunner(t, &Config{}, t.TempDir())
 	r.ShellRunner = sh
 
-	val, ok := r.builtinLookup("GIT_COMMIT")
+	val, ok := r.builtins(t.Context())("GIT_COMMIT")
 	assert.True(t, ok)
 	assert.Equal(t, "feedface", val)
 }

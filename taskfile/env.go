@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -85,13 +86,13 @@ var shellDefaultPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*):-([^{
 //     `secrets: [X]` reference is a stronger signal than a same-named
 //     `env: { X: ... }` entry, and is the only way op:// values reach the
 //     env when secrets are declared centrally).
-func (r *Runner) buildEnv(taskName string, task *Task, dir string, parentEnv []string, vars, callEnv map[string]string) ([]string, error) {
+func (r *Runner) buildEnv(ctx context.Context, taskName string, task *Task, dir string, parentEnv []string, vars, callEnv map[string]string) ([]string, error) {
 	env := slices.Clone(r.BaseEnv)
 
 	// File-level env entries are defaults: root values flow everywhere,
 	// namespace values become more specific, and the process environment wins.
 	scoped := r.scopedEnv(taskName)
-	resolvedScoped := resolveTaskEnv(scoped, env, vars, r.builtinLookup)
+	resolvedScoped := resolveTaskEnv(scoped, env, vars, r.builtins(ctx))
 	for _, key := range slices.Sorted(maps.Keys(resolvedScoped)) {
 		if !envHasKey(env, key) {
 			env = append(env, envPair(key, resolvedScoped[key]))
@@ -119,12 +120,12 @@ func (r *Runner) buildEnv(taskName string, task *Task, dir string, parentEnv []s
 		}
 	}
 
-	resolvedTaskEnv := resolveTaskEnv(task.Env, env, vars, r.builtinLookup)
+	resolvedTaskEnv := resolveTaskEnv(task.Env, env, vars, r.builtins(ctx))
 	for _, k := range slices.Sorted(maps.Keys(task.Env)) {
 		env = setEnv(env, k, resolvedTaskEnv[k])
 	}
 
-	resolvedCallEnv := resolveTaskEnv(callEnv, env, nil, r.builtinLookup)
+	resolvedCallEnv := resolveTaskEnv(callEnv, env, nil, r.builtins(ctx))
 	for _, k := range slices.Sorted(maps.Keys(callEnv)) {
 		env = setEnv(env, k, resolvedCallEnv[k])
 	}

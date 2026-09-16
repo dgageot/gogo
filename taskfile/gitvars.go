@@ -1,8 +1,8 @@
 package taskfile
 
 import (
+	"context"
 	"strings"
-	"sync"
 )
 
 // builtinGitVars enumerates the {{.GIT_*}} names gogo synthesises by shelling
@@ -19,30 +19,46 @@ var builtinGitVars = []string{
 }
 
 // gitVars memoises each built-in git command exactly once per Runner via
-// sync.OnceValue, regardless of how many tasks reference the name.
+// a per-command lock, regardless of how many tasks reference the name.
 type gitVars struct {
-	commit      func() string
-	shortCommit func() string
-	tag         func() string
-	branch      func() string
-	dirty       func() string
+	commit      func(context.Context) string
+	shortCommit func(context.Context) string
+	tag         func(context.Context) string
+	branch      func(context.Context) string
+	dirty       func(context.Context) string
 }
 
 // newGitVars wires the lazy resolvers to the Runner's ShellRunner so tests
 // can intercept git invocations the same way they do for `vars: { sh: ... }`.
 func newGitVars(dir string, sh ShellRunner) *gitVars {
-	once := func(command string) func() string {
-		return sync.OnceValue(func() string {
-			out, err := sh.Output(ShellCommand{
-				Kind:    ShellCommandVar,
-				Command: command,
-				Dir:     dir,
-			})
-			if err != nil {
+	once := func(command string) func(context.Context) string {
+		lock := make(chan struct{}, 1)
+		var value string
+		var ready bool
+		return func(ctx context.Context) string {
+			select {
+			case lock <- struct{}{}:
+			case <-ctx.Done():
 				return ""
 			}
-			return strings.TrimSpace(string(out))
-		})
+			defer func() { <-lock }()
+			if ready {
+				return value
+			}
+			if ctx.Err() != nil {
+				return ""
+			}
+			out, err := sh.Output(ShellCommand{Context: ctx, Kind: ShellCommandVar, Command: command, Dir: dir})
+			// Cancellation must not poison the cache.
+			if ctx.Err() != nil {
+				return ""
+			}
+			ready = true
+			if err == nil {
+				value = strings.TrimSpace(string(out))
+			}
+			return value
+		}
 	}
 	return &gitVars{
 		commit:      once("git rev-parse HEAD"),
@@ -61,21 +77,21 @@ func newGitVars(dir string, sh ShellRunner) *gitVars {
 // only for known names; values may be empty (e.g. outside a git repo, or
 // for GIT_TAG when no exact-match tag exists). The empty/known distinction
 // matters for `requires.vars`, which must accept an empty built-in as "set".
-func (g *gitVars) lookup(name string) (string, bool) {
+func (g *gitVars) lookup(ctx context.Context, name string) (string, bool) {
 	if g == nil {
 		return "", false
 	}
 	switch name {
 	case "GIT_COMMIT":
-		return g.commit(), true
+		return g.commit(ctx), true
 	case "GIT_SHORT_COMMIT":
-		return g.shortCommit(), true
+		return g.shortCommit(ctx), true
 	case "GIT_TAG":
-		return g.tag(), true
+		return g.tag(ctx), true
 	case "GIT_BRANCH":
-		return g.branch(), true
+		return g.branch(ctx), true
 	case "GIT_DIRTY":
-		return g.dirty(), true
+		return g.dirty(ctx), true
 	}
 	return "", false
 }

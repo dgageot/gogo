@@ -260,7 +260,7 @@ func TestUnusedVarsStaySortedAndLazy(t *testing.T) {
 		Cmds: []Cmd{{Cmd: "echo {{.USED}}"}},
 	}
 
-	vars, unused, err := r.resolveAllVars("app:show", task, dir, map[string]Var{
+	vars, unused, err := r.resolveAllVars(t.Context(), "app:show", task, dir, map[string]Var{
 		"M": {Sh: "unused call-site"},
 	})
 	require.NoError(t, err)

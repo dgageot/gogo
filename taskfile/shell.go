@@ -1,6 +1,7 @@
 package taskfile
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ShellCommandKind identifies why a shell command is being run.
@@ -23,6 +25,8 @@ const (
 
 // ShellCommand describes one shell invocation.
 type ShellCommand struct {
+	Context context.Context //nolint:containedctx // execution requests carry context to injectable runners
+
 	Kind     ShellCommandKind
 	TaskName string
 	Command  string
@@ -65,7 +69,11 @@ func (s *defaultShellRunner) Run(req ShellCommand) error {
 	cmd.Stdin = req.Stdin
 	cmd.Stdout = req.Stdout
 	cmd.Stderr = req.Stderr
-	return cmd.Run()
+	err = cmd.Run()
+	if req.Context != nil && req.Context.Err() != nil {
+		return req.Context.Err()
+	}
+	return err
 }
 
 func (s *defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
@@ -74,6 +82,9 @@ func (s *defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
 		return nil, err
 	}
 	out, err := cmd.Output()
+	if req.Context != nil && req.Context.Err() != nil {
+		return out, req.Context.Err()
+	}
 	if err != nil {
 		return out, withStderr(err)
 	}
@@ -99,13 +110,17 @@ func withStderr(err error) error {
 }
 
 func (s *defaultShellRunner) shellExecCommand(req ShellCommand) (*exec.Cmd, error) {
+	ctx := req.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if req.UseOpRun {
 		if _, err := s.opPath(); err != nil {
 			return nil, fmt.Errorf("uses op:// secrets but the 1Password CLI (op) is not installed: %w\n\nInstall it from https://developer.1password.com/docs/cli/get-started/", err)
 		}
-		return configuredShellCommand(exec.Command("op", opRunArgs(req)...), req), nil
+		return configuredShellCommand(exec.CommandContext(ctx, "op", opRunArgs(req)...), req), nil
 	}
-	return configuredShellCommand(exec.Command("/bin/sh", "-c", req.Command), req), nil
+	return configuredShellCommand(exec.CommandContext(ctx, "/bin/sh", "-c", req.Command), req), nil
 }
 
 // opRunArgs builds the argv passed to `op run`. When the task's stdout and
@@ -141,5 +156,9 @@ func isTerminal(w io.Writer) bool {
 func configuredShellCommand(cmd *exec.Cmd, req ShellCommand) *exec.Cmd {
 	cmd.Dir = req.Dir
 	cmd.Env = req.Env
+	if req.Context != nil && req.Context.Done() != nil {
+		cmd.WaitDelay = time.Second
+		configureCancellation(cmd, req)
+	}
 	return cmd
 }

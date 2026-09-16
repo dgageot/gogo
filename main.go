@@ -152,7 +152,7 @@ func (a *App) Run(ctx context.Context) error {
 		if i > 0 {
 			runner.ResetRan()
 		}
-		if err := a.handleRunError(tf, runner.Run(name, cliArgs)); err != nil {
+		if err := a.handleRunError(tf, runner.RunContext(ctx, name, cliArgs)); err != nil {
 			return err
 		}
 	}
