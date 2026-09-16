@@ -1,9 +1,11 @@
 package taskfile
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -120,4 +122,39 @@ func TestPromptDryRunSkipsQuestion(t *testing.T) {
 
 	assert.NotContains(t, stderr.String(), "[y/N]")
 	assert.Empty(t, *execs)
+}
+
+func TestPromptWaitCanCancelIndependently(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, promptConfig(dir), dir)
+	var stderr strings.Builder
+	r.IO = RunnerIO{Stdin: strings.NewReader("y\n"), Stderr: &stderr}
+	r.promptSem <- struct{}{}
+	defer func() { <-r.promptSem }()
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- r.confirmPrompt(ctx, "deploy", "Continue?") }()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(3 * time.Second):
+		require.FailNow(t, "waiting prompt ignored cancellation")
+	}
+	assert.Empty(t, stderr.String())
+}
+
+func TestCancelledPromptDoesNotReadOrPrint(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, promptConfig(dir), dir)
+	var stderr strings.Builder
+	input := strings.NewReader("y\n")
+	r.IO = RunnerIO{Stdin: input, Stderr: &stderr}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for range 20 {
+		require.ErrorIs(t, r.confirmPrompt(ctx, "deploy", "Continue?"), context.Canceled)
+	}
+	assert.Empty(t, stderr.String())
+	assert.Equal(t, 2, input.Len())
 }

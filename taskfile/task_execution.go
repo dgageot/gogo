@@ -254,7 +254,7 @@ func (r *Runner) run(ctx context.Context, resolved, cliArgs string, extraVars ma
 	// Prompt before anything runs — deps included — so declining leaves the
 	// system untouched.
 	if task.Prompt != "" {
-		if err := r.confirmPrompt(resolved, task.Prompt); err != nil {
+		if err := r.confirmPrompt(ctx, resolved, task.Prompt); err != nil {
 			return err
 		}
 	}

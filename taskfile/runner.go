@@ -53,7 +53,7 @@ type Runner struct {
 	outputMu    sync.Mutex        // protects non-file output streams
 	graphMu     sync.Mutex
 	waits       map[*taskRun]map[*taskRun]int // active invocation edges, including memoized waits
-	promptMu    sync.Mutex                    // serializes `prompt:` interactions on the shared stdin
+	promptSem   chan struct{}                 // serializes cancellable prompt interactions
 }
 
 type taskRunKey struct {
@@ -106,6 +106,7 @@ func NewRunner(tf *Config, cwd string) (*Runner, error) {
 		aliases:     aliases,
 		ShellRunner: newDefaultShellRunner(),
 		IO:          defaultRunnerIO(),
+		promptSem:   make(chan struct{}, 1),
 	}
 	return r, nil
 }
