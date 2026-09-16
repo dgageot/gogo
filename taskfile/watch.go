@@ -101,7 +101,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 
 	// Run once immediately
 	if err := r.Run(resolved, cliArgs); err != nil {
-		fmt.Fprintln(r.IO.Stderr, err)
+		fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
 	}
 
 	// Track checksum after initial run to avoid immediate re-run
@@ -135,7 +135,7 @@ func (r *Runner) Watch(ctx context.Context, name, cliArgs string, interval time.
 		r.ResetRan()
 
 		if err := r.Run(resolved, cliArgs); err != nil {
-			fmt.Fprintln(r.IO.Stderr, err)
+			fmt.Fprintln(r.outputWriter(r.IO.Stderr), err)
 		}
 	}
 }

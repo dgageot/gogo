@@ -443,11 +443,12 @@ func (r *Runner) taskDir(task *Task) string {
 }
 
 func (r *Runner) logTask(color, name, msg string) {
-	logTask(r.IO.Stderr, color, name, msg)
+	logTask(r.outputWriter(r.IO.Stderr), color, name, msg)
 }
 
 // runShellTaskCommand executes a task command through the configured shell runner.
 func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string, useOpRun bool) error {
+	stdout, stderr := r.outputStreams()
 	err := r.ShellRunner.Run(ShellCommand{
 		Kind:     ShellCommandTask,
 		TaskName: taskName,
@@ -456,8 +457,8 @@ func (r *Runner) runShellTaskCommand(taskName, command, dir string, env []string
 		Env:      env,
 		UseOpRun: useOpRun,
 		Stdin:    r.IO.Stdin,
-		Stdout:   r.IO.Stdout,
-		Stderr:   r.IO.Stderr,
+		Stdout:   stdout,
+		Stderr:   stderr,
 	})
 	if err != nil {
 		return fmt.Errorf("task %q: %w", taskName, err)

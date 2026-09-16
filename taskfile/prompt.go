@@ -24,7 +24,7 @@ func (r *Runner) confirmPrompt(taskName, prompt string) error {
 	r.promptMu.Lock()
 	defer r.promptMu.Unlock()
 
-	fmt.Fprintf(r.IO.Stderr, "%s[%s]%s %s [y/N]: ", colorYellow, taskName, colorReset, prompt)
+	fmt.Fprintf(r.outputWriter(r.IO.Stderr), "%s[%s]%s %s [y/N]: ", colorYellow, taskName, colorReset, prompt)
 
 	declined := fmt.Errorf("task %q: prompt declined", taskName)
 	if r.IO.Stdin == nil {
