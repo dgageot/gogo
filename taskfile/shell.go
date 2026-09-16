@@ -100,8 +100,8 @@ func (s *defaultShellRunner) Output(req ShellCommand) ([]byte, error) {
 // so users debugging a broken `sh:` lookup or a missing git repo see what
 // the underlying tool actually said.
 func withStderr(err error) error {
-	var ee *exec.ExitError
-	if !errors.As(err, &ee) {
+	ee, ok := errors.AsType[*exec.ExitError](err)
+	if !ok {
 		return err
 	}
 	stderr := strings.TrimSpace(string(ee.Stderr))

@@ -167,8 +167,8 @@ func (a *App) Run(ctx context.Context) error {
 // narrowed to just those candidates rather than the whole index. Other
 // errors pass through untouched so the existing error surface is unchanged.
 func (a *App) handleRunError(tf *taskfile.Config, err error) error {
-	var nfe *taskfile.TaskNotFoundError
-	if !errors.As(err, &nfe) {
+	nfe, ok := errors.AsType[*taskfile.TaskNotFoundError](err)
+	if !ok {
 		return err
 	}
 	listings := gatherTaskListings(tf)
