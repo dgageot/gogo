@@ -134,6 +134,7 @@ Completion suggests every visible task name in the current `gogo.yaml`, includin
 
 Watch cancellation stops running shell commands, including conditions, variables,
 preconditions, and status checks. Registered cleanup commands still get up to five
-seconds to finish after cancellation. On Linux and macOS, non-interactive command
-process groups are terminated together; interactive commands keep their foreground
-terminal group. Other platforms terminate the direct child and bound pipe waits.
+seconds to finish after cancellation. On Linux and macOS, headless command process groups are terminated together.
+Commands in a foreground terminal session keep that group, including auxiliary
+commands that prompt through `/dev/tty`; cancellation terminates their direct
+child, while terminal-generated signals also reach the foreground group. Other platforms terminate the direct child and bound pipe waits.
