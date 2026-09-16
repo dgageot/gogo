@@ -147,3 +147,46 @@ func TestScopedEnvCrossReferenceResolvesOverlaidDefault(t *testing.T) {
 	assert.Equal(t, "local", envValue((*execs)[0].Env, "TAG"))
 	assert.Equal(t, "app:v1", envValue((*execs)[0].Env, "IMAGE"))
 }
+
+func TestShellDefaultsExpandSourceOnly(t *testing.T) {
+	for _, tc := range []struct{ name, value, want string }{
+		{"plain reference", "$TOKEN", "abc$OTHER"},
+		{"default reference", "${TOKEN:-fallback}", "abc$OTHER"},
+		{"fallback reference", "${MISSING:-$TOKEN}", "abc$OTHER"},
+		{"empty value", "${EMPTY:-$OTHER}", "changed"},
+		{"literal fallback", "${MISSING:-fallback}", "fallback"},
+		{"multiple references", "$OTHER/${TOKEN:-fallback}/$OTHER/${MISSING:-$TOKEN}", "changed/abc$OTHER/changed/abc$OTHER"},
+		{"unused fallback", "${TOKEN:-$OTHER}", "abc$OTHER"},
+		{"special dollar", "${SPECIAL:-fallback}", "$$$2${OTHER}"},
+		{"nested missing", "${MISSING:-${ALSO_MISSING:-8080}}", "8080"},
+		{"nested value", "${MISSING:-${TOKEN:-fallback}}", "abc$OTHER"},
+		{"nested unused", "${TOKEN:-${MISSING:-$OTHER}}", "abc$OTHER"},
+		{"nested empty", "${EMPTY:-${MISSING:-$TOKEN}}", "abc$OTHER"},
+		{"literal braces", "${MISSING:-{literal}}", "{literal}"},
+		{"escaped dollar", "$${MISSING:-fallback}", "$${MISSING:-fallback}"},
+		{"positional", "$2/${MISSING:-fallback}", "$2/fallback"},
+		{"trailing dollar", "${MISSING:-fallback}$", "fallback$"},
+		{"incomplete parameter", "${MISSING:-${TOKEN}", "${MISSING:-${TOKEN}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := resolveTaskEnv(map[string]string{"COPY": tc.value}, []string{"TOKEN=abc$OTHER", "OTHER=changed", "EMPTY=", "SPECIAL=$$$2${OTHER}"}, nil, nil)
+			assert.Equal(t, tc.want, env["COPY"])
+		})
+	}
+}
+
+func TestShellDefaultPreservesCrossReferencedValue(t *testing.T) {
+	env := resolveTaskEnv(map[string]string{"COPY": "${TOKEN:-fallback}", "TOKEN": "$RAW"}, []string{"RAW=abc$OTHER", "OTHER=changed"}, nil, nil)
+	assert.Equal(t, "abc$OTHER", env["COPY"])
+	assert.Equal(t, "abc$OTHER", env["TOKEN"])
+}
+
+func TestUnusedDefaultDoesNotResolveFallback(t *testing.T) {
+	var lookedUp []string
+	value := expandShellDefaults("${SET:-${UNUSED:-fallback}}", func(name string) (string, bool) {
+		lookedUp = append(lookedUp, name)
+		return "value$OTHER", true
+	})
+	assert.Equal(t, "value$OTHER", value)
+	assert.Equal(t, []string{"SET"}, lookedUp)
+}

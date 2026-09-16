@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -70,8 +69,6 @@ func baseEnvWithDotenv(dotenv map[string]string) []string {
 	}
 	return env
 }
-
-var shellDefaultPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*):-([^{}]*)\}`)
 
 // buildEnv composes the environment used to run a task's commands:
 //
@@ -184,7 +181,6 @@ func resolveTaskEnv(taskEnv map[string]string, baseEnv []string, vars map[string
 				})
 			}
 			v = expandShellDefaults(v, lookup)
-			v = expandShellEnv(v, lookup)
 		}
 		delete(visiting, k)
 		resolved[k] = v
@@ -197,14 +193,79 @@ func resolveTaskEnv(taskEnv map[string]string, baseEnv []string, vars map[string
 	return resolved
 }
 
+// expandShellDefaults scans complete shell parameters, never substituted values.
+// Nested fallback words are expanded only when selected.
 func expandShellDefaults(value string, lookup func(string) (string, bool)) string {
-	return shellDefaultPattern.ReplaceAllStringFunc(value, func(match string) string {
-		parts := shellDefaultPattern.FindStringSubmatch(match)
-		if current, ok := lookup(parts[1]); ok && current != "" {
-			return current
+	var out strings.Builder
+	for value != "" {
+		before, tail, found := strings.Cut(value, "$")
+		out.WriteString(before)
+		if !found {
+			break
 		}
-		return parts[2]
-	})
+		if tail == "" {
+			out.WriteByte('$')
+			break
+		}
+		if tail[0] == '{' {
+			end := shellParameterEnd(tail)
+			if end < 0 {
+				out.WriteByte('$')
+				out.WriteString(tail)
+				break
+			}
+			token := "$" + tail[:end+1]
+			body := tail[1:end]
+			name, fallback, hasDefault := strings.Cut(body, ":-")
+			if hasDefault && isValidEnvKey(name) {
+				if current, ok := lookup(name); ok && current != "" {
+					out.WriteString(current)
+				} else {
+					out.WriteString(expandShellDefaults(fallback, lookup))
+				}
+			} else {
+				out.WriteString(expandShellEnv(token, lookup))
+			}
+			value = tail[end+1:]
+			continue
+		}
+		end := 0
+		if isShellSpecialChar(tail[0]) {
+			end = 1
+		} else {
+			for end < len(tail) && isShellNameByte(tail[end]) {
+				end++
+			}
+		}
+		if end == 0 {
+			out.WriteByte('$')
+		} else {
+			out.WriteString(expandShellEnv("$"+tail[:end], lookup))
+		}
+		value = tail[end:]
+	}
+	return out.String()
+}
+
+// shellParameterEnd finds the matching brace without splitting nested defaults.
+func shellParameterEnd(value string) int {
+	depth := 0
+	for i, c := range value {
+		switch c {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func isShellNameByte(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
 // hasOpSecrets reports whether any env entry's value is an op:// reference.

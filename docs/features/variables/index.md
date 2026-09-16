@@ -194,6 +194,8 @@ env:
   MIRROR_FS: ${MIRROR_FS:-1}
 ```
 
+Shell defaults such as `${PORT:-${DEFAULT_PORT:-8080}}` expand only the selected fallback. Substituted values are kept literal, so a `$` inside a token or password is not expanded again.
+
 The process environment wins, so `AWS_PROFILE=custom gogo deploy` uses `custom`. Included files scope their top-level environment to their namespace; nested namespaces inherit ancestor defaults, and siblings remain isolated. A task's own `env:` block still overrides these defaults.
 
 ## Task Environment
