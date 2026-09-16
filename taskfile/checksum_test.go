@@ -198,6 +198,40 @@ func TestWriteChecksumDoesNotFollowSymlink(t *testing.T) {
 	assert.Zero(t, info.Mode()&os.ModeSymlink, "checksum entry must not be a symlink")
 }
 
+func TestWriteChecksumRejectsCacheDirectoryEscape(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	writeFiles(t, outside, map[string]string{"checksum/build": "original"})
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, ".gogo")))
+
+	require.Error(t, writeChecksum(dir, "build", "new-checksum"))
+	data, err := os.ReadFile(filepath.Join(outside, "checksum", "build"))
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(data))
+}
+
+func TestWriteChecksumRejectsChecksumDirectoryEscape(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	writeFiles(t, outside, map[string]string{"build": "original"})
+	require.NoError(t, os.Mkdir(filepath.Join(dir, ".gogo"), 0o755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, ".gogo", "checksum")))
+
+	require.Error(t, writeChecksum(dir, "build", "new-checksum"))
+	data, err := os.ReadFile(filepath.Join(outside, "build"))
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(data))
+}
+
+func TestWriteChecksumAllowsContainedDirectorySymlink(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "cache"), 0o755))
+	require.NoError(t, os.Symlink("cache", filepath.Join(dir, ".gogo")))
+
+	require.NoError(t, writeChecksum(dir, "build", "checksum"))
+	assert.Equal(t, "checksum", readStoredChecksum(dir, "build"))
+}
+
 func TestOutputsNewerThanSources(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "main.go")

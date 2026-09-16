@@ -151,23 +151,23 @@ func readStoredChecksum(fileDir, taskName string) string {
 	return string(data)
 }
 
-// writeChecksum stores the checksum for a task. The write is hardened
-// against local symlink attacks: we remove any pre-existing entry (without
-// following symlinks) and then re-create the file with O_CREATE|O_EXCL so
-// a pre-placed symlink in .gogo/checksum/ can't redirect the write
-// elsewhere on disk — if an attacker wins the race and recreates a
-// symlink between the Remove and the OpenFile, the OpenFile call fails.
+// writeChecksum confines cache writes to the task-file directory. Removing the
+// leaf before exclusive creation also prevents following a pre-placed symlink.
 func writeChecksum(fileDir, taskName, checksum string) error {
-	p := checksumPath(fileDir, taskName)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	root, err := os.OpenRoot(fileDir)
+	if err != nil {
 		return err
 	}
-	// os.Remove does not follow symlinks, so we only ever delete the entry
-	// itself, never its target.
-	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+	defer root.Close()
+
+	p := checksumPath("", taskName)
+	if err := root.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err := root.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := root.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return err
 	}
