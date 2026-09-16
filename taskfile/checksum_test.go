@@ -285,3 +285,17 @@ func TestOutputsNewerThanSourcesNoSources(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, upToDate, "should not be up-to-date when no sources match")
 }
+
+func TestOutputsRequireEveryDeclaredPattern(t *testing.T) {
+	for _, missing := range []string{"missing.out", "missing/*.out", "missing/**/*.out"} {
+		t.Run(missing, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{"input.go": "source", "one.out": "output"})
+			old := time.Now().Add(-time.Hour)
+			require.NoError(t, os.Chtimes(filepath.Join(dir, "input.go"), old, old))
+			fresh, err := outputsNewerThanSources(dir, []string{"*.go"}, []string{"one.out", missing})
+			require.NoError(t, err)
+			assert.False(t, fresh)
+		})
+	}
+}

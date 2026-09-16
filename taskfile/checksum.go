@@ -186,9 +186,16 @@ func outputsNewerThanSources(dir string, sourcePatterns, generatePatterns []stri
 		return false, fmt.Errorf("discovering sources: %w", err)
 	}
 
-	generatedOutputs, err := discoverFiles(dir, generatePatterns)
-	if err != nil {
-		return false, fmt.Errorf("discovering outputs: %w", err)
+	var generatedOutputs []string
+	for _, pattern := range generatePatterns {
+		outputs, err := discoverFiles(dir, []string{pattern})
+		if err != nil {
+			return false, fmt.Errorf("discovering outputs: %w", err)
+		}
+		if len(outputs) == 0 {
+			return false, nil
+		}
+		generatedOutputs = append(generatedOutputs, outputs...)
 	}
 
 	// If no outputs exist yet, the task must run
