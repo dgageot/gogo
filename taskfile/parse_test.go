@@ -1142,3 +1142,17 @@ tasks:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "task name")
 }
+
+func TestNestedFlattenParentTaskWins(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":  "flatten: [parent.yml, later.yml]\n",
+		"parent.yml": "flatten: [child.yml]\ntasks:\n  build: {cmd: parent}\n",
+		"child.yml":  "tasks:\n  build: {cmd: child}\n  other: {cmd: child-other}\n",
+		"later.yml":  "tasks:\n  build: {cmd: later}\n  other: {cmd: later-other}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "parent", tf.Tasks["build"].Cmds[0].Cmd)
+	assert.Equal(t, "child-other", tf.Tasks["other"].Cmds[0].Cmd)
+}

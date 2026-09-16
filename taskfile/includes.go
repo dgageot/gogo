@@ -46,11 +46,12 @@ func LoadWithIncludes(dir string) (*Config, error) {
 // includeLoader holds shared state while recursively loading task files
 // pulled in via `includes:` (namespaced) and `flatten:` (no namespace).
 type includeLoader struct {
-	root       *Config
-	rootDir    string
-	seenDotenv map[string]struct{} // deduplicates dotenv files across loaded files
-	dotenvVars map[string]string   // accumulated dotenv variables
-	loadStack  map[string]struct{} // absolute file paths currently being loaded (cycle detection)
+	root          *Config
+	rootDir       string
+	seenDotenv    map[string]struct{} // deduplicates dotenv files across loaded files
+	dotenvVars    map[string]string   // accumulated dotenv variables
+	flattenOwners map[string]string   // task name -> first declaring flatten file
+	loadStack     map[string]struct{} // absolute file paths currently being loaded (cycle detection)
 }
 
 func newIncludeLoader(root *Config) (*includeLoader, error) {
@@ -61,11 +62,12 @@ func newIncludeLoader(root *Config) (*includeLoader, error) {
 	}
 
 	return &includeLoader{
-		root:       root,
-		rootDir:    root.Dir,
-		seenDotenv: seenDotenv,
-		dotenvVars: dotenvVars,
-		loadStack:  map[string]struct{}{filepath.Join(root.Dir, fileName): {}},
+		root:          root,
+		flattenOwners: make(map[string]string),
+		rootDir:       root.Dir,
+		seenDotenv:    seenDotenv,
+		dotenvVars:    dotenvVars,
+		loadStack:     map[string]struct{}{filepath.Join(root.Dir, fileName): {}},
 	}, nil
 }
 
@@ -289,6 +291,14 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 	l.mergeSourcePresets(flattened.Sources)
 	l.mergeSecrets(flattened.Secrets)
 
+	// Reserve task names before descending so this file beats files it flattens.
+	for name := range flattened.Tasks {
+		finalName := namespaceJoin(req.namespace, name)
+		if _, owned := l.flattenOwners[finalName]; !owned {
+			l.flattenOwners[finalName] = absPath
+		}
+	}
+
 	// Recurse: nested flatten files keep the same namespace and ancestor.
 	for _, p := range flattened.Flatten {
 		if err := l.loadFlatten(flattenRequest{
@@ -313,7 +323,7 @@ func (l *includeLoader) loadFlatten(req flattenRequest) error {
 		}
 	}
 
-	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir)
+	return l.mergeFlattenedTasks(flattened, req.namespace, req.ancestorDir, absPath)
 }
 
 func namespaceJoin(prefix, name string) string {
@@ -404,9 +414,12 @@ func (l *includeLoader) mergeTasks(included *includedConfig) error {
 // (this is the agentic-platform pattern for splitting one file across many).
 // First defined wins, so a parent file can override a flattened task by
 // declaring it locally with the same name.
-func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancestorDir string) error {
+func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancestorDir, filePath string) error {
 	for _, name := range slices.Sorted(maps.Keys(flattened.Tasks)) {
 		finalName := namespaceJoin(namespace, name)
+		if l.flattenOwners[finalName] != filePath {
+			continue
+		}
 		if err := validateTaskName(finalName); err != nil {
 			return err
 		}
