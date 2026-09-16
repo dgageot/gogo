@@ -105,6 +105,14 @@ func (l *includeLoader) load() (*Config, error) {
 		}
 	}
 
+	// A reserved flatten winner may not have merged until the outer load ends.
+	for _, namespace := range slices.Sorted(maps.Keys(l.root.NamespaceDefaults)) {
+		name := l.root.NamespaceDefaults[namespace]
+		if _, ok := l.root.Tasks[name]; !ok {
+			return nil, fmt.Errorf("namespace %q default: %q does not reference any defined task", namespace, strings.TrimPrefix(name, namespace+":"))
+		}
+	}
+
 	// Qualify aliases before references so aliases in later files are visible.
 	for name, origin := range l.taskOrigins {
 		task := l.root.Tasks[name]
@@ -216,13 +224,7 @@ func (l *includeLoader) loadInclude(req includeRequest) error {
 	}
 
 	if included.Default != "" {
-		defaultTask := namespaceJoin(included.Namespace, included.Default)
-		_, localTask := included.Tasks[included.Default]
-		_, loadedTask := l.root.Tasks[defaultTask]
-		if !localTask && !loadedTask {
-			return fmt.Errorf("namespace %q default: %q does not reference any defined task", included.Namespace, included.Default)
-		}
-		l.root.NamespaceDefaults[included.Namespace] = defaultTask
+		l.root.NamespaceDefaults[included.Namespace] = namespaceJoin(included.Namespace, included.Default)
 	}
 
 	return l.mergeTasks(included)

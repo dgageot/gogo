@@ -1240,3 +1240,32 @@ func TestNestedNamespaceDefaultReferencesStayLocal(t *testing.T) {
 		}
 	}
 }
+
+func TestFlattenWinnerCanSatisfyNestedNamespaceDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":     "flatten: [parent.yml]\n",
+		"parent.yml":    "flatten: [child.yml]\ntasks:\n  api:build: {cmd: parent}\n",
+		"child.yml":     "includes: [api]\n",
+		"api/gogo.yaml": "default: build\nflatten: [build.yml]\n",
+		"api/build.yml": "tasks:\n  build: {cmd: child}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "parent", tf.Tasks["api:build"].Cmds[0].Cmd)
+	r := newTestRunner(t, tf, dir)
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("api", ""))
+	require.Len(t, *execs, 1)
+	assert.Equal(t, "parent", (*execs)[0].Command)
+}
+
+func TestNamespaceDefaultStillRejectsMissingWinner(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":     "includes: [api]\n",
+		"api/gogo.yaml": "default: missing\n",
+	})
+	_, err := LoadWithIncludes(dir)
+	require.EqualError(t, err, `namespace "api" default: "missing" does not reference any defined task`)
+}
