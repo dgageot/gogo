@@ -75,8 +75,11 @@ func discoverFiles(dir string, patterns []string) ([]string, error) {
 // before is the path prefix before "**", after is the suffix.
 func matchRecursivePattern(dir, before, after string) []string {
 	baseDir := dir
-	if prefix := strings.TrimRight(before, string(filepath.Separator)); prefix != "" {
-		baseDir = filepath.Join(dir, prefix)
+	if before != "" {
+		baseDir = before
+		if !filepath.IsAbs(baseDir) {
+			baseDir = filepath.Join(dir, baseDir)
+		}
 	}
 
 	filePart := strings.TrimLeft(after, string(filepath.Separator))

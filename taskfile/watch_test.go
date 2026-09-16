@@ -236,3 +236,27 @@ func TestWatchChecksumDetectsMovingFileBetweenGroups(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, after, unchanged)
 }
+
+func TestWatchDetectsAbsoluteRecursiveSources(t *testing.T) {
+	dir := t.TempDir()
+	sources := t.TempDir()
+	writeFiles(t, sources, map[string]string{"sub/input.txt": "original"})
+	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{
+		"build": {Sources: StringList{filepath.Join(sources, "**", "*.txt")}, Cmds: []Cmd{{Cmd: "build"}}},
+	}}, dir)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	calls := 0
+	r.ShellRunner = &fakeShellRunner{runFunc: func(ShellCommand) error {
+		calls++
+		if calls == 1 {
+			writeFiles(t, sources, map[string]string{"sub/input.txt": "changed"})
+		} else {
+			cancel()
+		}
+		return nil
+	}}
+
+	require.ErrorIs(t, r.Watch(ctx, "build", "", 10*time.Millisecond), context.Canceled)
+	assert.Equal(t, 2, calls)
+}

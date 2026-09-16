@@ -333,3 +333,38 @@ func TestOutputsRequireEveryDeclaredPattern(t *testing.T) {
 		})
 	}
 }
+
+func TestRecursiveAbsolutePattern(t *testing.T) {
+	dir := t.TempDir()
+	sources := t.TempDir()
+	writeFiles(t, sources, map[string]string{
+		"root.go":     "root",
+		"sub/lib.go":  "nested",
+		"ignored.txt": "ignored",
+	})
+	pattern := filepath.Join(sources, "**", "*.go")
+	files, err := discoverFiles(dir, []string{pattern})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{filepath.Join(sources, "root.go"), filepath.Join(sources, "sub", "lib.go")}, files)
+
+	before, err := sourcesChecksum(dir, []string{pattern})
+	require.NoError(t, err)
+	require.NotEmpty(t, before)
+	writeFiles(t, sources, map[string]string{"sub/lib.go": "changed"})
+	after, err := sourcesChecksum(dir, []string{pattern})
+	require.NoError(t, err)
+	assert.NotEqual(t, before, after)
+}
+
+func TestAbsoluteRecursiveGenerates(t *testing.T) {
+	dir := t.TempDir()
+	outputDir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"input.txt": "source"})
+	writeFiles(t, outputDir, map[string]string{"sub/result.out": "output"})
+	old := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "input.txt"), old, old))
+
+	fresh, err := outputsNewerThanSources(dir, []string{"input.txt"}, []string{filepath.Join(outputDir, "**", "*.out")})
+	require.NoError(t, err)
+	assert.True(t, fresh)
+}
