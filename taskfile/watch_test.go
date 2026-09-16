@@ -217,3 +217,22 @@ func TestWatchCollectsResolvedDependencySources(t *testing.T) {
 		})
 	}
 }
+
+func TestWatchChecksumDetectsMovingFileBetweenGroups(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"a/input.txt": "same"})
+	groups := []dirPatterns{
+		{Dir: filepath.Join(dir, "a"), Patterns: []string{"*.txt"}},
+		{Dir: filepath.Join(dir, "b"), Patterns: []string{"*.txt"}},
+	}
+	before, err := multiSourcesChecksum(groups)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "b"), 0o755))
+	require.NoError(t, os.Rename(filepath.Join(dir, "a", "input.txt"), filepath.Join(dir, "b", "input.txt")))
+	after, err := multiSourcesChecksum(groups)
+	require.NoError(t, err)
+	assert.NotEqual(t, before, after)
+	unchanged, err := multiSourcesChecksum(groups)
+	require.NoError(t, err)
+	assert.Equal(t, after, unchanged)
+}

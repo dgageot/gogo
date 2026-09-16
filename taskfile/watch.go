@@ -71,6 +71,7 @@ func multiSourcesChecksum(groups []dirPatterns) (string, error) {
 			return "", err
 		}
 		h.Write([]byte(checksum))
+		h.Write([]byte{0}) // empty groups must still occupy a position
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
