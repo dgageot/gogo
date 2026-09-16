@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -102,19 +103,21 @@ func TestCancelledRunDoesNotPoisonMemoizedResult(t *testing.T) {
 }
 
 func TestMemoizedWaiterCanCancelIndependently(t *testing.T) {
-	dir := t.TempDir()
-	r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{"build": {Cmds: []Cmd{{Cmd: "true"}}}}}, dir)
-	r.IO.Stderr = io.Discard
-	started, release := make(chan struct{}), make(chan struct{})
-	r.ShellRunner = &fakeShellRunner{runFunc: func(ShellCommand) error { close(started); <-release; return nil }}
-	owner := make(chan error, 1)
-	go func() { owner <- r.RunContext(t.Context(), "build", "") }()
-	<-started
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
-	defer cancel()
-	require.ErrorIs(t, r.RunContext(ctx, "build", ""), context.DeadlineExceeded)
-	close(release)
-	require.NoError(t, <-owner)
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		r := newTestRunner(t, &Config{Dir: dir, Tasks: map[string]Task{"build": {Cmds: []Cmd{{Cmd: "true"}}}}}, dir)
+		r.IO.Stderr = io.Discard
+		started, release := make(chan struct{}), make(chan struct{})
+		r.ShellRunner = &fakeShellRunner{runFunc: func(ShellCommand) error { close(started); <-release; return nil }}
+		owner := make(chan error, 1)
+		go func() { owner <- r.RunContext(t.Context(), "build", "") }()
+		<-started
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+		defer cancel()
+		require.ErrorIs(t, r.RunContext(ctx, "build", ""), context.DeadlineExceeded)
+		close(release)
+		require.NoError(t, <-owner)
+	})
 }
 
 func TestGitLookupUsesCurrentContextAndRetriesCancellation(t *testing.T) {
@@ -137,22 +140,24 @@ func TestGitLookupUsesCurrentContextAndRetriesCancellation(t *testing.T) {
 }
 
 func TestGitLookupWaiterCanCancelIndependently(t *testing.T) {
-	started, release := make(chan struct{}), make(chan struct{})
-	g := newGitVars("", &fakeShellRunner{outputFunc: func(ShellCommand) ([]byte, error) {
-		close(started)
-		<-release
-		return []byte("commit"), nil
-	}})
-	done := make(chan struct{})
-	go func() { _, _ = g.lookup(t.Context(), "GIT_COMMIT"); close(done) }()
-	<-started
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
-	defer cancel()
-	value, known := g.lookup(ctx, "GIT_COMMIT")
-	assert.True(t, known)
-	assert.Empty(t, value)
-	close(release)
-	<-done
+	synctest.Test(t, func(t *testing.T) {
+		started, release := make(chan struct{}), make(chan struct{})
+		g := newGitVars("", &fakeShellRunner{outputFunc: func(ShellCommand) ([]byte, error) {
+			close(started)
+			<-release
+			return []byte("commit"), nil
+		}})
+		done := make(chan struct{})
+		go func() { _, _ = g.lookup(t.Context(), "GIT_COMMIT"); close(done) }()
+		<-started
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+		defer cancel()
+		value, known := g.lookup(ctx, "GIT_COMMIT")
+		assert.True(t, known)
+		assert.Empty(t, value)
+		close(release)
+		<-done
+	})
 }
 
 func TestCancelledPreconditionDoesNotPoisonRetry(t *testing.T) {

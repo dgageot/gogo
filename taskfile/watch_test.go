@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -153,29 +154,31 @@ func TestWatchNoSourcesInDeps(t *testing.T) {
 }
 
 func TestWatchWritesRunErrorsToInjectedStderr(t *testing.T) {
-	dir := t.TempDir()
-	writeFiles(t, dir, map[string]string{"main.go": "package main"})
-	tf := &Config{
-		Dir: dir,
-		Tasks: map[string]Task{
-			"build": {
-				Sources: StringList{"*.go"},
-				Cmds:    []Cmd{{Cmd: "false"}},
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{"main.go": "package main"})
+		tf := &Config{
+			Dir: dir,
+			Tasks: map[string]Task{
+				"build": {
+					Sources: StringList{"*.go"},
+					Cmds:    []Cmd{{Cmd: "false"}},
+				},
 			},
-		},
-		DotenvVars: make(map[string]string),
-	}
+			DotenvVars: make(map[string]string),
+		}
 
-	runner := newTestRunner(t, tf, dir)
-	var stderr strings.Builder
-	runner.IO.Stderr = &stderr
+		runner := newTestRunner(t, tf, dir)
+		var stderr strings.Builder
+		runner.IO.Stderr = &stderr
 
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+		defer cancel()
 
-	err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Contains(t, stderr.String(), `task "build"`)
+		err := runner.Watch(ctx, "build", "", 50*time.Millisecond)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, stderr.String(), `task "build"`)
+	})
 }
 
 func TestWatchDetectsEditDuringInitialBuild(t *testing.T) {
