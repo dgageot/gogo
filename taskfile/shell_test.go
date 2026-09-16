@@ -104,3 +104,24 @@ func TestOpRunKeepsMaskingWhenOnlyStderrIsATerminal(t *testing.T) {
 	})
 	assert.False(t, slices.Contains(args, "--no-masking"))
 }
+
+func TestNullDeviceIsNotATerminal(t *testing.T) {
+	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	require.NoError(t, err)
+	defer null.Close()
+	assert.False(t, isTerminal(null))
+	assert.NotContains(t, opRunArgs(ShellCommand{Stdout: null, Stderr: null}), "--no-masking")
+}
+
+func TestPipeAndRegularFileAreNotTerminals(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	defer reader.Close()
+	defer writer.Close()
+	file, err := os.CreateTemp(t.TempDir(), "output")
+	require.NoError(t, err)
+	defer file.Close()
+	assert.False(t, isTerminal(reader))
+	assert.False(t, isTerminal(writer))
+	assert.False(t, isTerminal(file))
+}

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/term"
 )
 
 // ShellCommandKind identifies why a shell command is being run.
@@ -138,19 +140,11 @@ func opRunArgs(req ShellCommand) []string {
 	return append(args, "--", "/bin/sh", "-c", req.Command)
 }
 
-// isTerminal reports whether w is a *os.File backed by a character device,
-// i.e. a terminal. Anything else (a pipe, buffer, regular file, or nil)
-// returns false.
+// isTerminal reports whether w is a file attached to a terminal, not merely
+// a character device such as /dev/null.
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
-	if !ok || f == nil {
-		return false
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
+	return ok && f != nil && term.IsTerminal(int(f.Fd()))
 }
 
 func configuredShellCommand(cmd *exec.Cmd, req ShellCommand) *exec.Cmd {
