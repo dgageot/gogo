@@ -184,6 +184,9 @@ func (r *Runner) resolveAllVars(ctx context.Context, taskName string, task *Task
 		var value string
 		if s.v.Sh != "" {
 			cmdLine := expandTemplates(s.v.Sh, lookup)
+			if firstErr != nil {
+				return "", true
+			}
 			out, err := r.ShellRunner.Output(ShellCommand{
 				Context: ctx,
 				Kind:    ShellCommandVar,

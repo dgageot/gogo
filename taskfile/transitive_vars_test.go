@@ -308,3 +308,23 @@ func TestReferencedVarsCollectsSortedUniqueNames(t *testing.T) {
 
 	assert.Equal(t, []string{"A", "B", "C", "D", "E", "F", "Z"}, referencedVars(task))
 }
+
+func TestNestedShFailureDoesNotExecuteOuterCommand(t *testing.T) {
+	dir := t.TempDir()
+	failure := errors.New("lookup failed")
+	r := newTestRunner(t, &Config{Dir: dir, Vars: map[string]Var{
+		"INNER":  {Sh: "lookup"},
+		"MIDDLE": {Value: "{{.INNER}}"},
+		"OUTER":  {Sh: "deploy {{.MIDDLE}}"},
+	}, Tasks: map[string]Task{"show": {Cmds: []Cmd{{Cmd: "echo {{.OUTER}}"}}}}}, dir)
+	shell := &fakeShellRunner{outputFunc: func(req ShellCommand) ([]byte, error) {
+		assert.Equal(t, "lookup", req.Command)
+		return nil, failure
+	}}
+	r.ShellRunner = shell
+	require.ErrorIs(t, r.Run("show", ""), failure)
+	outputs := shell.outputsSnapshot()
+	require.Len(t, outputs, 1)
+	assert.Equal(t, "lookup", outputs[0].Command)
+	assert.Empty(t, shell.runsSnapshot())
+}
