@@ -1156,3 +1156,19 @@ func TestNestedFlattenParentTaskWins(t *testing.T) {
 	assert.Equal(t, "parent", tf.Tasks["build"].Cmds[0].Cmd)
 	assert.Equal(t, "child-other", tf.Tasks["other"].Cmds[0].Cmd)
 }
+
+func TestFlattenedReferencesResolveAfterParentAndSiblingsLoad(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"gogo.yaml":      "includes: [api]\ntasks:\n  build: {cmd: unrelated-root}\n",
+		"api/gogo.yaml":  "flatten: [first.yml, second.yml]\ntasks:\n  build: {cmd: parent}\n",
+		"api/first.yml":  "tasks:\n  all:\n    deps: [build, helper]\n    cmds: [{task: build}, {task: helper}]\n",
+		"api/second.yml": "tasks:\n  helper: {cmd: sibling}\n",
+	})
+	tf, err := LoadWithIncludes(dir)
+	require.NoError(t, err)
+	task := tf.Tasks["api:all"]
+	assert.Equal(t, []Dep{{Task: "api:build"}, {Task: "api:helper"}}, task.Deps)
+	assert.Equal(t, []Cmd{{Task: "api:build"}, {Task: "api:helper"}}, task.Cmds)
+	assert.Equal(t, "unrelated-root", tf.Tasks["build"].Cmds[0].Cmd)
+}

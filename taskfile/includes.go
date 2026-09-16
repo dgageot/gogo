@@ -48,10 +48,11 @@ func LoadWithIncludes(dir string) (*Config, error) {
 type includeLoader struct {
 	root          *Config
 	rootDir       string
-	seenDotenv    map[string]struct{} // deduplicates dotenv files across loaded files
-	dotenvVars    map[string]string   // accumulated dotenv variables
-	flattenOwners map[string]string   // task name -> first declaring flatten file
-	loadStack     map[string]struct{} // absolute file paths currently being loaded (cycle detection)
+	seenDotenv    map[string]struct{}        // deduplicates dotenv files across loaded files
+	dotenvVars    map[string]string          // accumulated dotenv variables
+	taskOrigins   map[string]*includedConfig // qualification waits until all tasks are loaded
+	flattenOwners map[string]string          // task name -> first declaring flatten file
+	loadStack     map[string]struct{}        // absolute file paths currently being loaded (cycle detection)
 }
 
 func newIncludeLoader(root *Config) (*includeLoader, error) {
@@ -64,6 +65,7 @@ func newIncludeLoader(root *Config) (*includeLoader, error) {
 	return &includeLoader{
 		root:          root,
 		flattenOwners: make(map[string]string),
+		taskOrigins:   make(map[string]*includedConfig),
 		rootDir:       root.Dir,
 		seenDotenv:    seenDotenv,
 		dotenvVars:    dotenvVars,
@@ -101,6 +103,15 @@ func (l *includeLoader) load() (*Config, error) {
 		}); err != nil {
 			return nil, err
 		}
+	}
+
+	// Resolve references only after parent, sibling and nested tasks all exist.
+	for _, name := range slices.Sorted(maps.Keys(l.taskOrigins)) {
+		task := l.root.Tasks[name]
+		task.Deps = slices.Clone(task.Deps)
+		task.Cmds = slices.Clone(task.Cmds)
+		namespaceLocalReferences(&task, l.taskOrigins[name], l.root.Tasks, l.root.NamespaceDefaults)
+		l.root.Tasks[name] = task
 	}
 
 	l.root.DotenvVars = l.dotenvVars
@@ -399,12 +410,14 @@ func (l *includeLoader) mergeSecrets(secrets map[string]string) {
 
 func (l *includeLoader) mergeTasks(included *includedConfig) error {
 	for _, name := range slices.Sorted(maps.Keys(included.Tasks)) {
-		task := normalizedIncludedTask(included, name, l.root.Tasks, l.root.NamespaceDefaults)
+		task := included.Tasks[name]
+		makeTaskDirAbsolute(&task, included.Dir)
 		finalName := included.Namespace + ":" + name
 		if err := validateTaskName(finalName); err != nil {
 			return err
 		}
 		l.root.Tasks[finalName] = task
+		l.taskOrigins[finalName] = included
 	}
 	return nil
 }
@@ -429,19 +442,11 @@ func (l *includeLoader) mergeFlattenedTasks(flattened *Config, namespace, ancest
 		task := flattened.Tasks[name]
 		makeTaskDirAbsolute(&task, ancestorDir)
 		if namespace != "" {
-			ic := &includedConfig{Config: flattened, Namespace: namespace}
-			namespaceLocalReferences(&task, ic, l.root.Tasks, l.root.NamespaceDefaults)
+			l.taskOrigins[finalName] = &includedConfig{Config: flattened, Namespace: namespace}
 		}
 		l.root.Tasks[finalName] = task
 	}
 	return nil
-}
-
-func normalizedIncludedTask(included *includedConfig, name string, loadedTasks map[string]Task, loadedDefaults map[string]string) Task {
-	task := included.Tasks[name]
-	makeTaskDirAbsolute(&task, included.Dir)
-	namespaceLocalReferences(&task, included, loadedTasks, loadedDefaults)
-	return task
 }
 
 func makeTaskDirAbsolute(task *Task, fileDir string) {
