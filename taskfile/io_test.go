@@ -2,8 +2,11 @@ package taskfile
 
 import (
 	"bytes"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,4 +68,40 @@ func TestOutputStreamsAcceptNestedNonComparableWriters(t *testing.T) {
 	stdout, stderr := r.outputStreams()
 	require.NotNil(t, stdout)
 	require.NotNil(t, stderr)
+}
+
+func TestParallelTasksShareInjectedInputSafely(t *testing.T) {
+	dir := t.TempDir()
+	r, err := NewRunner(&Config{Dir: dir, Tasks: map[string]Task{
+		"all": {Deps: []Dep{{Task: "a"}, {Task: "b"}}},
+		"a":   {Cmds: []Cmd{{Cmd: "cat > a.txt"}}},
+		"b":   {Cmds: []Cmd{{Cmd: "cat > b.txt"}}},
+	}}, dir)
+	require.NoError(t, err)
+	input := strings.Repeat("x", 1<<20)
+	r.IO = RunnerIO{Stdin: strings.NewReader(input), Stdout: io.Discard, Stderr: io.Discard}
+	require.NoError(t, r.RunContext(t.Context(), "all", ""))
+	a, err := os.ReadFile(filepath.Join(dir, "a.txt"))
+	require.NoError(t, err)
+	b, err := os.ReadFile(filepath.Join(dir, "b.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, input, string(a)+string(b))
+}
+
+func TestInputReaderSerializesConcurrentReads(t *testing.T) {
+	r := &Runner{IO: RunnerIO{Stdin: strings.NewReader(strings.Repeat("x", 100000))}}
+	var outputs [2][]byte
+	var errs [2]error
+	var wg sync.WaitGroup
+	for i := range outputs {
+		wg.Go(func() { outputs[i], errs[i] = io.ReadAll(r.inputReader()) })
+	}
+	wg.Wait()
+	require.NoError(t, errs[0])
+	require.NoError(t, errs[1])
+	assert.Equal(t, 100000, len(outputs[0])+len(outputs[1]))
+	r.IO.Stdin = os.Stdin
+	assert.Same(t, os.Stdin, r.inputReader())
+	r.IO.Stdin = nil
+	assert.Nil(t, r.inputReader())
 }

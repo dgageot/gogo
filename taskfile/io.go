@@ -43,3 +43,26 @@ func sameWriter(a, b io.Writer) (equal bool) {
 	defer func() { _ = recover() }()
 	return a == b
 }
+
+type lockedReader struct {
+	mu     *sync.Mutex
+	reader io.Reader
+}
+
+func (r *lockedReader) Read(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reader.Read(p)
+}
+
+// inputReader preserves file descriptors; other readers may be shared by exec
+// copy goroutines and prompts, so they must use the same lock.
+func (r *Runner) inputReader() io.Reader {
+	if r.IO.Stdin == nil {
+		return nil
+	}
+	if _, ok := r.IO.Stdin.(*os.File); ok {
+		return r.IO.Stdin
+	}
+	return &lockedReader{mu: &r.inputMu, reader: r.IO.Stdin}
+}

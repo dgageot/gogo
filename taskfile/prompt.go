@@ -30,7 +30,7 @@ func (r *Runner) confirmPrompt(taskName, prompt string) error {
 	if r.IO.Stdin == nil {
 		return declined
 	}
-	switch strings.ToLower(strings.TrimSpace(readAnswer(r.IO.Stdin))) {
+	switch strings.ToLower(strings.TrimSpace(readAnswer(r.inputReader()))) {
 	case "y", "yes":
 		return nil
 	default:

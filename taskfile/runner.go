@@ -49,6 +49,7 @@ type Runner struct {
 	runs        sync.Map          // (resolved task name, CLI args) -> *taskRun
 	gitVars     *gitVars          // lazy {{.GIT_*}} resolver, built on first reference
 	gitOnce     sync.Once         // guards gitVars construction
+	inputMu     sync.Mutex        // protects injected non-file readers
 	outputMu    sync.Mutex        // protects non-file output streams
 	graphMu     sync.Mutex
 	waits       map[*taskRun]map[*taskRun]int // active invocation edges, including memoized waits

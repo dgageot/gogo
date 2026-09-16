@@ -503,7 +503,7 @@ func (r *Runner) runShellTaskCommand(ctx context.Context, taskName, command, dir
 		Dir:      dir,
 		Env:      env,
 		UseOpRun: useOpRun,
-		Stdin:    r.IO.Stdin,
+		Stdin:    r.inputReader(),
 		Stdout:   stdout,
 		Stderr:   stderr,
 	})

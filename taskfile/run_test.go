@@ -2,6 +2,7 @@ package taskfile
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -2683,8 +2684,10 @@ func TestRunnerPassesInjectedIOToShellCommands(t *testing.T) {
 
 	runs := shell.runsSnapshot()
 	require.Len(t, runs, 1)
-	assert.Same(t, stdin, runs[0].Stdin)
-	_, err := runs[0].Stdout.Write([]byte("stdout"))
+	input, err := io.ReadAll(runs[0].Stdin)
+	require.NoError(t, err)
+	assert.Equal(t, "input", string(input))
+	_, err = runs[0].Stdout.Write([]byte("stdout"))
 	require.NoError(t, err)
 	assert.Equal(t, "stdout", stdout.String())
 	_, err = runs[0].Stderr.Write([]byte("stderr"))
