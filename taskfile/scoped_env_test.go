@@ -109,6 +109,31 @@ func TestFileEnvTemplatesResolveLazyVars(t *testing.T) {
 	assert.Len(t, shell.outputsSnapshot(), 1)
 }
 
+func TestFileEnvCrossReferencesUseProcessOverrides(t *testing.T) {
+	dir := t.TempDir()
+	r := newTestRunner(t, &Config{
+		Dir:          dir,
+		Env:          map[string]string{"HOST": "{{.UNUSED}}", "URL": "https://$HOST"},
+		Vars:         map[string]Var{"UNUSED": {Sh: "must not execute"}},
+		NamespaceEnv: map[string]map[string]string{"api": {"HOST": "namespace-default"}},
+		Tasks: map[string]Task{
+			"build":     {Cmds: []Cmd{{Cmd: "true"}}},
+			"api:build": {Cmds: []Cmd{{Cmd: "true"}}},
+		},
+	}, dir)
+	r.BaseEnv = []string{"HOST=production.example"}
+	shell := &fakeShellRunner{}
+	r.ShellRunner = shell
+	execs := captureExecs(r)
+	require.NoError(t, r.Run("build", ""))
+	require.NoError(t, r.Run("api:build", ""))
+	for _, exec := range *execs {
+		assert.Equal(t, "production.example", envValue(exec.Env, "HOST"))
+		assert.Equal(t, "https://production.example", envValue(exec.Env, "URL"))
+	}
+	assert.Empty(t, shell.outputsSnapshot())
+}
+
 func TestScopedEnvCrossReferenceResolvesOverlaidDefault(t *testing.T) {
 	dir := t.TempDir()
 	r := newTestRunner(t, &Config{

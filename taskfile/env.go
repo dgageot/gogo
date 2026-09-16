@@ -227,5 +227,12 @@ func (r *Runner) scopedEnv(taskName string) map[string]string {
 		}
 		maps.Copy(scoped, r.tf.NamespaceEnv[namespace])
 	}
+	// Defaults shadowed by the process/global dotenv are not evaluated:
+	// cross-references must see the effective value, not the discarded default.
+	for key := range scoped {
+		if envHasKey(r.BaseEnv, key) {
+			delete(scoped, key)
+		}
+	}
 	return scoped
 }
