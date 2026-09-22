@@ -1,5 +1,5 @@
-github.com/dgageot/rubocop-go v0.0.0-20260627140528-ee9a9b36c3eb h1:E4a9ksSV9JrxAenB8/ByZI6LShO05uBEXzGEoe2DZE8=
-github.com/dgageot/rubocop-go v0.0.0-20260627140528-ee9a9b36c3eb/go.mod h1:wn4xlnesVpaaCT+xUYHAPW/rPxWd2jZIcUVqFkGUa0U=
+github.com/dgageot/rubocop-go v0.0.0-20260914103134-ceff10dc27fa h1:BsHe+ftBXHqkChK1/Re/BEDtwEp8WD8ScZsWC7qp7aE=
+github.com/dgageot/rubocop-go v0.0.0-20260914103134-ceff10dc27fa/go.mod h1:wn4xlnesVpaaCT+xUYHAPW/rPxWd2jZIcUVqFkGUa0U=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
