@@ -313,6 +313,26 @@ tasks:
 	assert.Equal(t, "echo from-flatten", (*execs)[0].Command)
 }
 
+func TestTaskNamespace(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		want string
+	}{
+		{name: ""},
+		{name: "build"},
+		{name: "app:build", want: "app"},
+		{name: "app:api:build", want: "app:api"},
+		{name: "équipe:日本:build", want: "équipe:日本"},
+		{name: ":build"},
+		{name: "app:", want: "app"},
+		{name: "app::build", want: "app:"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, taskNamespace(tt.name))
+		})
+	}
+}
+
 func TestAncestorNamespaces(t *testing.T) {
 	for _, tt := range []struct {
 		name string

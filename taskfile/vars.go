@@ -83,8 +83,8 @@ func expandTaskTemplates(t *Task) {
 // task name (everything before the last colon). The root namespace is the
 // empty string. A bare task name like "build" lives in the root.
 func taskNamespace(name string) string {
-	if i := strings.LastIndex(name, ":"); i >= 0 {
-		return name[:i]
+	if namespace, _, found := strings.CutLast(name, ":"); found {
+		return namespace
 	}
 	return ""
 }
