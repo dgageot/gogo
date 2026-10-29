@@ -2,6 +2,7 @@ package cops
 
 import (
 	"go/ast"
+	"slices"
 	"strings"
 
 	"github.com/dgageot/rubocop-go/cop"
@@ -50,6 +51,7 @@ func schemeConstNames(file *ast.File) []string {
 	}) {
 		names = append(names, name)
 	}
+	slices.Sort(names)
 	return names
 }
 
