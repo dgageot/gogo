@@ -1,6 +1,6 @@
 module github.com/dgageot/gogo/tools/gogolint
 
-go 1.26.5
+go 1.26.11
 
 require (
 	github.com/dgageot/rubocop-go v1.1.0
